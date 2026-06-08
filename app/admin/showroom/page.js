@@ -13,7 +13,7 @@ export default function ShowroomUpload() {
   const [message, setMessage] = useState("");
   const router = useRouter();
 
-  // Check admin auth
+  // Auth check
   if (typeof window !== "undefined" && sessionStorage.getItem("adminAuth") !== "true") {
     router.push("/admin/login");
     return null;
@@ -55,13 +55,13 @@ export default function ShowroomUpload() {
 
       if (uploadError) throw uploadError;
 
-      // 2. Get public URL of uploaded image
+      // 2. Get public URL
       const { data: urlData } = supabase.storage
         .from("showroom-bucket")
         .getPublicUrl(filePath);
       const imageUrl = urlData.publicUrl;
 
-      // 3. Insert product into showroom table
+      // 3. Insert into showroom table
       const { error: insertError } = await supabase.from("showroom").insert([
         {
           image_url: imageUrl,
@@ -78,7 +78,6 @@ export default function ShowroomUpload() {
       setDescription("");
       setPrice("");
       setSold(false);
-      // Clear file input
       document.getElementById("imageInput").value = "";
     } catch (error) {
       setMessage("Error: " + error.message);
@@ -148,4 +147,4 @@ export default function ShowroomUpload() {
       </form>
     </div>
   );
-        }
+            }
