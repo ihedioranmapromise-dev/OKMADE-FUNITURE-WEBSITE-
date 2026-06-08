@@ -33,7 +33,7 @@ export default function AdminLogin() {
           {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
           <button
             type="submit"
-            className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700"
+            className="w-full bg-blue-600 text-white p-2 rounded"
           >
             Login
           </button>
@@ -41,4 +41,4 @@ export default function AdminLogin() {
       </div>
     </div>
   );
-          }
+              }
