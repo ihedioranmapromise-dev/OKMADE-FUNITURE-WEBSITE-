@@ -10,9 +10,8 @@ export default function AdminLogin() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    // Simple password check (hardcoded for now – you can change it)
+    // Change this password to whatever you want
     if (password === "OKMADE2026TERMINAL") {
-      // Store a flag in sessionStorage (client-side only)
       sessionStorage.setItem("adminAuth", "true");
       router.push("/admin/dashboard");
     } else {
