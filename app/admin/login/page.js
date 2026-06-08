@@ -8,9 +8,8 @@ export default function AdminLogin() {
   const [error, setError] = useState("");
   const router = useRouter();
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    // Change this password to whatever you want
     if (password === "OKMADE2026TERMINAL") {
       sessionStorage.setItem("adminAuth", "true");
       router.push("/admin/dashboard");
@@ -42,4 +41,4 @@ export default function AdminLogin() {
       </div>
     </div>
   );
-              }
+          }
