@@ -9,7 +9,7 @@ const supabase = createClient(
 );
 
 export default function WorkspacePage() {
-  const { token } = useParams(); // gets token from URL
+  const { token } = useParams();
   const [data, setData] = useState(null);
   const [progressImages, setProgressImages] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -18,7 +18,6 @@ export default function WorkspacePage() {
   useEffect(() => {
     if (!token) return;
     async function fetchWorkspace() {
-      // 1. Find the token
       const { data: tokenData, error: tokenError } = await supabase
         .from("tokens")
         .select("*")
@@ -29,14 +28,11 @@ export default function WorkspacePage() {
         setLoading(false);
         return;
       }
-
-      // 2. Fetch progress images for this token
       const { data: images } = await supabase
         .from("progress_images")
         .select("image_url, uploaded_at")
         .eq("token_id", tokenData.id)
         .order("uploaded_at", { ascending: true });
-
       setData(tokenData);
       setProgressImages(images || []);
       setLoading(false);
@@ -55,7 +51,6 @@ export default function WorkspacePage() {
         {isActive ? "Your Private Workspace" : "Completed Work – Testimonial"}
       </h1>
       <div className="bg-white rounded-xl shadow-md p-6 space-y-6">
-        {/* Request Image */}
         <div>
           <h2 className="text-xl font-semibold mb-2">Original Request</h2>
           {data.request_image_url ? (
@@ -64,8 +59,6 @@ export default function WorkspacePage() {
             <p className="text-gray-500">No request image uploaded.</p>
           )}
         </div>
-
-        {/* Progress Images */}
         <div>
           <h2 className="text-xl font-semibold mb-2">
             {isActive ? "Work in Progress" : "Final Result & Progress"}
@@ -80,12 +73,7 @@ export default function WorkspacePage() {
             </div>
           )}
         </div>
-
-        {/* Client info (optional) */}
-        {data.client_name && (
-          <p className="text-gray-600">Client: {data.client_name}</p>
-        )}
-
+        {data.client_name && <p className="text-gray-600">Client: {data.client_name}</p>}
         {isActive && (
           <p className="text-blue-600 bg-blue-50 p-3 rounded text-sm">
             Your custom piece is being crafted. Check back later for updates.
@@ -99,4 +87,4 @@ export default function WorkspacePage() {
       </div>
     </div>
   );
-    }
+                                    }
