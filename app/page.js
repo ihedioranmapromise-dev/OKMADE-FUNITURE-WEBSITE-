@@ -8,6 +8,8 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
+const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "";
+
 export default function Home() {
   const [products, setProducts] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
@@ -51,6 +53,17 @@ export default function Home() {
     if (token.trim()) {
       router.push(`/workspace/${token.trim()}`);
     }
+  };
+
+  // Helper to generate WhatsApp link for a product
+  const getWhatsAppLink = (product) => {
+    const message = `I'm interested in this product: ${product.description} for $${product.price}. See image: ${product.image_url}`;
+    return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
+  };
+
+  const getWhatsAppGeneralLink = () => {
+    const message = "Hello, I have a question about your furniture.";
+    return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
   };
 
   return (
@@ -111,7 +124,14 @@ export default function Home() {
                   <p className="text-gray-600 text-sm mb-2">{product.description}</p>
                   <div className="flex justify-between items-center">
                     <span className="text-xl font-bold text-green-700">${product.price}</span>
-                    <a href="#" className="text-green-500 hover:text-green-600">📞 WhatsApp</a>
+                    <a
+                      href={getWhatsAppLink(product)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-green-500 hover:text-green-600"
+                    >
+                      📞 WhatsApp
+                    </a>
                   </div>
                 </div>
               </div>
@@ -136,7 +156,17 @@ export default function Home() {
               <p className="text-gray-700 text-lg mb-6">{latestCatalog.description}</p>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {latestCatalog.images.slice(0, 6).map((img, idx) => (
-                  <img key={idx} src={img.image_url} className="w-full h-40 object-cover rounded-lg shadow" />
+                  <div key={idx} className="relative">
+                    <img src={img.image_url} className="w-full h-40 object-cover rounded-lg shadow" />
+                    <a
+                      href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(`I'm interested in this catalog item: ${latestCatalog.description}. Image: ${img.image_url}`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="absolute bottom-2 right-2 bg-green-500 text-white p-1 rounded-full text-xs hover:bg-green-600"
+                    >
+                      📞
+                    </a>
+                  </div>
                 ))}
               </div>
               <div className="mt-8">
@@ -152,7 +182,12 @@ export default function Home() {
       </section>
 
       {/* Floating WhatsApp Icon */}
-      <a href="#" className="fixed bottom-6 right-6 bg-green-500 text-white p-4 rounded-full shadow-lg hover:bg-green-600 transition z-50">
+      <a
+        href={getWhatsAppGeneralLink()}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="fixed bottom-6 right-6 bg-green-500 text-white p-4 rounded-full shadow-lg hover:bg-green-600 transition z-50"
+      >
         💬 WhatsApp
       </a>
 
