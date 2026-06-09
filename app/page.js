@@ -55,7 +55,6 @@ export default function Home() {
     }
   };
 
-  // Helper to generate WhatsApp link for a product
   const getWhatsAppLink = (product) => {
     const message = `I'm interested in this product: ${product.description} for $${product.price}. See image: ${product.image_url}`;
     return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
@@ -68,7 +67,6 @@ export default function Home() {
 
   return (
     <div>
-      {/* Hero Section */}
       <section className="relative bg-black text-white">
         <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1616486338812-3bade2a6d9e2?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80')] bg-cover bg-center opacity-40"></div>
         <div className="relative container mx-auto px-6 py-32 text-center">
@@ -81,7 +79,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Token Workspace Section */}
       <section className="bg-gray-100 py-16">
         <div className="container mx-auto px-6 text-center">
           <h2 className="text-3xl font-bold mb-4">Track Your Custom Work</h2>
@@ -103,7 +100,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Showroom Featured Pieces */}
       <section className="container mx-auto px-6 py-16">
         <h2 className="text-3xl font-bold text-center mb-12">Featured Pieces</h2>
         {loadingProducts ? (
@@ -124,14 +120,7 @@ export default function Home() {
                   <p className="text-gray-600 text-sm mb-2">{product.description}</p>
                   <div className="flex justify-between items-center">
                     <span className="text-xl font-bold text-green-700">${product.price}</span>
-                    <a
-                      href={getWhatsAppLink(product)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-green-500 hover:text-green-600"
-                    >
-                      📞 WhatsApp
-                    </a>
+                    <a href={getWhatsAppLink(product)} target="_blank" rel="noopener noreferrer" className="text-green-500 hover:text-green-600">📞 WhatsApp</a>
                   </div>
                 </div>
               </div>
@@ -145,7 +134,6 @@ export default function Home() {
         )}
       </section>
 
-      {/* Catalog Preview Section */}
       <section className="bg-white py-16 border-t border-gray-200">
         <div className="container mx-auto px-6">
           <h2 className="text-3xl font-bold text-center mb-12">Latest Catalog Space</h2>
@@ -158,21 +146,12 @@ export default function Home() {
                 {latestCatalog.images.slice(0, 6).map((img, idx) => (
                   <div key={idx} className="relative">
                     <img src={img.image_url} className="w-full h-40 object-cover rounded-lg shadow" />
-                    <a
-                      href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(`I'm interested in this catalog item: ${latestCatalog.description}. Image: ${img.image_url}`)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="absolute bottom-2 right-2 bg-green-500 text-white p-1 rounded-full text-xs hover:bg-green-600"
-                    >
-                      📞
-                    </a>
+                    <a href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(`I'm interested in this catalog item: ${latestCatalog.description}. Image: ${img.image_url}`)}`} target="_blank" rel="noopener noreferrer" className="absolute bottom-2 right-2 bg-green-500 text-white p-1 rounded-full text-xs hover:bg-green-600">📞</a>
                   </div>
                 ))}
               </div>
               <div className="mt-8">
-                <a href="/catalog" className="inline-block bg-purple-600 text-white px-8 py-3 rounded-full hover:bg-purple-700 transition">
-                  Explore Full Catalog →
-                </a>
+                <a href="/catalog" className="inline-block bg-purple-600 text-white px-8 py-3 rounded-full hover:bg-purple-700 transition">Explore Full Catalog →</a>
               </div>
             </div>
           ) : (
@@ -181,20 +160,11 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Floating WhatsApp Icon */}
-      <a
-        href={getWhatsAppGeneralLink()}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="fixed bottom-6 right-6 bg-green-500 text-white p-4 rounded-full shadow-lg hover:bg-green-600 transition z-50"
-      >
-        💬 WhatsApp
-      </a>
+      <a href={getWhatsAppGeneralLink()} target="_blank" rel="noopener noreferrer" className="fixed bottom-6 right-6 bg-green-500 text-white p-4 rounded-full shadow-lg hover:bg-green-600 transition z-50">💬 WhatsApp</a>
 
-      {/* Footer */}
       <footer className="bg-gray-900 text-white text-center py-6">
         <p>© 2026 OKMADE Furniture. All rights reserved.</p>
       </footer>
     </div>
   );
-    }
+                }
