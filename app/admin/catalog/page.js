@@ -1,12 +1,6 @@
 "use client";
 import { useState } from "react";
-import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
 
 export default function CatalogUpload() {
   const [title, setTitle] = useState("");
@@ -44,39 +38,19 @@ export default function CatalogUpload() {
     setMessage("");
 
     try {
-      // Insert catalog with title and description
-      const { data: catalog, error: catErr } = await supabase
-        .from("catalogs")
-        .insert([{ title, description }])
-        .select()
-        .single();
-      if (catErr) throw catErr;
+      const formData = new FormData();
+      formData.append("title", title);
+      formData.append("description", description);
+      images.forEach((img) => formData.append("images", img));
 
-      // Upload each image to catalog-bucket
-      for (let i = 0; i < images.length; i++) {
-        const file = images[i];
-        const ext = file.name.split(".").pop();
-        const fileName = `${catalog.id}_${Date.now()}_${i}.${ext}`;
-        const { error: uploadErr } = await supabase.storage
-          .from("catalog-bucket")
-          .upload(fileName, file);
-        if (uploadErr) throw uploadErr;
-
-        const { data: urlData } = supabase.storage
-          .from("catalog-bucket")
-          .getPublicUrl(fileName);
-
-        const { error: insertErr } = await supabase
-          .from("catalog_images")
-          .insert({
-            catalog_id: catalog.id,
-            image_url: urlData.publicUrl,
-            display_order: i,
-          });
-        if (insertErr) throw insertErr;
-      }
-
-      setMessage(`Catalog space "${title}" added with ${images.length} image(s).`);
+      const res = await fetch("/api/admin/add-catalog", {
+        method: "POST",
+        headers: { "x-admin-key": "okmade_super_secret_2026" },
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setMessage(`Catalog "${title}" added with ${images.length} image(s).`);
       setTitle("");
       setDescription("");
       setImages([]);
@@ -92,51 +66,12 @@ export default function CatalogUpload() {
     <div className="p-8 max-w-2xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Add Catalog Space</h1>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block font-medium mb-1">Title *</label>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="w-full border p-2 rounded"
-            required
-          />
-        </div>
-        <div>
-          <label className="block font-medium mb-1">Description *</label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="w-full border p-2 rounded"
-            rows="3"
-            required
-          />
-        </div>
-        <div>
-          <label className="block font-medium mb-1">Images (up to 6)</label>
-          <input
-            id="catalogImages"
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={handleImageChange}
-            className="w-full border p-2 rounded"
-          />
-          <p className="text-sm text-gray-500 mt-1">{images.length} file(s) selected</p>
-        </div>
-        <button
-          type="submit"
-          disabled={uploading}
-          className="bg-purple-600 text-white px-4 py-2 rounded disabled:opacity-50"
-        >
-          {uploading ? "Uploading..." : "Add Catalog Space"}
-        </button>
-        {message && (
-          <p className={`mt-4 ${message.startsWith("Error") ? "text-red-500" : "text-green-500"}`}>
-            {message}
-          </p>
-        )}
+        <div><label className="block font-medium mb-1">Title *</label><input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full border p-2 rounded" required /></div>
+        <div><label className="block font-medium mb-1">Description *</label><textarea value={description} onChange={(e) => setDescription(e.target.value)} className="w-full border p-2 rounded" rows="3" required /></div>
+        <div><label className="block font-medium mb-1">Images (up to 6)</label><input id="catalogImages" type="file" accept="image/*" multiple onChange={handleImageChange} className="w-full border p-2 rounded" /><p className="text-sm text-gray-500 mt-1">{images.length} file(s) selected</p></div>
+        <button type="submit" disabled={uploading} className="bg-purple-600 text-white px-4 py-2 rounded disabled:opacity-50">{uploading ? "Uploading..." : "Add Catalog Space"}</button>
+        {message && <p className={`mt-4 ${message.startsWith("Error") ? "text-red-500" : "text-green-500"}`}>{message}</p>}
       </form>
     </div>
   );
-  }
+                                                               }
