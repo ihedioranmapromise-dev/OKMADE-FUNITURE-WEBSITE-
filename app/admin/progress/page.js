@@ -1,6 +1,12 @@
 "use client";
 import { useState, useEffect } from "react";
+import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
 
 export default function AdminProgress() {
   const [tokens, setTokens] = useState([]);
@@ -18,11 +24,12 @@ export default function AdminProgress() {
 
   useEffect(() => {
     async function fetchTokens() {
-      const res = await fetch("/api/admin/active-tokens", { headers: { "x-admin-key": "okmade_super_secret_2026" } });
-      if (res.ok) {
-        const data = await res.json();
-        setTokens(data);
-      }
+      const { data, error } = await supabase
+        .from("tokens")
+        .select("id, token_string, client_name")
+        .eq("status", "active")
+        .order("created_at", { ascending: false });
+      if (!error) setTokens(data || []);
     }
     fetchTokens();
   }, []);
@@ -47,16 +54,24 @@ export default function AdminProgress() {
     setUploading(true);
     setMessage("");
     try {
-      const formData = new FormData();
-      formData.append("tokenId", selectedTokenId);
-      images.forEach((img) => formData.append("progressImages", img));
-      const res = await fetch("/api/admin/upload-progress", {
-        method: "POST",
-        headers: { "x-admin-key": "okmade_super_secret_2026" },
-        body: formData,
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      for (let i = 0; i < images.length; i++) {
+        const file = images[i];
+        const ext = file.name.split(".").pop();
+        const fileName = `progress/${selectedTokenString}_${Date.now()}_${i}.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from("workspace-progress")
+          .upload(fileName, file);
+        if (uploadError) throw uploadError;
+
+        const { data: urlData } = supabase.storage
+          .from("workspace-progress")
+          .getPublicUrl(fileName);
+
+        await supabase.from("progress_images").insert({
+          token_id: selectedTokenId,
+          image_url: urlData.publicUrl,
+        });
+      }
       setMessage(`Uploaded ${images.length} progress image(s).`);
       setImages([]);
       document.getElementById("progressImages").value = "";
@@ -74,25 +89,24 @@ export default function AdminProgress() {
     }
     if (!confirm(`Kill token ${selectedTokenString}?`)) return;
     setUploading(true);
-    try {
-      const res = await fetch("/api/admin/kill-token", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-admin-key": "okmade_super_secret_2026" },
-        body: JSON.stringify({ tokenId: selectedTokenId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+    const { error } = await supabase
+      .from("tokens")
+      .update({ status: "killed" })
+      .eq("id", selectedTokenId);
+    if (error) {
+      setMessage("Error killing token: " + error.message);
+    } else {
       setMessage(`Token ${selectedTokenString} killed.`);
-      // Refresh token list (you can re-fetch or just remove from state)
-      const fetchRes = await fetch("/api/admin/active-tokens", { headers: { "x-admin-key": "okmade_super_secret_2026" } });
-      if (fetchRes.ok) setTokens(await fetchRes.json());
+      // Refresh token list
+      const { data } = await supabase
+        .from("tokens")
+        .select("id, token_string, client_name")
+        .eq("status", "active");
+      setTokens(data || []);
       setSelectedTokenId("");
       setSelectedTokenString("");
-    } catch (err) {
-      setMessage("Error: " + err.message);
-    } finally {
-      setUploading(false);
     }
+    setUploading(false);
   };
 
   return (
@@ -119,4 +133,4 @@ export default function AdminProgress() {
       </form>
     </div>
   );
-                        }
+              }
