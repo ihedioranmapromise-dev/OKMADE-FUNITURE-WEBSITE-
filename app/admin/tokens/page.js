@@ -50,8 +50,6 @@ export default function AdminTokens() {
 
     try {
       const tokenString = generateTokenString();
-
-      // Insert token
       const { data: token, error: tokenError } = await supabase
         .from("tokens")
         .insert([
@@ -70,7 +68,6 @@ export default function AdminTokens() {
         .single();
       if (tokenError) throw tokenError;
 
-      // Upload each request image
       for (let i = 0; i < requestImages.length; i++) {
         const file = requestImages[i];
         const ext = file.name.split(".").pop();
@@ -112,97 +109,17 @@ export default function AdminTokens() {
     <div className="p-8 max-w-2xl mx-auto">
       <h1 className="text-2xl font-bold mb-6">Generate Client Token</h1>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block font-medium mb-1">Client Name *</label>
-          <input
-            type="text"
-            value={clientName}
-            onChange={(e) => setClientName(e.target.value)}
-            className="w-full border p-2 rounded"
-            required
-          />
-        </div>
-        <div>
-          <label className="block font-medium mb-1">Client Contact (email or phone) *</label>
-          <input
-            type="text"
-            value={clientContact}
-            onChange={(e) => setClientContact(e.target.value)}
-            className="w-full border p-2 rounded"
-            required
-          />
-        </div>
-        <div>
-          <label className="block font-medium mb-1">Client Address</label>
-          <textarea
-            value={clientAddress}
-            onChange={(e) => setClientAddress(e.target.value)}
-            className="w-full border p-2 rounded"
-            rows="2"
-          />
-        </div>
-        <div>
-          <label className="block font-medium mb-1">Work Description</label>
-          <textarea
-            value={workDescription}
-            onChange={(e) => setWorkDescription(e.target.value)}
-            className="w-full border p-2 rounded"
-            rows="3"
-          />
-        </div>
-        <div>
-          <label className="block font-medium mb-1">Price (optional)</label>
-          <input
-            type="number"
-            step="0.01"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            className="w-full border p-2 rounded"
-          />
-        </div>
-        <div>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={doublePayment}
-              onChange={(e) => setDoublePayment(e.target.checked)}
-            />
-            Double Payment
-          </label>
-        </div>
-        <div>
-          <label className="block font-medium mb-1">Request Images (up to 6) *</label>
-          <input
-            id="requestImages"
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={handleImageChange}
-            className="w-full border p-2 rounded"
-            required
-          />
-          <p className="text-sm text-gray-500 mt-1">{requestImages.length} file(s) selected</p>
-        </div>
-        <button
-          type="submit"
-          disabled={uploading}
-          className="bg-yellow-600 text-white px-4 py-2 rounded disabled:opacity-50"
-        >
-          {uploading ? "Generating..." : "Generate Token"}
-        </button>
-        {message && (
-          <p className={`mt-4 ${message.startsWith("Error") ? "text-red-500" : "text-green-500"}`}>
-            {message}
-          </p>
-        )}
-        {generatedToken && (
-          <div className="mt-4 p-4 bg-gray-100 rounded">
-            <p className="font-bold">Token: <span className="font-mono">{generatedToken}</span></p>
-            <p className="text-sm text-gray-600">Share this token with the client.</p>
-            <p className="text-sm text-gray-600 mt-2">Workspace URL: /workspace/{generatedToken}</p>
-          </div>
-        )}
+        <div><label className="block font-medium mb-1">Client Name *</label><input type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} className="w-full border p-2 rounded" required /></div>
+        <div><label className="block font-medium mb-1">Client Contact (email or phone) *</label><input type="text" value={clientContact} onChange={(e) => setClientContact(e.target.value)} className="w-full border p-2 rounded" required /></div>
+        <div><label className="block font-medium mb-1">Client Address</label><textarea value={clientAddress} onChange={(e) => setClientAddress(e.target.value)} className="w-full border p-2 rounded" rows="2" /></div>
+        <div><label className="block font-medium mb-1">Work Description</label><textarea value={workDescription} onChange={(e) => setWorkDescription(e.target.value)} className="w-full border p-2 rounded" rows="3" /></div>
+        <div><label className="block font-medium mb-1">Price (₦) (optional)</label><input type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} className="w-full border p-2 rounded" /></div>
+        <div><label className="flex items-center gap-2"><input type="checkbox" checked={doublePayment} onChange={(e) => setDoublePayment(e.target.checked)} /> Double Payment</label></div>
+        <div><label className="block font-medium mb-1">Request Images (up to 6) *</label><input id="requestImages" type="file" accept="image/*" multiple onChange={handleImageChange} className="w-full border p-2 rounded" required /><p className="text-sm text-gray-500 mt-1">{requestImages.length} file(s) selected</p></div>
+        <button type="submit" disabled={uploading} className="bg-yellow-600 text-white px-4 py-2 rounded disabled:opacity-50">{uploading ? "Generating..." : "Generate Token"}</button>
+        {message && <p className={`mt-4 ${message.startsWith("Error") ? "text-red-500" : "text-green-500"}`}>{message}</p>}
+        {generatedToken && (<div className="mt-4 p-4 bg-gray-100 rounded"><p className="font-bold">Token: <span className="font-mono">{generatedToken}</span></p><p className="text-sm text-gray-600">Share this token with the client.</p><p className="text-sm text-gray-600 mt-2">Workspace URL: /workspace/{generatedToken}</p></div>)}
       </form>
     </div>
   );
-              }
+  }
