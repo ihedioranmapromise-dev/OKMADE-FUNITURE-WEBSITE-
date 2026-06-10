@@ -91,61 +91,28 @@ export default function ShowroomUpload() {
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block font-medium mb-1">Product Images (up to 6)</label>
-          <input
-            id="productImages"
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={handleImageChange}
-            className="w-full border p-2 rounded"
-            required
-          />
+          <input id="productImages" type="file" accept="image/*" multiple onChange={handleImageChange} className="w-full border p-2 rounded" required />
           <p className="text-sm text-gray-500 mt-1">{images.length} file(s) selected</p>
         </div>
         <div>
           <label className="block font-medium mb-1">Description</label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="w-full border p-2 rounded"
-            rows="3"
-            required
-          />
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)} className="w-full border p-2 rounded" rows="3" required />
         </div>
         <div>
-          <label className="block font-medium mb-1">Price ($)</label>
-          <input
-            type="number"
-            step="0.01"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            className="w-full border p-2 rounded"
-            required
-          />
+          <label className="block font-medium mb-1">Price (₦)</label>
+          <input type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} className="w-full border p-2 rounded" required />
         </div>
         <div>
           <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={sold}
-              onChange={(e) => setSold(e.target.checked)}
-            />
+            <input type="checkbox" checked={sold} onChange={(e) => setSold(e.target.checked)} />
             Mark as Sold
           </label>
         </div>
-        <button
-          type="submit"
-          disabled={uploading}
-          className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
-        >
+        <button type="submit" disabled={uploading} className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50">
           {uploading ? "Uploading..." : "Add Product"}
         </button>
-        {message && (
-          <p className={`mt-4 ${message.startsWith("Error") ? "text-red-500" : "text-green-500"}`}>
-            {message}
-          </p>
-        )}
+        {message && <p className={`mt-4 ${message.startsWith("Error") ? "text-red-500" : "text-green-500"}`}>{message}</p>}
       </form>
     </div>
   );
-              }
+        }
