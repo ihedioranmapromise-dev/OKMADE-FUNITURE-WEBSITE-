@@ -45,7 +45,6 @@ export default function ShowroomUpload() {
     setMessage("");
 
     try {
-      // 1. Insert product into showroom table
       const { data: product, error: productError } = await supabase
         .from("showroom")
         .insert([{ description, price: parseFloat(price), sold }])
@@ -53,7 +52,6 @@ export default function ShowroomUpload() {
         .single();
       if (productError) throw productError;
 
-      // 2. Upload each image and insert into product_images
       for (let i = 0; i < images.length; i++) {
         const file = images[i];
         const ext = file.name.split(".").pop();
@@ -67,14 +65,11 @@ export default function ShowroomUpload() {
           .from("showroom-bucket")
           .getPublicUrl(fileName);
 
-        const { error: insertError } = await supabase
-          .from("product_images")
-          .insert({
-            product_id: product.id,
-            image_url: urlData.publicUrl,
-            display_order: i,
-          });
-        if (insertError) throw insertError;
+        await supabase.from("product_images").insert({
+          product_id: product.id,
+          image_url: urlData.publicUrl,
+          display_order: i,
+        });
       }
 
       setMessage(`Product added with ${images.length} image(s).`);
