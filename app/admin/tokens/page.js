@@ -1,12 +1,6 @@
 "use client";
 import { useState } from "react";
-import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
 
 export default function AdminTokens() {
   const [clientName, setClientName] = useState("");
@@ -35,10 +29,6 @@ export default function AdminTokens() {
     setRequestImages(files);
   };
 
-  const generateTokenString = () => {
-    return Math.random().toString(36).substring(2, 10).toUpperCase();
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!clientName || !clientContact || requestImages.length === 0) {
@@ -49,47 +39,24 @@ export default function AdminTokens() {
     setMessage("");
 
     try {
-      const tokenString = generateTokenString();
-      const { data: token, error: tokenError } = await supabase
-        .from("tokens")
-        .insert([
-          {
-            token_string: tokenString,
-            client_name: clientName,
-            client_contact: clientContact,
-            client_address: clientAddress,
-            work_description: workDescription,
-            price: price ? parseFloat(price) : null,
-            double_payment: doublePayment,
-            status: "active",
-          },
-        ])
-        .select()
-        .single();
-      if (tokenError) throw tokenError;
+      const formData = new FormData();
+      formData.append("clientName", clientName);
+      formData.append("clientContact", clientContact);
+      formData.append("clientAddress", clientAddress);
+      formData.append("workDescription", workDescription);
+      formData.append("price", price);
+      formData.append("doublePayment", doublePayment);
+      requestImages.forEach((img) => formData.append("requestImages", img));
 
-      for (let i = 0; i < requestImages.length; i++) {
-        const file = requestImages[i];
-        const ext = file.name.split(".").pop();
-        const fileName = `requests/${tokenString}_${Date.now()}_${i}.${ext}`;
-        const { error: uploadError } = await supabase.storage
-          .from("workspace-requests")
-          .upload(fileName, file);
-        if (uploadError) throw uploadError;
-
-        const { data: urlData } = supabase.storage
-          .from("workspace-requests")
-          .getPublicUrl(fileName);
-
-        await supabase.from("token_request_images").insert({
-          token_id: token.id,
-          image_url: urlData.publicUrl,
-          display_order: i,
-        });
-      }
-
-      setGeneratedToken(tokenString);
-      setMessage(`Token generated: ${tokenString}`);
+      const res = await fetch("/api/admin/generate-token", {
+        method: "POST",
+        headers: { "x-admin-key": "okmade_super_secret_2026" },
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setGeneratedToken(data.token);
+      setMessage(`Token generated: ${data.token}`);
       setClientName("");
       setClientContact("");
       setClientAddress("");
