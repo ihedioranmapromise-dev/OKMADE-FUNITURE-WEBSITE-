@@ -47,7 +47,6 @@ export default function Home() {
       setLoadingCatalog(false);
     }
     async function fetchTestimonials() {
-      // Get latest 6 killed tokens
       const { data: killedTokens, error } = await supabase
         .from("tokens")
         .select("id, token_string, client_name, work_description, created_at")
@@ -59,7 +58,6 @@ export default function Home() {
         setLoadingTestimonials(false);
         return;
       }
-      // For each token, fetch the first request image
       const testimonialsWithImages = await Promise.all(
         killedTokens.map(async (token) => {
           const { data: images } = await supabase
@@ -90,7 +88,7 @@ export default function Home() {
   };
 
   const getWhatsAppLink = (product) => {
-    const message = `I'm interested in this product: ${product.description} for $${product.price}. See image: ${product.image_url}`;
+    const message = `I'm interested in this product: ${product.description} for ₦${product.price}. See image: ${product.image_url}`;
     return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
   };
 
@@ -101,7 +99,7 @@ export default function Home() {
 
   return (
     <div>
-      {/* Hero Section – Carpentry Workshop Background */}
+      {/* Hero Section */}
       <section className="relative text-white">
         <div
           className="absolute inset-0 bg-cover bg-center bg-no-repeat"
@@ -113,9 +111,7 @@ export default function Home() {
         </div>
         <div className="relative container mx-auto px-6 py-32 text-center">
           <h1 className="text-5xl md:text-7xl font-bold mb-4">OKMADE Furniture</h1>
-          <p className="text-xl md:text-2xl max-w-2xl mx-auto">
-            Handcrafted pieces for modern living – timeless design, exceptional quality.
-          </p>
+          <p className="text-xl md:text-2xl max-w-2xl mx-auto">Handcrafted pieces for modern living – timeless design, exceptional quality.</p>
           <div className="mt-8 flex gap-4 justify-center flex-wrap">
             <a href="/showroom" className="bg-white text-black px-6 py-3 rounded-full font-semibold hover:bg-gray-200 transition">Browse Showroom</a>
             <a href="/catalog" className="bg-transparent border-2 border-white px-6 py-3 rounded-full font-semibold hover:bg-white hover:text-black transition">View Catalog</a>
@@ -143,7 +139,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Featured Showroom Products */}
+      {/* Featured Products */}
       <section className="container mx-auto px-6 py-16">
         <h2 className="text-3xl font-bold text-center mb-12">Featured Pieces</h2>
         {loadingProducts ? (
@@ -163,7 +159,7 @@ export default function Home() {
                 <div className="p-5">
                   <p className="text-gray-600 text-sm mb-2">{product.description}</p>
                   <div className="flex justify-between items-center">
-                    <span className="text-xl font-bold text-green-700">${product.price}</span>
+                    <span className="text-xl font-bold text-green-700">₦{product.price}</span>
                     <a href={getWhatsAppLink(product)} target="_blank" rel="noopener noreferrer" className="text-green-500 hover:text-green-600">📞 WhatsApp</a>
                   </div>
                 </div>
@@ -178,7 +174,7 @@ export default function Home() {
         )}
       </section>
 
-      {/* Catalog Preview Section */}
+      {/* Catalog Preview */}
       <section className="bg-white py-16 border-t border-gray-200">
         <div className="container mx-auto px-6">
           <h2 className="text-3xl font-bold text-center mb-12">Latest Catalog Space</h2>
@@ -217,23 +213,13 @@ export default function Home() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {testimonials.map((testimonial) => (
-                <a
-                  key={testimonial.id}
-                  href={`/workspace/${testimonial.token_string}`}
-                  className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition block"
-                >
+                <a key={testimonial.id} href={`/workspace/${testimonial.token_string}`} className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition block">
                   <div className="h-48 overflow-hidden">
-                    {testimonial.image ? (
-                      <img src={testimonial.image} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">No image</div>
-                    )}
+                    {testimonial.image ? <img src={testimonial.image} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">No image</div>}
                   </div>
                   <div className="p-5">
                     <h3 className="font-bold text-xl mb-2">{testimonial.client_name || "Client"}</h3>
-                    <p className="text-gray-600 line-clamp-3">
-                      {testimonial.work_description || "Completed furniture piece. See the full story."}
-                    </p>
+                    <p className="text-gray-600 line-clamp-3">{testimonial.work_description || "Completed furniture piece. See the full story."}</p>
                     <p className="text-sm text-blue-500 mt-3">View full work →</p>
                   </div>
                 </a>
@@ -246,14 +232,14 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Floating WhatsApp Icon */}
+      {/* Floating WhatsApp */}
       <a href={getWhatsAppGeneralLink()} target="_blank" rel="noopener noreferrer" className="fixed bottom-6 right-6 bg-green-500 text-white p-4 rounded-full shadow-lg hover:bg-green-600 transition z-50">💬 WhatsApp</a>
 
-      {/* Footer with admin link */}
+      {/* Footer */}
       <footer className="bg-gray-900 text-white text-center py-6 text-sm">
         <p>© 2026 OKMADE Furniture. All rights reserved.</p>
         <p className="mt-2"><a href="/admin/login" className="text-gray-400 hover:text-white transition">Admin Login</a></p>
       </footer>
     </div>
   );
-          }
+        }
