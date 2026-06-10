@@ -1,12 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
 
 export default function AdminProgress() {
   const [tokens, setTokens] = useState([]);
@@ -17,21 +11,18 @@ export default function AdminProgress() {
   const [message, setMessage] = useState("");
   const router = useRouter();
 
-  // Auth check
   if (typeof window !== "undefined" && sessionStorage.getItem("adminAuth") !== "true") {
     router.push("/admin/login");
     return null;
   }
 
-  // Fetch active tokens
   useEffect(() => {
     async function fetchTokens() {
-      const { data, error } = await supabase
-        .from("tokens")
-        .select("id, token_string, client_name")
-        .eq("status", "active")
-        .order("created_at", { ascending: false });
-      if (!error) setTokens(data || []);
+      const res = await fetch("/api/admin/active-tokens", { headers: { "x-admin-key": "okmade_super_secret_2026" } });
+      if (res.ok) {
+        const data = await res.json();
+        setTokens(data);
+      }
     }
     fetchTokens();
   }, []);
@@ -47,38 +38,25 @@ export default function AdminProgress() {
     setImages(Array.from(e.target.files));
   };
 
-  const handleSubmit = async (e) => {
+  const handleUpload = async (e) => {
     e.preventDefault();
     if (!selectedTokenId || images.length === 0) {
-      setMessage("Please select a token and at least one image.");
+      setMessage("Select a token and at least one image.");
       return;
     }
     setUploading(true);
     setMessage("");
-
     try {
-      for (let i = 0; i < images.length; i++) {
-        const file = images[i];
-        const fileExt = file.name.split(".").pop();
-        const fileName = `progress/${selectedTokenString}_${Date.now()}_${i}.${fileExt}`;
-        const { error: uploadError } = await supabase.storage
-          .from("workspace-progress")
-          .upload(fileName, file);
-        if (uploadError) throw uploadError;
-
-        const { data: urlData } = supabase.storage
-          .from("workspace-progress")
-          .getPublicUrl(fileName);
-        const imageUrl = urlData.publicUrl;
-
-        const { error: insertError } = await supabase.from("progress_images").insert([
-          {
-            token_id: selectedTokenId,
-            image_url: imageUrl,
-          },
-        ]);
-        if (insertError) throw insertError;
-      }
+      const formData = new FormData();
+      formData.append("tokenId", selectedTokenId);
+      images.forEach((img) => formData.append("progressImages", img));
+      const res = await fetch("/api/admin/upload-progress", {
+        method: "POST",
+        headers: { "x-admin-key": "okmade_super_secret_2026" },
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
       setMessage(`Uploaded ${images.length} progress image(s).`);
       setImages([]);
       document.getElementById("progressImages").value = "";
@@ -89,89 +67,56 @@ export default function AdminProgress() {
     }
   };
 
-  // Kill token function (optional, can be added as separate button)
-  const handleKillToken = async () => {
+  const handleKill = async () => {
     if (!selectedTokenId) {
-      setMessage("Please select a token first.");
+      setMessage("Select a token first.");
       return;
     }
-    if (!confirm(`Mark token ${selectedTokenString} as killed? This will make the workspace public as a testimonial.`)) return;
+    if (!confirm(`Kill token ${selectedTokenString}?`)) return;
     setUploading(true);
-    const { error } = await supabase
-      .from("tokens")
-      .update({ status: "killed" })
-      .eq("id", selectedTokenId);
-    if (error) {
-      setMessage("Error killing token: " + error.message);
-    } else {
-      setMessage(`Token ${selectedTokenString} killed. Workspace is now public.`);
-      // Refresh token list
-      const { data } = await supabase
-        .from("tokens")
-        .select("id, token_string, client_name")
-        .eq("status", "active");
-      setTokens(data || []);
+    try {
+      const res = await fetch("/api/admin/kill-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-key": "okmade_super_secret_2026" },
+        body: JSON.stringify({ tokenId: selectedTokenId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setMessage(`Token ${selectedTokenString} killed.`);
+      // Refresh token list (you can re-fetch or just remove from state)
+      const fetchRes = await fetch("/api/admin/active-tokens", { headers: { "x-admin-key": "okmade_super_secret_2026" } });
+      if (fetchRes.ok) setTokens(await fetchRes.json());
       setSelectedTokenId("");
       setSelectedTokenString("");
+    } catch (err) {
+      setMessage("Error: " + err.message);
+    } finally {
+      setUploading(false);
     }
-    setUploading(false);
   };
 
   return (
     <div className="p-8 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">Upload Progress Images & Manage Tokens</h1>
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <h1 className="text-2xl font-bold mb-6">Upload Progress & Manage Tokens</h1>
+      <form onSubmit={handleUpload} className="space-y-4">
         <div>
           <label className="block font-medium mb-1">Select Active Token</label>
-          <select
-            value={selectedTokenId}
-            onChange={handleTokenChange}
-            className="w-full border p-2 rounded"
-            required
-          >
+          <select value={selectedTokenId} onChange={handleTokenChange} className="w-full border p-2 rounded" required>
             <option value="">-- Choose a token --</option>
-            {tokens.map((token) => (
-              <option key={token.id} value={token.id}>
-                {token.token_string} - {token.client_name}
-              </option>
-            ))}
+            {tokens.map((t) => <option key={t.id} value={t.id}>{t.token_string} - {t.client_name}</option>)}
           </select>
         </div>
         <div>
-          <label className="block font-medium mb-1">Progress Images (can select multiple)</label>
-          <input
-            id="progressImages"
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={handleImageChange}
-            className="w-full border p-2 rounded"
-          />
+          <label className="block font-medium mb-1">Progress Images (multiple allowed)</label>
+          <input id="progressImages" type="file" accept="image/*" multiple onChange={handleImageChange} className="w-full border p-2 rounded" />
           <p className="text-sm text-gray-500 mt-1">{images.length} file(s) selected</p>
         </div>
         <div className="flex gap-3">
-          <button
-            type="submit"
-            disabled={uploading}
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
-          >
-            {uploading ? "Uploading..." : "Upload Progress"}
-          </button>
-          <button
-            type="button"
-            onClick={handleKillToken}
-            disabled={uploading || !selectedTokenId}
-            className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 disabled:opacity-50"
-          >
-            Kill Token (Make Public Testimonial)
-          </button>
+          <button type="submit" disabled={uploading} className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50">{uploading ? "Uploading..." : "Upload Progress"}</button>
+          <button type="button" onClick={handleKill} disabled={uploading || !selectedTokenId} className="bg-red-600 text-white px-4 py-2 rounded disabled:opacity-50">Kill Token</button>
         </div>
-        {message && (
-          <p className={`mt-4 ${message.includes("Error") ? "text-red-500" : "text-green-500"}`}>
-            {message}
-          </p>
-        )}
+        {message && <p className={`mt-4 ${message.startsWith("Error") ? "text-red-500" : "text-green-500"}`}>{message}</p>}
       </form>
     </div>
   );
-      }
+                        }
