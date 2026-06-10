@@ -26,7 +26,7 @@ export default function ShowroomPage() {
   }, []);
 
   const getWhatsAppLink = (product) => {
-    const message = `I'm interested in this product: ${product.description} for $${product.price}. See image: ${product.image_url}`;
+    const message = `I'm interested in this product: ${product.description} for ₦${product.price}. See image: ${product.image_url}`;
     return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
   };
 
@@ -50,7 +50,7 @@ export default function ShowroomPage() {
               <div className="p-5">
                 <p className="text-gray-600 text-sm mb-2">{product.description}</p>
                 <div className="flex justify-between items-center">
-                  <span className="text-xl font-bold text-green-700">${product.price}</span>
+                  <span className="text-xl font-bold text-green-700">₦{product.price}</span>
                   <a href={getWhatsAppLink(product)} target="_blank" rel="noopener noreferrer" className="text-green-500 hover:text-green-600">📞 WhatsApp</a>
                 </div>
               </div>
@@ -60,4 +60,4 @@ export default function ShowroomPage() {
       )}
     </div>
   );
-        }
+                }
