@@ -1,6 +1,12 @@
 "use client";
 import { useState } from "react";
+import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
 
 export default function CatalogUpload() {
   const [title, setTitle] = useState("");
@@ -38,18 +44,33 @@ export default function CatalogUpload() {
     setMessage("");
 
     try {
-      const formData = new FormData();
-      formData.append("title", title);
-      formData.append("description", description);
-      images.forEach((img) => formData.append("images", img));
+      const { data: catalog, error: catalogError } = await supabase
+        .from("catalogs")
+        .insert([{ title, description }])
+        .select()
+        .single();
+      if (catalogError) throw catalogError;
 
-      const res = await fetch("/api/admin/add-catalog", {
-        method: "POST",
-        headers: { "x-admin-key": "okmade_super_secret_2026" },
-        body: formData,
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      for (let i = 0; i < images.length; i++) {
+        const file = images[i];
+        const ext = file.name.split(".").pop();
+        const fileName = `${catalog.id}_${Date.now()}_${i}.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from("catalog-bucket")
+          .upload(fileName, file);
+        if (uploadError) throw uploadError;
+
+        const { data: urlData } = supabase.storage
+          .from("catalog-bucket")
+          .getPublicUrl(fileName);
+
+        await supabase.from("catalog_images").insert({
+          catalog_id: catalog.id,
+          image_url: urlData.publicUrl,
+          display_order: i,
+        });
+      }
+
       setMessage(`Catalog "${title}" added with ${images.length} image(s).`);
       setTitle("");
       setDescription("");
@@ -74,4 +95,4 @@ export default function CatalogUpload() {
       </form>
     </div>
   );
-                                                               }
+    }
