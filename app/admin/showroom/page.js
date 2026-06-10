@@ -1,12 +1,6 @@
 "use client";
 import { useState } from "react";
-import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
 
 export default function ShowroomUpload() {
   const [images, setImages] = useState([]);
@@ -45,33 +39,21 @@ export default function ShowroomUpload() {
     setMessage("");
 
     try {
-      const { data: product, error: productError } = await supabase
-        .from("showroom")
-        .insert([{ description, price: parseFloat(price), sold }])
-        .select()
-        .single();
-      if (productError) throw productError;
+      const formData = new FormData();
+      formData.append("description", description);
+      formData.append("price", price);
+      formData.append("sold", sold);
+      images.forEach((img) => formData.append("images", img));
 
-      for (let i = 0; i < images.length; i++) {
-        const file = images[i];
-        const ext = file.name.split(".").pop();
-        const fileName = `products/${product.id}_${Date.now()}_${i}.${ext}`;
-        const { error: uploadError } = await supabase.storage
-          .from("showroom-bucket")
-          .upload(fileName, file);
-        if (uploadError) throw uploadError;
-
-        const { data: urlData } = supabase.storage
-          .from("showroom-bucket")
-          .getPublicUrl(fileName);
-
-        await supabase.from("product_images").insert({
-          product_id: product.id,
-          image_url: urlData.publicUrl,
-          display_order: i,
-        });
-      }
-
+      const res = await fetch("/api/admin/add-product", {
+        method: "POST",
+        headers: {
+          "x-admin-key": "okmade_super_secret_2026", // Use same as ADMIN_API_KEY
+        },
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
       setMessage(`Product added with ${images.length} image(s).`);
       setImages([]);
       setDescription("");
@@ -115,4 +97,4 @@ export default function ShowroomUpload() {
       </form>
     </div>
   );
-        }
+    }
