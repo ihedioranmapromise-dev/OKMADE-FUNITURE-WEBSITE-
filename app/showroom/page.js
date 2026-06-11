@@ -15,18 +15,38 @@ export default function ShowroomPage() {
 
   useEffect(() => {
     async function fetchProducts() {
-      const { data, error } = await supabase
+      // 1. Get all products
+      const { data: productsData, error } = await supabase
         .from("showroom")
         .select("*")
         .order("created_at", { ascending: false });
-      if (!error) setProducts(data);
+      if (error || !productsData) {
+        setLoading(false);
+        return;
+      }
+      // 2. For each product, fetch its first image from product_images
+      const productsWithImages = await Promise.all(
+        productsData.map(async (product) => {
+          const { data: images } = await supabase
+            .from("product_images")
+            .select("image_url")
+            .eq("product_id", product.id)
+            .order("display_order", { ascending: true })
+            .limit(1);
+          return {
+            ...product,
+            imageUrl: images && images.length > 0 ? images[0].image_url : null,
+          };
+        })
+      );
+      setProducts(productsWithImages);
       setLoading(false);
     }
     fetchProducts();
   }, []);
 
   const getWhatsAppLink = (product) => {
-    const message = `I'm interested in this product: ${product.description} for ₦${product.price}. See image: ${product.image_url}`;
+    const message = `I'm interested in this product: ${product.description} for ₦${product.price}.`;
     return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
   };
 
@@ -42,7 +62,11 @@ export default function ShowroomPage() {
           {products.map((product) => (
             <div key={product.id} className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition">
               <div className="relative h-64">
-                <img src={product.image_url} alt={product.description} className="w-full h-full object-cover" />
+                {product.imageUrl ? (
+                  <img src={product.imageUrl} alt={product.description} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">No image</div>
+                )}
                 {product.sold && (
                   <span className="absolute top-4 right-4 bg-red-600 text-white px-3 py-1 rounded-full text-sm font-bold">SOLD</span>
                 )}
@@ -60,4 +84,4 @@ export default function ShowroomPage() {
       )}
     </div>
   );
-                }
+        }
