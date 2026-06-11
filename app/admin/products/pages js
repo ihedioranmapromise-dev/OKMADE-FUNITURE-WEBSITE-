@@ -1,0 +1,92 @@
+"use client";
+import { useEffect, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
+import { useRouter } from "next/navigation";
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
+
+export default function ManageProducts() {
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+
+  if (typeof window !== "undefined" && sessionStorage.getItem("adminAuth") !== "true") {
+    router.push("/admin/login");
+    return null;
+  }
+
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  async function fetchProducts() {
+    const { data, error } = await supabase
+      .from("showroom")
+      .select("id, description, price, sold, created_at")
+      .order("created_at", { ascending: false });
+    if (!error) setProducts(data || []);
+    setLoading(false);
+  }
+
+  async function deleteProduct(id) {
+    if (!confirm("Delete this product permanently? Images will also be removed.")) return;
+    // First, get all product_images to delete their storage files
+    const { data: images } = await supabase
+      .from("product_images")
+      .select("image_url")
+      .eq("product_id", id);
+    if (images && images.length) {
+      for (const img of images) {
+        // Extract file path from URL (e.g., .../storage/v1/object/public/showroom-bucket/products/xxx.jpg)
+        const url = img.image_url;
+        const path = url.split('/public/')[1];
+        if (path) {
+          await supabase.storage.from("showroom-bucket").remove([path]);
+        }
+      }
+    }
+    // Delete product_images rows (cascade should handle, but safe)
+    await supabase.from("product_images").delete().eq("product_id", id);
+    // Delete product
+    const { error } = await supabase.from("showroom").delete().eq("id", id);
+    if (error) alert("Error deleting product: " + error.message);
+    else fetchProducts(); // refresh list
+  }
+
+  return (
+    <div className="p-8">
+      <h1 className="text-2xl font-bold mb-6">Manage Products</h1>
+      {loading ? (
+        <p>Loading...</p>
+      ) : products.length === 0 ? (
+        <p>No products yet.</p>
+      ) : (
+        <table className="min-w-full bg-white border">
+          <thead>
+            <tr><th className="py-2 px-4 border">ID</th><th className="py-2 px-4 border">Description</th><th className="py-2 px-4 border">Price (₦)</th><th className="py-2 px-4 border">Sold</th><th className="py-2 px-4 border">Actions</th></tr>
+          </thead>
+          <tbody>
+            {products.map((p) => (
+              <tr key={p.id}>
+                <td className="py-2 px-4 border">{p.id.slice(0,8)}</td>
+                <td className="py-2 px-4 border">{p.description}</td>
+                <td className="py-2 px-4 border">{p.price}</td>
+                <td className="py-2 px-4 border">{p.sold ? "Yes" : "No"}</td>
+                <td className="py-2 px-4 border">
+                  <button onClick={() => router.push(`/admin/products/edit/${p.id}`)} className="bg-blue-500 text-white px-3 py-1 rounded mr-2">Edit</button>
+                  <button onClick={() => deleteProduct(p.id)} className="bg-red-500 text-white px-3 py-1 rounded">Delete</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <div className="mt-6">
+        <button onClick={() => router.push("/admin/showroom")} className="bg-green-600 text-white px-4 py-2 rounded">Add New Product</button>
+      </div>
+    </div>
+  );
+}
