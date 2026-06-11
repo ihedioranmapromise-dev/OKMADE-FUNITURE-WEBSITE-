@@ -22,11 +22,27 @@ export default function Home() {
 
   useEffect(() => {
     async function fetchProducts() {
-      const { data, error } = await supabase
+      const { data: productsData, error } = await supabase
         .from("showroom")
         .select("*")
         .order("created_at", { ascending: false });
-      if (!error) setProducts(data);
+      if (!error && productsData) {
+        const productsWithImages = await Promise.all(
+          productsData.map(async (product) => {
+            const { data: images } = await supabase
+              .from("product_images")
+              .select("image_url")
+              .eq("product_id", product.id)
+              .order("display_order", { ascending: true })
+              .limit(1);
+            return {
+              ...product,
+              imageUrl: images && images.length > 0 ? images[0].image_url : null,
+            };
+          })
+        );
+        setProducts(productsWithImages);
+      }
       setLoadingProducts(false);
     }
     async function fetchLatestCatalog() {
@@ -82,13 +98,11 @@ export default function Home() {
 
   const handleTokenSubmit = (e) => {
     e.preventDefault();
-    if (token.trim()) {
-      router.push(`/workspace/${token.trim()}`);
-    }
+    if (token.trim()) router.push(`/workspace/${token.trim()}`);
   };
 
   const getWhatsAppLink = (product) => {
-    const message = `I'm interested in this product: ${product.description} for ₦${product.price}. See image: ${product.image_url}`;
+    const message = `I'm interested in this product: ${product.description} for ₦${product.price}.`;
     return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
   };
 
@@ -101,12 +115,7 @@ export default function Home() {
     <div>
       {/* Hero Section */}
       <section className="relative text-white">
-        <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-          style={{
-            backgroundImage: "url('https://images.unsplash.com/photo-1589939705384-5185137a7f0f?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80')",
-          }}
-        >
+        <div className="absolute inset-0 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1589939705384-5185137a7f0f?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80')" }}>
           <div className="absolute inset-0 bg-black/50"></div>
         </div>
         <div className="relative container mx-auto px-6 py-32 text-center">
@@ -125,21 +134,14 @@ export default function Home() {
           <h2 className="text-3xl font-bold mb-4">Track Your Custom Work</h2>
           <p className="text-gray-600 mb-6">Enter the private token you received to see your workspace and progress.</p>
           <form onSubmit={handleTokenSubmit} className="max-w-md mx-auto flex gap-3">
-            <input
-              type="text"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              placeholder="Your token (e.g., ABC-123)"
-              className="flex-1 p-3 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            />
+            <input type="text" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Your token (e.g., ABC-123)" className="flex-1 p-3 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500" required />
             <button type="submit" className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition">Track Work →</button>
           </form>
           <p className="text-sm text-gray-500 mt-4">Example tokens: ABC123, XYZ789 (check your email or SMS).</p>
         </div>
       </section>
 
-      {/* Featured Products */}
+      {/* Featured Pieces */}
       <section className="container mx-auto px-6 py-16">
         <h2 className="text-3xl font-bold text-center mb-12">Featured Pieces</h2>
         {loadingProducts ? (
@@ -151,7 +153,11 @@ export default function Home() {
             {products.slice(0, 6).map((product) => (
               <div key={product.id} className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition">
                 <div className="relative h-64">
-                  <img src={product.image_url} alt={product.description} className="w-full h-full object-cover" />
+                  {product.imageUrl ? (
+                    <img src={product.imageUrl} alt={product.description} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">No image</div>
+                  )}
                   {product.sold && (
                     <span className="absolute top-4 right-4 bg-red-600 text-white px-3 py-1 rounded-full text-sm font-bold">SOLD</span>
                   )}
@@ -232,10 +238,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Floating WhatsApp */}
       <a href={getWhatsAppGeneralLink()} target="_blank" rel="noopener noreferrer" className="fixed bottom-6 right-6 bg-green-500 text-white p-4 rounded-full shadow-lg hover:bg-green-600 transition z-50">💬 WhatsApp</a>
-
-      {/* Footer */}
       <footer className="bg-gray-900 text-white text-center py-6 text-sm">
         <p>© 2026 OKMADE Furniture. All rights reserved.</p>
         <p className="mt-2"><a href="/admin/login" className="text-gray-400 hover:text-white transition">Admin Login</a></p>
