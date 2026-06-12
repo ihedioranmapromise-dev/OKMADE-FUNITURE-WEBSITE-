@@ -13,6 +13,7 @@ export default function ManageProducts() {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
+  // Admin auth check
   if (typeof window !== "undefined" && sessionStorage.getItem("adminAuth") !== "true") {
     router.push("/admin/login");
     return null;
@@ -23,32 +24,36 @@ export default function ManageProducts() {
   }, []);
 
   async function fetchProducts() {
+    setLoading(true);
     const { data, error } = await supabase
       .from("showroom")
       .select("id, description, price, sold, created_at")
       .order("created_at", { ascending: false });
-    if (!error) setProducts(data || []);
+    if (error) {
+      console.error("Supabase error:", error);
+      alert("Error fetching products: " + error.message);
+    } else {
+      setProducts(data || []);
+    }
     setLoading(false);
   }
 
   async function deleteProduct(id) {
     if (!confirm("Delete this product permanently? Images will also be removed.")) return;
-    // First, get all product_images to delete their storage files
+    // Get all product_images to delete storage files
     const { data: images } = await supabase
       .from("product_images")
       .select("image_url")
       .eq("product_id", id);
     if (images && images.length) {
       for (const img of images) {
-        // Extract file path from URL (e.g., .../storage/v1/object/public/showroom-bucket/products/xxx.jpg)
-        const url = img.image_url;
-        const path = url.split('/public/')[1];
+        const path = img.image_url.split('/public/')[1];
         if (path) {
           await supabase.storage.from("showroom-bucket").remove([path]);
         }
       }
     }
-    // Delete product_images rows (cascade should handle, but safe)
+    // Delete product_images rows
     await supabase.from("product_images").delete().eq("product_id", id);
     // Delete product
     const { error } = await supabase.from("showroom").delete().eq("id", id);
@@ -60,9 +65,9 @@ export default function ManageProducts() {
     <div className="p-8">
       <h1 className="text-2xl font-bold mb-6">Manage Products</h1>
       {loading ? (
-        <p>Loading...</p>
+        <p>Loading products...</p>
       ) : products.length === 0 ? (
-        <p>No products yet.</p>
+        <p>No products found. Add some from the "Add Product" page.</p>
       ) : (
         <table className="min-w-full bg-white border">
           <thead>
@@ -89,4 +94,4 @@ export default function ManageProducts() {
       </div>
     </div>
   );
-}
+        }
