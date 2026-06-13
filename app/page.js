@@ -10,6 +10,19 @@ const supabase = createClient(
 
 const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "";
 
+function StarRating({ rating }) {
+  const full = Math.floor(rating);
+  const half = rating % 1 >= 0.5;
+  const empty = 5 - full - (half ? 1 : 0);
+  return (
+    <div className="flex items-center gap-0.5">
+      {[...Array(full)].map((_, i) => <span key={i} className="text-yellow-500">★</span>)}
+      {half && <span className="text-yellow-500">½</span>}
+      {[...Array(empty)].map((_, i) => <span key={i} className="text-gray-300">★</span>)}
+    </div>
+  );
+}
+
 export default function Home() {
   const [products, setProducts] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
@@ -27,21 +40,32 @@ export default function Home() {
         .select("*")
         .order("created_at", { ascending: false });
       if (!error && productsData) {
-        const productsWithImages = await Promise.all(
+        const productsWithDetails = await Promise.all(
           productsData.map(async (product) => {
             const { data: images } = await supabase
               .from("product_images")
               .select("image_url")
               .eq("product_id", product.id)
-              .order("display_order", { ascending: true })
+              .order("display_order")
               .limit(1);
+            const { data: ratings } = await supabase
+              .from("ratings")
+              .select("rating")
+              .eq("product_id", product.id);
+            let avgRating = 0;
+            if (ratings && ratings.length) {
+              const sum = ratings.reduce((a, b) => a + b.rating, 0);
+              avgRating = sum / ratings.length;
+            }
             return {
               ...product,
-              imageUrl: images && images.length > 0 ? images[0].image_url : null,
+              imageUrl: images && images.length ? images[0].image_url : null,
+              avgRating,
+              reviewCount: ratings ? ratings.length : 0,
             };
           })
         );
-        setProducts(productsWithImages);
+        setProducts(productsWithDetails);
       }
       setLoadingProducts(false);
     }
@@ -57,7 +81,7 @@ export default function Home() {
           .from("catalog_images")
           .select("image_url")
           .eq("catalog_id", catalog.id)
-          .order("display_order", { ascending: true });
+          .order("display_order");
         setLatestCatalog({ ...catalog, images: images || [] });
       }
       setLoadingCatalog(false);
@@ -80,12 +104,9 @@ export default function Home() {
             .from("token_request_images")
             .select("image_url")
             .eq("token_id", token.id)
-            .order("display_order", { ascending: true })
+            .order("display_order")
             .limit(1);
-          return {
-            ...token,
-            image: images && images.length > 0 ? images[0].image_url : null,
-          };
+          return { ...token, image: images && images.length ? images[0].image_url : null };
         })
       );
       setTestimonials(testimonialsWithImages);
@@ -113,7 +134,6 @@ export default function Home() {
 
   return (
     <div>
-      {/* Hero Section */}
       <section className="relative text-white">
         <div className="absolute inset-0 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1589939705384-5185137a7f0f?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80')" }}>
           <div className="absolute inset-0 bg-black/50"></div>
@@ -128,7 +148,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Token Workspace Section */}
       <section className="bg-gray-100 py-16">
         <div className="container mx-auto px-6 text-center">
           <h2 className="text-3xl font-bold mb-4">Track Your Custom Work</h2>
@@ -141,7 +160,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Featured Pieces */}
       <section className="container mx-auto px-6 py-16">
         <h2 className="text-3xl font-bold text-center mb-12">Featured Pieces</h2>
         {loadingProducts ? (
@@ -158,16 +176,19 @@ export default function Home() {
                   ) : (
                     <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">No image</div>
                   )}
-                  {product.sold && (
-                    <span className="absolute top-4 right-4 bg-red-600 text-white px-3 py-1 rounded-full text-sm font-bold">SOLD</span>
-                  )}
+                  {product.sold && <span className="absolute top-4 right-4 bg-red-600 text-white px-3 py-1 rounded-full text-sm font-bold">SOLD</span>}
                 </div>
                 <div className="p-5">
                   <p className="text-gray-600 text-sm mb-2">{product.description}</p>
-                  <div className="flex justify-between items-center">
+                  <div className="flex justify-between items-center mt-1">
+                    <StarRating rating={product.avgRating || 0} />
+                    <span className="text-xs text-gray-500">({product.reviewCount || 0})</span>
+                  </div>
+                  <div className="flex justify-between items-center mt-2">
                     <span className="text-xl font-bold text-green-700">₦{product.price}</span>
                     <a href={getWhatsAppLink(product)} target="_blank" rel="noopener noreferrer" className="text-green-500 hover:text-green-600">📞 WhatsApp</a>
                   </div>
+                  <button onClick={() => router.push(`/product/${product.id}`)} className="mt-3 w-full bg-gray-800 text-white py-1 rounded hover:bg-gray-900 transition text-sm">View Details</button>
                 </div>
               </div>
             ))}
@@ -180,7 +201,6 @@ export default function Home() {
         )}
       </section>
 
-      {/* Catalog Preview */}
       <section className="bg-white py-16 border-t border-gray-200">
         <div className="container mx-auto px-6">
           <h2 className="text-3xl font-bold text-center mb-12">Latest Catalog Space</h2>
@@ -208,7 +228,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Testimonials Section */}
       <section className="bg-gray-50 py-16">
         <div className="container mx-auto px-6">
           <h2 className="text-3xl font-bold text-center mb-12">Client Testimonials</h2>
@@ -245,4 +264,4 @@ export default function Home() {
       </footer>
     </div>
   );
-        }
+  }
