@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
+import { getOptimizedImage } from '@/lib/utils';
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
@@ -84,7 +85,7 @@ export default function CatalogPage() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {catalog.images.map((img, idx) => (
                     <div key={idx} className="relative">
-                      <img src={img.image_url} className="w-full h-48 object-cover rounded-lg shadow" />
+                      <img src={getOptimizedImage(img.image_url, 500)} className="w-full h-48 object-cover rounded-lg shadow" />
                       <a
                         href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(`I'm interested in this catalog item: ${catalog.title}. Image: ${img.image_url}`)}`}
                         target="_blank"

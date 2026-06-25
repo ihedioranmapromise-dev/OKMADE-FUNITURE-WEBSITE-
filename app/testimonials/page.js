@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
+import { getOptimizedImage } from '@/lib/utils';
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
@@ -60,7 +61,7 @@ export default function TestimonialsPage() {
             >
               <div className="h-48 overflow-hidden">
                 {testimonial.image ? (
-                  <img src={testimonial.image} className="w-full h-full object-cover" />
+                  <img src={getOptimizedImage(testimonial.image, 400)} className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">No image</div>
                 )}

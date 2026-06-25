@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 
 const supabase = createClient(
+import { getOptimizedImage } from '@/lib/utils';
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
@@ -172,7 +173,7 @@ export default function Home() {
               <div key={product.id} className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition">
                 <div className="relative h-64">
                   {product.imageUrl ? (
-                    <img src={product.imageUrl} alt={product.description} className="w-full h-full object-cover" />
+                    <img src={getOptimizedImage(product.imageUrl, 400)} alt={product.description} className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">No image</div>
                   )}
@@ -213,7 +214,7 @@ export default function Home() {
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {latestCatalog.images.slice(0, 6).map((img, idx) => (
                   <div key={idx} className="relative">
-                    <img src={img.image_url} className="w-full h-40 object-cover rounded-lg shadow" />
+                    <img src={getOptimizedImage(img.image_url, 500)} className="w-full h-40 object-cover rounded-lg shadow" />
                     <a href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(`I'm interested in this catalog item: ${latestCatalog.title}. Image: ${img.image_url}`)}`} target="_blank" rel="noopener noreferrer" className="absolute bottom-2 right-2 bg-green-500 text-white p-1 rounded-full text-xs hover:bg-green-600">📞</a>
                   </div>
                 ))}

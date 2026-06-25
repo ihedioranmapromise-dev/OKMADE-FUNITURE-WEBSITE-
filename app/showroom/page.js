@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 
 const supabase = createClient(
+import { getOptimizedImage } from '@/lib/utils';
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
@@ -115,7 +116,7 @@ export default function ShowroomPage() {
               <div key={product.id} className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition">
                 <div className="relative h-64">
                   {product.imageUrl ? (
-                    <img src={product.imageUrl} alt={product.description} className="w-full h-full object-cover cursor-pointer" onClick={() => router.push(`/product/${product.id}`)} />
+                    <img src={getOptimizedImage(product.imageUrl, 400)} alt={product.description} className="w-full h-full object-cover cursor-pointer" onClick={() => router.push(`/product/${product.id}`)} />
                   ) : (
                     <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">No image</div>
                   )}

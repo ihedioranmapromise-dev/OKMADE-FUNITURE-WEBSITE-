@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import { useParams, useRouter } from "next/navigation";
 
 const supabase = createClient(
+import { getOptimizedImage } from '@/lib/utils';
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
@@ -129,7 +130,7 @@ export default function ProductDetail() {
       {/* Lightbox modal */}
       {lightboxOpen && selectedImage && (
         <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center" onClick={() => setLightboxOpen(false)}>
-          <img src={selectedImage} className="max-w-full max-h-full object-contain" />
+          <img src={getOptimizedImage(selectedImage, 800)} className="max-w-full max-h-full object-contain" />
           <button className="absolute top-4 right-4 text-white text-3xl" onClick={() => setLightboxOpen(false)}>✕</button>
         </div>
       )}
@@ -138,11 +139,11 @@ export default function ProductDetail() {
         {/* Left: Images */}
         <div>
           <div className="bg-gray-100 rounded-lg overflow-hidden mb-4 cursor-pointer" onClick={() => setLightboxOpen(true)}>
-            <img src={selectedImage} className="w-full h-auto object-contain max-h-96" />
+            <img src={getOptimizedImage(selectedImage, 800)} className="w-full h-auto object-contain max-h-96" />
           </div>
           <div className="flex gap-2 overflow-x-auto">
             {images.map((img, idx) => (
-              <img key={idx} src={img.image_url} className="w-20 h-20 object-cover rounded cursor-pointer border-2 border-transparent hover:border-blue-500" onClick={() => setSelectedImage(img.image_url)} />
+              <img key={idx} src={getOptimizedImage(img.image_url, 120)} className="w-20 h-20 object-cover rounded cursor-pointer border-2 border-transparent hover:border-blue-500" onClick={() => setSelectedImage(img.image_url)} />
             ))}
           </div>
         </div>
