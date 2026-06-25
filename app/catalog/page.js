@@ -1,10 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
+import { getOptimizedImage } from "@/lib/utils";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
-import { getOptimizedImage } from '@/lib/utils';
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
