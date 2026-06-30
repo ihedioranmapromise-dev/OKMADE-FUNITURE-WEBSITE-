@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useState } from "react";
-import { getOptimizedImage } from "@/lib/utils";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 
@@ -61,8 +60,7 @@ export default function ShowroomPage() {
             .from("product_images")
             .select("image_url")
             .eq("product_id", product.id)
-            .order("display_order")
-            .limit(1);
+            .order("display_order");
           const { data: ratings } = await supabase
             .from("ratings")
             .select("rating")
@@ -74,7 +72,7 @@ export default function ShowroomPage() {
           }
           return {
             ...product,
-            imageUrl: images && images.length ? images[0].image_url : null,
+            images: images || [],
             avgRating,
             reviewCount: ratings ? ratings.length : 0,
           };
@@ -94,58 +92,103 @@ export default function ShowroomPage() {
   };
 
   return (
-    <div className="container mx-auto px-6 py-12">
-      <h1 className="text-4xl font-bold text-center mb-6">Full Showroom</h1>
-      <div className="max-w-md mx-auto mb-8">
-        <input
-          type="text"
-          placeholder="Search products by description..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full p-3 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
-      {loading ? (
-        <p className="text-center">Loading products...</p>
-      ) : displayProducts.length === 0 ? (
-        <p className="text-center">No products match your search.</p>
-      ) : (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {displayProducts.slice(0, visibleCount).map((product) => (
-              <div key={product.id} className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition">
-                <div className="relative h-64">
-                  {product.imageUrl ? (
-                    <img src={getOptimizedImage(product.imageUrl, 400)} alt={product.description} className="w-full h-full object-cover cursor-pointer" onClick={() => router.push(`/product/${product.id}`)} />
-                  ) : (
-                    <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">No image</div>
-                  )}
-                  {product.sold && (
-                    <span className="absolute top-4 right-4 bg-red-600 text-white px-3 py-1 rounded-full text-sm font-bold">SOLD</span>
-                  )}
-                </div>
-                <div className="p-5">
-                  <p className="text-gray-600 text-sm mb-2">{product.description}</p>
-                  <div className="flex justify-between items-center mt-1">
-                    <StarRating rating={product.avgRating || 0} />
-                    <span className="text-xs text-gray-500">({product.reviewCount || 0})</span>
-                  </div>
-                  <div className="flex justify-between items-center mt-2">
-                    <span className="text-xl font-bold text-green-700">₦{product.price}</span>
-                    <a href={getWhatsAppLink(product)} target="_blank" rel="noopener noreferrer" className="text-green-500 hover:text-green-600">📞 WhatsApp</a>
-                  </div>
-                  <button onClick={() => router.push(`/product/${product.id}`)} className="mt-3 w-full bg-gray-800 text-white py-1 rounded hover:bg-gray-900 transition text-sm">View Details</button>
-                </div>
-              </div>
-            ))}
+    <div className="min-h-screen bg-gradient-to-b from-amber-50/40 to-white py-12">
+      <div className="container mx-auto px-4 md:px-6">
+        <div className="text-center mb-12">
+          <h1 className="text-4xl md:text-5xl font-bold text-gray-800 mb-3 tracking-tight">
+            Our <span className="text-amber-700">Showroom</span>
+          </h1>
+          <p className="text-gray-500 max-w-xl mx-auto">Discover handcrafted furniture pieces, each with its own story.</p>
+        </div>
+
+        <div className="max-w-md mx-auto mb-10">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search products..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full p-4 pl-12 border border-amber-200/50 rounded-full shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-300 bg-white/80 backdrop-blur-sm transition"
+            />
+            <svg className="absolute left-4 top-4 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
           </div>
-          {visibleCount < displayProducts.length && (
-            <div className="text-center mt-10">
-              <button onClick={loadMore} className="bg-gray-800 text-white px-8 py-3 rounded-full hover:bg-gray-900 transition">Load More</button>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center items-center h-64">
+            <div className="animate-pulse text-amber-600">Loading beautiful pieces...</div>
+          </div>
+        ) : displayProducts.length === 0 ? (
+          <div className="text-center py-16 text-gray-400">No products match your search.</div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {displayProducts.slice(0, visibleCount).map((product) => {
+                // Carousel state for this product
+                const [currentImageIndex, setCurrentImageIndex] = useState(0);
+                useEffect(() => {
+                  if (product.images.length > 1) {
+                    const interval = setInterval(() => {
+                      setCurrentImageIndex(prev => (prev + 1) % product.images.length);
+                    }, 3000);
+                    return () => clearInterval(interval);
+                  }
+                }, [product.images.length]);
+                return (
+                  <div
+                    key={product.id}
+                    className="group bg-white rounded-2xl shadow-md hover:shadow-2xl transition-all duration-300 overflow-hidden border border-amber-100/30 hover:-translate-y-1"
+                  >
+                    <div className="relative h-64 overflow-hidden bg-amber-50 cursor-pointer" onClick={() => router.push(`/product/${product.id}`)}>
+                      {product.images.length > 0 ? (
+                        <img
+                          src={product.images[currentImageIndex]?.image_url}
+                          alt={product.description}
+                          className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-amber-300 text-sm">No image</div>
+                      )}
+                      {product.sold && (
+                        <span className="absolute top-4 right-4 bg-red-600 text-white px-3 py-1 rounded-full text-sm font-bold">SOLD</span>
+                      )}
+                      {product.images.length > 1 && (
+                        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5">
+                          {product.images.map((_, idx) => (
+                            <span
+                              key={idx}
+                              className={`w-2 h-2 rounded-full transition ${idx === currentImageIndex ? 'bg-white' : 'bg-white/40'}`}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-5">
+                      <p className="text-gray-600 text-sm mb-1 line-clamp-2">{product.description}</p>
+                      <div className="flex justify-between items-center mt-1">
+                        <StarRating rating={product.avgRating || 0} />
+                        <span className="text-xs text-gray-500">({product.reviewCount || 0})</span>
+                      </div>
+                      <div className="flex justify-between items-center mt-2">
+                        <span className="text-xl font-bold text-green-700">₦{product.price}</span>
+                        <a href={getWhatsAppLink(product)} target="_blank" rel="noopener noreferrer" className="text-green-500 hover:text-green-600">📞 WhatsApp</a>
+                      </div>
+                      <button onClick={() => router.push(`/product/${product.id}`)} className="mt-3 w-full bg-amber-600 hover:bg-amber-700 text-white font-medium py-2 rounded-full transition">
+                        View Details
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          )}
-        </>
-      )}
+            {visibleCount < displayProducts.length && (
+              <div className="text-center mt-14">
+                <button onClick={loadMore} className="bg-white hover:bg-amber-50 text-amber-700 border border-amber-200 px-8 py-3 rounded-full transition shadow-sm hover:shadow-md">Load More</button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
-            }
+}
