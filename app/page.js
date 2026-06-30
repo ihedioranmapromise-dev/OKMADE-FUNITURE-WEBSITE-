@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useState } from "react";
-import { getOptimizedImage } from "@/lib/utils";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 
@@ -31,8 +30,12 @@ export default function Home() {
   const [loadingCatalog, setLoadingCatalog] = useState(true);
   const [testimonials, setTestimonials] = useState([]);
   const [loadingTestimonials, setLoadingTestimonials] = useState(true);
+  const [recentReviews, setRecentReviews] = useState([]);
   const [token, setToken] = useState("");
   const router = useRouter();
+
+  // Carousel index per product
+  const [imageIndices, setImageIndices] = useState({});
 
   useEffect(() => {
     async function fetchProducts() {
@@ -47,8 +50,7 @@ export default function Home() {
               .from("product_images")
               .select("image_url")
               .eq("product_id", product.id)
-              .order("display_order")
-              .limit(1);
+              .order("display_order");
             const { data: ratings } = await supabase
               .from("ratings")
               .select("rating")
@@ -60,24 +62,28 @@ export default function Home() {
             }
             return {
               ...product,
-              imageUrl: images && images.length ? images[0].image_url : null,
+              images: images || [],
               avgRating,
               reviewCount: ratings ? ratings.length : 0,
             };
           })
         );
         setProducts(productsWithDetails);
+        // Initialize image indices
+        const initialIndices = {};
+        productsWithDetails.forEach(p => { initialIndices[p.id] = 0; });
+        setImageIndices(initialIndices);
       }
       setLoadingProducts(false);
     }
     async function fetchLatestCatalog() {
-      const { data: catalog, error: catError } = await supabase
+      const { data: catalog, error } = await supabase
         .from("catalogs")
         .select("*")
         .order("created_at", { ascending: false })
         .limit(1)
         .single();
-      if (!catError && catalog) {
+      if (!error && catalog) {
         const { data: images } = await supabase
           .from("catalog_images")
           .select("image_url")
@@ -88,35 +94,59 @@ export default function Home() {
       setLoadingCatalog(false);
     }
     async function fetchTestimonials() {
-      const { data: killedTokens, error } = await supabase
+      const { data: killedTokens } = await supabase
         .from("tokens")
         .select("id, token_string, client_name, work_description, created_at")
         .eq("status", "killed")
         .order("created_at", { ascending: false })
         .limit(6);
-      if (error || !killedTokens || killedTokens.length === 0) {
+      if (killedTokens && killedTokens.length > 0) {
+        const withImages = await Promise.all(
+          killedTokens.map(async (token) => {
+            const { data: images } = await supabase
+              .from("token_request_images")
+              .select("image_url")
+              .eq("token_id", token.id)
+              .limit(1);
+            return { ...token, image: images?.[0]?.image_url || null };
+          })
+        );
+        setTestimonials(withImages);
+      } else {
         setTestimonials([]);
-        setLoadingTestimonials(false);
-        return;
       }
-      const testimonialsWithImages = await Promise.all(
-        killedTokens.map(async (token) => {
-          const { data: images } = await supabase
-            .from("token_request_images")
-            .select("image_url")
-            .eq("token_id", token.id)
-            .order("display_order")
-            .limit(1);
-          return { ...token, image: images && images.length ? images[0].image_url : null };
-        })
-      );
-      setTestimonials(testimonialsWithImages);
       setLoadingTestimonials(false);
+    }
+    async function fetchRecentReviews() {
+      const { data: reviews } = await supabase
+        .from("ratings")
+        .select("*, showroom(description, id)")
+        .order("created_at", { ascending: false })
+        .limit(5);
+      if (reviews) setRecentReviews(reviews);
     }
     fetchProducts();
     fetchLatestCatalog();
     fetchTestimonials();
+    fetchRecentReviews();
   }, []);
+
+  // Auto-rotate product images on homepage
+  useEffect(() => {
+    if (products.length === 0) return;
+    const interval = setInterval(() => {
+      setImageIndices(prev => {
+        const newIndices = { ...prev };
+        products.forEach(p => {
+          if (p.images.length > 1) {
+            newIndices[p.id] = (newIndices[p.id] + 1) % p.images.length;
+          }
+        });
+        return newIndices;
+      });
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [products]);
 
   const handleTokenSubmit = (e) => {
     e.preventDefault();
@@ -135,6 +165,7 @@ export default function Home() {
 
   return (
     <div>
+      {/* Hero Section */}
       <section className="relative text-white">
         <div className="absolute inset-0 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1589939705384-5185137a7f0f?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80')" }}>
           <div className="absolute inset-0 bg-black/50"></div>
@@ -149,6 +180,7 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Token Workspace */}
       <section className="bg-gray-100 py-16">
         <div className="container mx-auto px-6 text-center">
           <h2 className="text-3xl font-bold mb-4">Track Your Custom Work</h2>
@@ -161,6 +193,7 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Featured Pieces */}
       <section className="container mx-auto px-6 py-16">
         <h2 className="text-3xl font-bold text-center mb-12">Featured Pieces</h2>
         {loadingProducts ? (
@@ -169,30 +202,40 @@ export default function Home() {
           <p className="text-center text-gray-500">No products yet. Check back soon!</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {products.slice(0, 6).map((product) => (
-              <div key={product.id} className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition">
-                <div className="relative h-64">
-                  {product.imageUrl ? (
-                    <img src={getOptimizedImage(product.imageUrl, 400)} alt={product.description} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">No image</div>
-                  )}
-                  {product.sold && <span className="absolute top-4 right-4 bg-red-600 text-white px-3 py-1 rounded-full text-sm font-bold">SOLD</span>}
-                </div>
-                <div className="p-5">
-                  <p className="text-gray-600 text-sm mb-2">{product.description}</p>
-                  <div className="flex justify-between items-center mt-1">
-                    <StarRating rating={product.avgRating || 0} />
-                    <span className="text-xs text-gray-500">({product.reviewCount || 0})</span>
+            {products.slice(0, 6).map((product) => {
+              const idx = imageIndices[product.id] || 0;
+              return (
+                <div key={product.id} className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition">
+                  <div className="relative h-64">
+                    {product.images.length > 0 ? (
+                      <img src={product.images[idx]?.image_url} alt={product.description} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">No image</div>
+                    )}
+                    {product.sold && <span className="absolute top-4 right-4 bg-red-600 text-white px-3 py-1 rounded-full text-sm font-bold">SOLD</span>}
+                    {product.images.length > 1 && (
+                      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5">
+                        {product.images.map((_, i) => (
+                          <span key={i} className={`w-2 h-2 rounded-full transition ${i === idx ? 'bg-white' : 'bg-white/40'}`} />
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <div className="flex justify-between items-center mt-2">
-                    <span className="text-xl font-bold text-green-700">₦{product.price}</span>
-                    <a href={getWhatsAppLink(product)} target="_blank" rel="noopener noreferrer" className="text-green-500 hover:text-green-600">📞 WhatsApp</a>
+                  <div className="p-5">
+                    <p className="text-gray-600 text-sm mb-1">{product.description}</p>
+                    <div className="flex justify-between items-center mt-1">
+                      <StarRating rating={product.avgRating || 0} />
+                      <span className="text-xs text-gray-500">({product.reviewCount || 0})</span>
+                    </div>
+                    <div className="flex justify-between items-center mt-2">
+                      <span className="text-xl font-bold text-green-700">₦{product.price}</span>
+                      <a href={getWhatsAppLink(product)} target="_blank" rel="noopener noreferrer" className="text-green-500 hover:text-green-600">📞 WhatsApp</a>
+                    </div>
+                    <button onClick={() => router.push(`/product/${product.id}`)} className="mt-3 w-full bg-gray-800 text-white py-1 rounded hover:bg-gray-900 transition text-sm">View Details</button>
                   </div>
-                  <button onClick={() => router.push(`/product/${product.id}`)} className="mt-3 w-full bg-gray-800 text-white py-1 rounded hover:bg-gray-900 transition text-sm">View Details</button>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
         {products.length > 6 && (
@@ -202,6 +245,77 @@ export default function Home() {
         )}
       </section>
 
+      {/* About Section */}
+      <section className="bg-white py-16 border-t border-gray-200">
+        <div className="container mx-auto px-6 max-w-4xl text-center">
+          <h2 className="text-3xl font-bold mb-6">About OKMADE Furniture</h2>
+          <p className="text-gray-600 text-lg leading-relaxed">
+            We are a passionate team of artisans dedicated to creating timeless furniture that blends tradition with modern design. 
+            Every piece is handcrafted with care, using sustainably sourced materials. We believe furniture should not only serve a purpose 
+            but also tell a story of quality and craftsmanship. From custom works to our showroom collection, we bring your vision to life.
+          </p>
+        </div>
+      </section>
+
+      {/* Contact Section */}
+      <section className="bg-amber-50/50 py-16">
+        <div className="container mx-auto px-6 max-w-4xl text-center">
+          <h2 className="text-3xl font-bold mb-6">Contact Us</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
+            <div>
+              <p className="font-semibold">📧 Email</p>
+              <p className="text-gray-600">okeywoodwork@gmail.com</p>
+              <p className="font-semibold mt-4">💬 WhatsApp</p>
+              <p className="text-gray-600">09161919164</p>
+              <p className="font-semibold mt-4">📞 Call</p>
+              <p className="text-gray-600">09166300206</p>
+              <p className="text-gray-600">07049264672</p>
+            </div>
+            <div>
+              <p className="font-semibold">📍 Location</p>
+              <p className="text-gray-600">Lagos, Nigeria (by appointment)</p>
+              <p className="font-semibold mt-4">🕒 Hours</p>
+              <p className="text-gray-600">Mon–Fri: 9am – 6pm</p>
+              <p className="text-gray-600">Sat: 10am – 4pm</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Customer Reviews Section */}
+      <section className="bg-white py-16 border-t border-gray-200">
+        <div className="container mx-auto px-6 max-w-4xl">
+          <h2 className="text-3xl font-bold text-center mb-12">Customer Reviews</h2>
+          {recentReviews.length === 0 ? (
+            <p className="text-center text-gray-500">No reviews yet. Be the first to review a product!</p>
+          ) : (
+            <div className="space-y-6">
+              {recentReviews.map((review) => (
+                <div key={review.id} className="border-b pb-6 last:border-0">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="font-semibold">{review.user_name}</span>
+                      <StarRating rating={review.rating} />
+                    </div>
+                    <span className="text-xs text-gray-400">{new Date(review.created_at).toLocaleDateString()}</span>
+                  </div>
+                  {review.comment && <p className="text-gray-600 mt-2">{review.comment}</p>}
+                  {review.showroom && (
+                    <button
+                      onClick={() => router.push(`/product/${review.showroom.id}`)}
+                      className="text-amber-600 text-sm hover:underline mt-2 inline-block"
+                    >
+                      View product →
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Catalog Preview */}
       <section className="bg-white py-16 border-t border-gray-200">
         <div className="container mx-auto px-6">
           <h2 className="text-3xl font-bold text-center mb-12">Latest Catalog Space</h2>
@@ -214,7 +328,7 @@ export default function Home() {
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {latestCatalog.images.slice(0, 6).map((img, idx) => (
                   <div key={idx} className="relative">
-                    <img src={getOptimizedImage(img.image_url, 500)} className="w-full h-40 object-cover rounded-lg shadow" />
+                    <img src={img.image_url} className="w-full h-40 object-cover rounded-lg shadow" />
                     <a href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(`I'm interested in this catalog item: ${latestCatalog.title}. Image: ${img.image_url}`)}`} target="_blank" rel="noopener noreferrer" className="absolute bottom-2 right-2 bg-green-500 text-white p-1 rounded-full text-xs hover:bg-green-600">📞</a>
                   </div>
                 ))}
@@ -229,6 +343,7 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Testimonials Section */}
       <section className="bg-gray-50 py-16">
         <div className="container mx-auto px-6">
           <h2 className="text-3xl font-bold text-center mb-12">Client Testimonials</h2>
@@ -238,14 +353,14 @@ export default function Home() {
             <p className="text-center text-gray-500">No testimonials yet. Completed works will appear here.</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {testimonials.map((testimonial) => (
-                <a key={testimonial.id} href={`/workspace/${testimonial.token_string}`} className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition block">
+              {testimonials.map((t) => (
+                <a key={t.id} href={`/workspace/${t.token_string}`} className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition block">
                   <div className="h-48 overflow-hidden">
-                    {testimonial.image ? <img src={testimonial.image} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">No image</div>}
+                    {t.image ? <img src={t.image} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">No image</div>}
                   </div>
                   <div className="p-5">
-                    <h3 className="font-bold text-xl mb-2">{testimonial.client_name || "Client"}</h3>
-                    <p className="text-gray-600 line-clamp-3">{testimonial.work_description || "Completed furniture piece. See the full story."}</p>
+                    <h3 className="font-bold text-xl mb-2">{t.client_name || "Client"}</h3>
+                    <p className="text-gray-600 line-clamp-3">{t.work_description || "Completed furniture piece. See the full story."}</p>
                     <p className="text-sm text-blue-500 mt-3">View full work →</p>
                   </div>
                 </a>
@@ -265,4 +380,4 @@ export default function Home() {
       </footer>
     </div>
   );
-  }
+}
