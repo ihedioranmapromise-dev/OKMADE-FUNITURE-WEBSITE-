@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -15,6 +15,14 @@ export default function CatalogPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [visibleCount, setVisibleCount] = useState(9);
+
+  // Lightbox state
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [currentImages, setCurrentImages] = useState([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [zoom, setZoom] = useState(false);
+  const autoPlayRef = useRef(null);
 
   useEffect(() => {
     fetchCatalogs();
@@ -58,6 +66,57 @@ export default function CatalogPage() {
 
   const loadMore = () => setVisibleCount(prev => prev + 9);
 
+  // Lightbox functions
+  const openLightbox = (images, index) => {
+    if (!images || images.length === 0) return;
+    setCurrentImages(images);
+    setCurrentIndex(index);
+    setLightboxOpen(true);
+    setIsPlaying(false); // stop auto-play on open
+    setZoom(false);
+  };
+
+  const closeLightbox = () => {
+    setLightboxOpen(false);
+    setCurrentImages([]);
+    setCurrentIndex(0);
+    setIsPlaying(false);
+    setZoom(false);
+    if (autoPlayRef.current) clearInterval(autoPlayRef.current);
+  };
+
+  const goToPrev = (e) => {
+    e?.stopPropagation();
+    setCurrentIndex(prev => (prev === 0 ? currentImages.length - 1 : prev - 1));
+  };
+
+  const goToNext = (e) => {
+    e?.stopPropagation();
+    setCurrentIndex(prev => (prev === currentImages.length - 1 ? 0 : prev + 1));
+  };
+
+  const togglePlay = (e) => {
+    e.stopPropagation();
+    setIsPlaying(prev => !prev);
+  };
+
+  const toggleZoom = (e) => {
+    e.stopPropagation();
+    setZoom(prev => !prev);
+  };
+
+  // Auto-play effect
+  useEffect(() => {
+    if (isPlaying && lightboxOpen && currentImages.length > 1) {
+      autoPlayRef.current = setInterval(() => {
+        setCurrentIndex(prev => (prev === currentImages.length - 1 ? 0 : prev + 1));
+      }, 3000);
+    } else {
+      if (autoPlayRef.current) clearInterval(autoPlayRef.current);
+    }
+    return () => clearInterval(autoPlayRef.current);
+  }, [isPlaying, lightboxOpen, currentImages.length]);
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-amber-50/50 to-white py-12">
       <div className="container mx-auto px-4 md:px-6">
@@ -98,8 +157,11 @@ export default function CatalogPage() {
                   key={catalog.id}
                   className="group bg-white rounded-2xl shadow-md hover:shadow-2xl transition-all duration-300 overflow-hidden border border-amber-100/30 hover:-translate-y-1"
                 >
-                  {/* Main Image */}
-                  <div className="relative h-64 overflow-hidden bg-amber-50">
+                  {/* Main Image – clickable to open lightbox */}
+                  <div
+                    className="relative h-64 overflow-hidden bg-amber-50 cursor-pointer"
+                    onClick={() => openLightbox(catalog.images, 0)}
+                  >
                     {catalog.images.length > 0 ? (
                       <img
                         src={catalog.images[0].image_url}
@@ -111,10 +173,14 @@ export default function CatalogPage() {
                         No image
                       </div>
                     )}
-                    {/* Decorative tag */}
                     <div className="absolute top-4 left-4 bg-amber-700/80 backdrop-blur-sm text-white text-xs px-3 py-1 rounded-full shadow-lg">
                       Featured
                     </div>
+                    {catalog.images.length > 1 && (
+                      <div className="absolute bottom-4 right-4 bg-black/50 text-white text-xs px-3 py-1 rounded-full backdrop-blur-sm">
+                        {catalog.images.length} images
+                      </div>
+                    )}
                   </div>
 
                   {/* Content */}
@@ -126,12 +192,19 @@ export default function CatalogPage() {
                     {catalog.images.length > 1 && (
                       <div className="flex gap-2 mb-4">
                         {catalog.images.slice(1, 4).map((img, idx) => (
-                          <div key={idx} className="w-12 h-12 rounded-lg overflow-hidden border border-gray-100 flex-shrink-0">
+                          <div
+                            key={idx}
+                            className="w-12 h-12 rounded-lg overflow-hidden border border-gray-100 flex-shrink-0 cursor-pointer"
+                            onClick={() => openLightbox(catalog.images, idx + 1)}
+                          >
                             <img src={img.image_url} className="w-full h-full object-cover" />
                           </div>
                         ))}
                         {catalog.images.length > 4 && (
-                          <div className="w-12 h-12 rounded-lg bg-amber-100 flex items-center justify-center text-amber-700 text-xs font-bold">
+                          <div
+                            className="w-12 h-12 rounded-lg bg-amber-100 flex items-center justify-center text-amber-700 text-xs font-bold cursor-pointer"
+                            onClick={() => openLightbox(catalog.images, 4)}
+                          >
                             +{catalog.images.length - 4}
                           </div>
                         )}
@@ -165,6 +238,77 @@ export default function CatalogPage() {
           </>
         )}
       </div>
+
+      {/* Lightbox Modal */}
+      {lightboxOpen && currentImages.length > 0 && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+          onClick={closeLightbox}
+        >
+          <div className="relative max-w-5xl w-full h-auto max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+            {/* Close button */}
+            <button
+              className="absolute -top-12 right-0 text-white text-3xl hover:text-amber-300 transition"
+              onClick={closeLightbox}
+              aria-label="Close gallery"
+            >
+              ✕
+            </button>
+
+            {/* Play/Pause and Zoom buttons */}
+            <div className="absolute -top-12 left-0 flex gap-3 text-white">
+              {currentImages.length > 1 && (
+                <button
+                  className="hover:text-amber-300 transition text-sm bg-white/20 px-3 py-1 rounded-full backdrop-blur-sm flex items-center gap-1"
+                  onClick={togglePlay}
+                >
+                  {isPlaying ? '⏸ Pause' : '▶ Play'}
+                </button>
+              )}
+              <button
+                className="hover:text-amber-300 transition text-sm bg-white/20 px-3 py-1 rounded-full backdrop-blur-sm"
+                onClick={toggleZoom}
+              >
+                {zoom ? '🔍 Zoom Out' : '🔍 Zoom In'}
+              </button>
+            </div>
+
+            {/* Main image with zoom */}
+            <div className="overflow-hidden rounded-lg">
+              <img
+                src={currentImages[currentIndex]?.image_url}
+                className={`w-full h-auto max-h-[80vh] object-contain transition-transform duration-300 ${zoom ? 'scale-150 cursor-zoom-out' : 'scale-100 cursor-zoom-in'}`}
+                onClick={toggleZoom}
+                alt="Catalog gallery"
+              />
+            </div>
+
+            {/* Navigation arrows */}
+            {currentImages.length > 1 && (
+              <>
+                <button
+                  className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/30 text-white p-3 rounded-full backdrop-blur-sm transition"
+                  onClick={goToPrev}
+                  aria-label="Previous image"
+                >
+                  ‹
+                </button>
+                <button
+                  className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/30 text-white p-3 rounded-full backdrop-blur-sm transition"
+                  onClick={goToNext}
+                  aria-label="Next image"
+                >
+                  ›
+                </button>
+                {/* Counter */}
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 text-white text-sm px-4 py-1 rounded-full backdrop-blur-sm">
+                  {currentIndex + 1} / {currentImages.length}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
