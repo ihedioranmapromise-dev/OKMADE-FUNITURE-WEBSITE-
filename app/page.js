@@ -32,10 +32,8 @@ export default function Home() {
   const [loadingTestimonials, setLoadingTestimonials] = useState(true);
   const [recentReviews, setRecentReviews] = useState([]);
   const [token, setToken] = useState("");
-  const router = useRouter();
-
-  // Carousel index per product
   const [imageIndices, setImageIndices] = useState({});
+  const router = useRouter();
 
   useEffect(() => {
     async function fetchProducts() {
@@ -69,7 +67,6 @@ export default function Home() {
           })
         );
         setProducts(productsWithDetails);
-        // Initialize image indices
         const initialIndices = {};
         productsWithDetails.forEach(p => { initialIndices[p.id] = 0; });
         setImageIndices(initialIndices);
@@ -165,7 +162,7 @@ export default function Home() {
 
   return (
     <div>
-      {/* Hero Section */}
+      {/* Hero Section - same as before */}
       <section className="relative text-white">
         <div className="absolute inset-0 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1589939705384-5185137a7f0f?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80')" }}>
           <div className="absolute inset-0 bg-black/50"></div>
@@ -180,7 +177,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Token Workspace */}
+      {/* Token Workspace - same */}
       <section className="bg-gray-100 py-16">
         <div className="container mx-auto px-6 text-center">
           <h2 className="text-3xl font-bold mb-4">Track Your Custom Work</h2>
@@ -193,7 +190,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Featured Pieces */}
+      {/* Featured Pieces - same */}
       <section className="container mx-auto px-6 py-16">
         <h2 className="text-3xl font-bold text-center mb-12">Featured Pieces</h2>
         {loadingProducts ? (
@@ -245,11 +242,11 @@ export default function Home() {
         )}
       </section>
 
-      {/* About Section */}
-      <section className="bg-white py-16 border-t border-gray-200">
+      {/* About Section - styled with handwritten font and different background */}
+      <section className="bg-amber-50/80 py-16 border-t border-amber-100">
         <div className="container mx-auto px-6 max-w-4xl text-center">
-          <h2 className="text-3xl font-bold mb-6">About OKMADE Furniture</h2>
-          <p className="text-gray-600 text-lg leading-relaxed">
+          <h2 className="text-4xl font-bold mb-6 font-['Dancing_Script',_cursive] text-amber-800">About OKMADE Furniture</h2>
+          <p className="text-gray-700 text-lg leading-relaxed font-light">
             We are a passionate team of artisans dedicated to creating timeless furniture that blends tradition with modern design. 
             Every piece is handcrafted with care, using sustainably sourced materials. We believe furniture should not only serve a purpose 
             but also tell a story of quality and craftsmanship. From custom works to our showroom collection, we bring your vision to life.
@@ -257,32 +254,33 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Contact Section */}
-      <section className="bg-amber-50/50 py-16">
-        <div className="container mx-auto px-6 max-w-4xl text-center">
-          <h2 className="text-3xl font-bold mb-6">Contact Us</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
+      {/* Contact Section - dark background */}
+      <section className="bg-gray-900 text-white py-16">
+        <div className="container mx-auto px-6 max-w-4xl">
+          <h2 className="text-4xl font-bold text-center mb-10 font-['Dancing_Script',_cursive] text-amber-300">Get in Touch</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-10 text-left">
             <div>
-              <p className="font-semibold">📧 Email</p>
-              <p className="text-gray-600">okeywoodwork@gmail.com</p>
-              <p className="font-semibold mt-4">💬 WhatsApp</p>
-              <p className="text-gray-600">09161919164</p>
-              <p className="font-semibold mt-4">📞 Call</p>
-              <p className="text-gray-600">09166300206</p>
-              <p className="text-gray-600">07049264672</p>
+              <p className="font-semibold text-amber-200">📧 Email</p>
+              <p className="text-gray-300">okeywoodwork@gmail.com</p>
+              <p className="font-semibold text-amber-200 mt-4">💬 WhatsApp</p>
+              <p className="text-gray-300">09161919164</p>
+              <p className="font-semibold text-amber-200 mt-4">📞 Call</p>
+              <p className="text-gray-300">09166300206</p>
+              <p className="text-gray-300">07049264672</p>
             </div>
             <div>
-              <p className="font-semibold">📍 Location</p>
-              <p className="text-gray-600">Lagos, Nigeria (by appointment)</p>
-              <p className="font-semibold mt-4">🕒 Hours</p>
-              <p className="text-gray-600">Mon–Fri: 9am – 6pm</p>
-              <p className="text-gray-600">Sat: 10am – 4pm</p>
+              <p className="font-semibold text-amber-200">📍 Location</p>
+              <p className="text-gray-300">Aba, Abia State, Nigeria</p>
+              <p className="text-gray-300 text-sm italic">(Open to travelling for appointments)</p>
+              <p className="font-semibold text-amber-200 mt-4">🕒 Hours</p>
+              <p className="text-gray-300">Mon–Fri: 9am – 6pm</p>
+              <p className="text-gray-300">Sat: 10am – 4pm</p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Customer Reviews Section */}
+      {/* Customer Reviews - same */}
       <section className="bg-white py-16 border-t border-gray-200">
         <div className="container mx-auto px-6 max-w-4xl">
           <h2 className="text-3xl font-bold text-center mb-12">Customer Reviews</h2>
@@ -315,7 +313,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Catalog Preview */}
+      {/* Catalog Preview - same */}
       <section className="bg-white py-16 border-t border-gray-200">
         <div className="container mx-auto px-6">
           <h2 className="text-3xl font-bold text-center mb-12">Latest Catalog Space</h2>
@@ -343,7 +341,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Testimonials Section */}
+      {/* Testimonials - same */}
       <section className="bg-gray-50 py-16">
         <div className="container mx-auto px-6">
           <h2 className="text-3xl font-bold text-center mb-12">Client Testimonials</h2>
