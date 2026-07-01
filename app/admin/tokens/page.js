@@ -63,6 +63,7 @@ export default function AdminTokens() {
             price: price ? parseFloat(price) : null,
             double_payment: doublePayment,
             status: "active",
+            notification_method: "whatsapp",
           },
         ])
         .select()
@@ -91,6 +92,21 @@ export default function AdminTokens() {
 
       setGeneratedToken(tokenString);
       setMessage(`Token generated: ${tokenString}`);
+
+      // --- Send WhatsApp notification ---
+      const workspaceLink = `${process.env.NEXT_PUBLIC_BASE_URL}/workspace/${tokenString}`;
+      const whatsappMessage = `Hello ${clientName},\n\nYour custom furniture token is: ${tokenString}\n\nYou can track your project here: ${workspaceLink}\n\nThank you for choosing OKMADE Furniture.`;
+      try {
+        await fetch('/api/send-whatsapp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: clientContact, message: whatsappMessage }),
+        });
+        // Don't block UI if fails
+      } catch (err) {
+        console.error('WhatsApp notification failed:', err);
+      }
+
       setClientName("");
       setClientContact("");
       setClientAddress("");
@@ -111,7 +127,7 @@ export default function AdminTokens() {
       <h1 className="text-2xl font-bold mb-6">Generate Client Token</h1>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div><label className="block font-medium mb-1">Client Name *</label><input type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} className="w-full border p-2 rounded" required /></div>
-        <div><label className="block font-medium mb-1">Client Contact (email or phone) *</label><input type="text" value={clientContact} onChange={(e) => setClientContact(e.target.value)} className="w-full border p-2 rounded" required /></div>
+        <div><label className="block font-medium mb-1">Client WhatsApp Number (with country code, e.g., 2348123456789) *</label><input type="text" value={clientContact} onChange={(e) => setClientContact(e.target.value)} className="w-full border p-2 rounded" required /></div>
         <div><label className="block font-medium mb-1">Client Address</label><textarea value={clientAddress} onChange={(e) => setClientAddress(e.target.value)} className="w-full border p-2 rounded" rows="2" /></div>
         <div><label className="block font-medium mb-1">Work Description</label><textarea value={workDescription} onChange={(e) => setWorkDescription(e.target.value)} className="w-full border p-2 rounded" rows="3" /></div>
         <div><label className="block font-medium mb-1">Price (₦) (optional)</label><input type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} className="w-full border p-2 rounded" /></div>
@@ -123,4 +139,4 @@ export default function AdminTokens() {
       </form>
     </div>
   );
-            }
+}
