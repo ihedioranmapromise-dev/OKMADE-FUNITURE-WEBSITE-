@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
+import { getOptimizedImage } from "@/lib/utils";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -466,7 +467,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Testimonials */}
+      {/* Testimonials – with optimized images */}
       <section id="testimonials" className="bg-gray-50 py-16">
         <div className="container mx-auto px-6">
           <h2 className="text-3xl font-bold text-center mb-12">Client Testimonials</h2>
@@ -479,7 +480,15 @@ export default function Home() {
               {testimonials.map((t) => (
                 <a key={t.id} href={`/workspace/${t.token_string}`} className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition block">
                   <div className="h-48 overflow-hidden">
-                    {t.image ? <img src={t.image} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">No image</div>}
+                    {t.image ? (
+                      <img
+                        src={getOptimizedImage(t.image, 400)}
+                        className="w-full h-full object-cover"
+                        alt="Testimonial"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">No image</div>
+                    )}
                   </div>
                   <div className="p-5">
                     <h3 className="font-bold text-xl mb-2">{t.client_name || "Client"}</h3>
