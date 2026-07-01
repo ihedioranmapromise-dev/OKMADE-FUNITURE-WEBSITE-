@@ -10,7 +10,6 @@ const supabase = createClient(
 
 const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "";
 
-// StarRating component
 function StarRating({ rating }) {
   const full = Math.floor(rating);
   const half = rating % 1 >= 0.5;
@@ -27,7 +26,7 @@ function StarRating({ rating }) {
 export default function Home() {
   const [products, setProducts] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
-  const [latestCatalog, setLatestCatalog] = useState(null);
+  const [catalogImages, setCatalogImages] = useState([]); // all catalog images flat array
   const [loadingCatalog, setLoadingCatalog] = useState(true);
   const [testimonials, setTestimonials] = useState([]);
   const [loadingTestimonials, setLoadingTestimonials] = useState(true);
@@ -36,26 +35,23 @@ export default function Home() {
   const [imageIndices, setImageIndices] = useState({});
   const router = useRouter();
 
- const aboutImages = [
-  // Hotels / luxury rooms
-  "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1600&q=80",
-  "https://images.unsplash.com/photo-1616137466211-f939a420be84?w=1600&q=80",
-  // Churches / grand halls
-  "https://images.unsplash.com/photo-1591134523895-0b7e0f57a2f0?w=1600&q=80",
-  "https://images.unsplash.com/photo-1580587771525-78b9dba3b914?w=1600&q=80",
-  // Government houses / offices
-  "https://images.unsplash.com/photo-1497366216548-37526070297c?w=1600&q=80",
-  "https://images.unsplash.com/photo-1575995872537-3793eb2b26d5?w=1600&q=80",
-  // Workshops / workspaces
-  "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=1600&q=80",
-  "https://images.unsplash.com/photo-1564501049412-61c2a3083791?w=1600&q=80",
-  // Furnished rooms / homes
-  "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1600&q=80",
-  // Furnished stores / showrooms
-  "https://images.unsplash.com/photo-1511578314322-379afb476865?w=1600&q=80"
-];
-
+  // --- About slideshow images --- (same as before)
+  const aboutImages = [
+    "https://images.unsplash.com/photo-1616137466211-f939a420be84?w=1600&q=80",
+    "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1600&q=80",
+    "https://images.unsplash.com/photo-1591134523895-0b7e0f57a2f0?w=1600&q=80",
+    "https://images.unsplash.com/photo-1580587771525-78b9dba3b914?w=1600&q=80",
+    "https://images.unsplash.com/photo-1497366216548-37526070297c?w=1600&q=80",
+    "https://images.unsplash.com/photo-1575995872537-3793eb2b26d5?w=1600&q=80",
+    "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=1600&q=80",
+    "https://images.unsplash.com/photo-1564501049412-61c2a3083791?w=1600&q=80",
+    "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1600&q=80",
+    "https://images.unsplash.com/photo-1511578314322-379afb476865?w=1600&q=80"
+  ];
   const [aboutImageIndex, setAboutImageIndex] = useState(0);
+
+  // --- Catalog carousel state ---
+  const [catalogCarouselIndex, setCatalogCarouselIndex] = useState(0);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -64,7 +60,14 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
-  // --- End about slideshow ---
+  // Auto-rotate catalog images
+  useEffect(() => {
+    if (catalogImages.length === 0) return;
+    const interval = setInterval(() => {
+      setCatalogCarouselIndex(prev => (prev + 1) % catalogImages.length);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [catalogImages]);
 
   useEffect(() => {
     async function fetchProducts() {
@@ -104,23 +107,35 @@ export default function Home() {
       }
       setLoadingProducts(false);
     }
-    async function fetchLatestCatalog() {
-      const { data: catalog, error } = await supabase
+
+    async function fetchAllCatalogImages() {
+      setLoadingCatalog(true);
+      // 1. Get all catalogs
+      const { data: catalogs, error } = await supabase
         .from("catalogs")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
-      if (!error && catalog) {
+        .select("id, title, description")
+        .order("created_at", { ascending: false });
+      if (error || !catalogs) {
+        setCatalogImages([]);
+        setLoadingCatalog(false);
+        return;
+      }
+      // 2. For each catalog, get images and flatten
+      let allImages = [];
+      for (const catalog of catalogs) {
         const { data: images } = await supabase
           .from("catalog_images")
-          .select("image_url")
+          .select("image_url, catalog_id")
           .eq("catalog_id", catalog.id)
           .order("display_order");
-        setLatestCatalog({ ...catalog, images: images || [] });
+        if (images && images.length) {
+          allImages = [...allImages, ...images];
+        }
       }
+      setCatalogImages(allImages);
       setLoadingCatalog(false);
     }
+
     async function fetchTestimonials() {
       const { data: killedTokens } = await supabase
         .from("tokens")
@@ -145,6 +160,7 @@ export default function Home() {
       }
       setLoadingTestimonials(false);
     }
+
     async function fetchRecentReviews() {
       const { data: reviews } = await supabase
         .from("ratings")
@@ -153,13 +169,14 @@ export default function Home() {
         .limit(5);
       if (reviews) setRecentReviews(reviews);
     }
+
     fetchProducts();
-    fetchLatestCatalog();
+    fetchAllCatalogImages();
     fetchTestimonials();
     fetchRecentReviews();
   }, []);
 
-  // Auto-rotate product images on homepage
+  // Auto-rotate product images on homepage (featured pieces)
   useEffect(() => {
     if (products.length === 0) return;
     const interval = setInterval(() => {
@@ -193,7 +210,7 @@ export default function Home() {
 
   return (
     <div>
-      {/* Hero Section */}
+      {/* Hero Section - same */}
       <section className="relative text-white">
         <div className="absolute inset-0 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1589939705384-5185137a7f0f?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80')" }}>
           <div className="absolute inset-0 bg-black/50"></div>
@@ -221,7 +238,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Featured Pieces */}
+      {/* Featured Pieces - same */}
       <section className="container mx-auto px-6 py-16">
         <h2 className="text-3xl font-bold text-center mb-12">Featured Pieces</h2>
         {loadingProducts ? (
@@ -273,21 +290,12 @@ export default function Home() {
         )}
       </section>
 
-      {/* --- About Section with Slideshow --- */}
+      {/* --- About Section with Slideshow --- (unchanged) */}
       <section className="relative h-[600px] md:h-[700px] flex items-center overflow-hidden">
-        {/* Background image with fade transition */}
-        <div
-          className="absolute inset-0 transition-opacity duration-1000 bg-cover bg-center"
-          style={{ backgroundImage: `url(${aboutImages[aboutImageIndex]})` }}
-        />
-        {/* Dark overlay for readability */}
+        <div className="absolute inset-0 transition-opacity duration-1000 bg-cover bg-center" style={{ backgroundImage: `url(${aboutImages[aboutImageIndex]})` }} />
         <div className="absolute inset-0 bg-black/50" />
-
-        {/* Content */}
         <div className="relative z-10 container mx-auto px-6 text-center text-white">
-          <h2 className="text-4xl md:text-5xl font-bold mb-6 font-['Dancing_Script',_cursive] text-amber-200 drop-shadow-lg">
-            About OKMADE Furniture
-          </h2>
+          <h2 className="text-4xl md:text-5xl font-bold mb-6 font-['Dancing_Script',_cursive] text-amber-200 drop-shadow-lg">About OKMADE Furniture</h2>
           <p className="max-w-3xl mx-auto text-lg md:text-xl leading-relaxed bg-black/30 backdrop-blur-sm p-6 rounded-2xl border border-white/10">
             We are a team of skilled artisans dedicated to transforming spaces with timeless furniture.
             From <span className="text-amber-200 font-semibold">hotels, churches, and government houses</span> to <span className="text-amber-200 font-semibold">private homes and corporate offices</span>,
@@ -305,7 +313,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Contact Section - Dark Background */}
+      {/* --- Contact Section - Dark --- (unchanged) */}
       <section className="bg-gray-900 text-white py-16">
         <div className="container mx-auto px-6 max-w-4xl">
           <h2 className="text-4xl font-bold text-center mb-10 font-['Dancing_Script',_cursive] text-amber-300">Get in Touch</h2>
@@ -331,7 +339,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Customer Reviews */}
+      {/* Customer Reviews - unchanged */}
       <section className="bg-white py-16 border-t border-gray-200">
         <div className="container mx-auto px-6 max-w-4xl">
           <h2 className="text-3xl font-bold text-center mb-12">Customer Reviews</h2>
@@ -364,35 +372,65 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Catalog Preview */}
-      <section className="bg-white py-16 border-t border-gray-200">
-        <div className="container mx-auto px-6">
-          <h2 className="text-3xl font-bold text-center mb-12">Latest Catalog Space</h2>
+      {/* --- NEW Catalog Carousel Section --- */}
+      <section className="relative py-16 overflow-hidden bg-gradient-to-br from-amber-900/90 via-amber-800/80 to-stone-800 text-white">
+        {/* Decorative pattern overlay */}
+        <div className="absolute inset-0 opacity-10" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }} />
+
+        <div className="container mx-auto px-4 md:px-6 relative z-10">
+          <h2 className="text-3xl md:text-4xl font-bold text-center mb-8 font-['Dancing_Script',_cursive] text-amber-200 drop-shadow-lg">
+            Our Catalog Gallery
+          </h2>
+
           {loadingCatalog ? (
-            <p className="text-center text-gray-500">Loading catalog...</p>
-          ) : latestCatalog ? (
-            <div className="max-w-4xl mx-auto text-center">
-              <p className="text-gray-700 text-lg font-semibold mb-2">{latestCatalog.title}</p>
-              <p className="text-gray-700 text-lg mb-6">{latestCatalog.description}</p>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                {latestCatalog.images.slice(0, 6).map((img, idx) => (
-                  <div key={idx} className="relative">
-                    <img src={img.image_url} className="w-full h-40 object-cover rounded-lg shadow" />
-                    <a href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(`I'm interested in this catalog item: ${latestCatalog.title}. Image: ${img.image_url}`)}`} target="_blank" rel="noopener noreferrer" className="absolute bottom-2 right-2 bg-green-500 text-white p-1 rounded-full text-xs hover:bg-green-600">📞</a>
-                  </div>
+            <div className="flex justify-center items-center h-64">
+              <div className="animate-pulse text-amber-300">Loading catalog images...</div>
+            </div>
+          ) : catalogImages.length === 0 ? (
+            <p className="text-center text-gray-300">No catalog images yet. Add some from the admin panel.</p>
+          ) : (
+            <div className="relative max-w-5xl mx-auto">
+              <div className="overflow-hidden rounded-2xl shadow-2xl">
+                <div className="relative aspect-[16/9] bg-stone-700">
+                  <img
+                    src={catalogImages[catalogCarouselIndex]?.image_url}
+                    className="w-full h-full object-cover transition-opacity duration-700"
+                    alt="Catalog"
+                  />
+                </div>
+              </div>
+
+              {/* Dot indicators */}
+              <div className="flex justify-center gap-2 mt-6">
+                {catalogImages.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setCatalogCarouselIndex(idx)}
+                    className={`w-3 h-3 rounded-full transition-all duration-300 ${
+                      idx === catalogCarouselIndex
+                        ? 'bg-amber-400 w-6'
+                        : 'bg-white/40 hover:bg-white/70'
+                    }`}
+                    aria-label={`Go to slide ${idx + 1}`}
+                  />
                 ))}
               </div>
-              <div className="mt-8">
-                <a href="/catalog" className="inline-block bg-purple-600 text-white px-8 py-3 rounded-full hover:bg-purple-700 transition">Explore Full Catalog →</a>
+
+              {/* Explore button */}
+              <div className="text-center mt-8">
+                <a
+                  href="/catalog"
+                  className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold px-8 py-3 rounded-full transition shadow-lg hover:shadow-xl"
+                >
+                  Explore Full Catalog →
+                </a>
               </div>
             </div>
-          ) : (
-            <p className="text-center text-gray-500">No catalog spaces yet. Check back soon!</p>
           )}
         </div>
       </section>
 
-      {/* Testimonials */}
+      {/* Testimonials - unchanged */}
       <section className="bg-gray-50 py-16">
         <div className="container mx-auto px-6">
           <h2 className="text-3xl font-bold text-center mb-12">Client Testimonials</h2>
