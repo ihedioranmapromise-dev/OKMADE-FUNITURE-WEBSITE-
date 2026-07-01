@@ -36,19 +36,24 @@ export default function Home() {
   const [imageIndices, setImageIndices] = useState({});
   const router = useRouter();
 
-  // --- About slideshow images ---
-  const aboutImages = [
-    "https://images.unsplash.com/photo-1616137466211-f939a420be84?w=1600&q=80",
-    "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1600&q=80",
-    "https://images.unsplash.com/photo-1591134523895-0b7e0f57a2f0?w=1600&q=80",
-    "https://images.unsplash.com/photo-1580587771525-78b9dba3b914?w=1600&q=80",
-    "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=1600&q=80",
-    "https://images.unsplash.com/photo-1564501049412-61c2a3083791?w=1600&q=80",
-    "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1600&q=80",
-    "https://images.unsplash.com/photo-1497366216548-37526070297c?w=1600&q=80",
-    "https://images.unsplash.com/photo-1575995872537-3793eb2b26d5?w=1600&q=80",
-    "https://images.unsplash.com/photo-1511578314322-379afb476865?w=1600&q=80"
-  ];
+ const aboutImages = [
+  // Hotels / luxury rooms
+  "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1600&q=80",
+  "https://images.unsplash.com/photo-1616137466211-f939a420be84?w=1600&q=80",
+  // Churches / grand halls
+  "https://images.unsplash.com/photo-1591134523895-0b7e0f57a2f0?w=1600&q=80",
+  "https://images.unsplash.com/photo-1580587771525-78b9dba3b914?w=1600&q=80",
+  // Government houses / offices
+  "https://images.unsplash.com/photo-1497366216548-37526070297c?w=1600&q=80",
+  "https://images.unsplash.com/photo-1575995872537-3793eb2b26d5?w=1600&q=80",
+  // Workshops / workspaces
+  "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=1600&q=80",
+  "https://images.unsplash.com/photo-1564501049412-61c2a3083791?w=1600&q=80",
+  // Furnished rooms / homes
+  "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1600&q=80",
+  // Furnished stores / showrooms
+  "https://images.unsplash.com/photo-1511578314322-379afb476865?w=1600&q=80"
+];
 
   const [aboutImageIndex, setAboutImageIndex] = useState(0);
 
