@@ -10,6 +10,7 @@ const supabase = createClient(
 
 const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "";
 
+// StarRating component
 function StarRating({ rating }) {
   const full = Math.floor(rating);
   const half = rating % 1 >= 0.5;
@@ -34,6 +35,31 @@ export default function Home() {
   const [token, setToken] = useState("");
   const [imageIndices, setImageIndices] = useState({});
   const router = useRouter();
+
+  // --- About slideshow images ---
+  const aboutImages = [
+    "https://images.unsplash.com/photo-1616137466211-f939a420be84?w=1600&q=80",
+    "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1600&q=80",
+    "https://images.unsplash.com/photo-1591134523895-0b7e0f57a2f0?w=1600&q=80",
+    "https://images.unsplash.com/photo-1580587771525-78b9dba3b914?w=1600&q=80",
+    "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=1600&q=80",
+    "https://images.unsplash.com/photo-1564501049412-61c2a3083791?w=1600&q=80",
+    "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1600&q=80",
+    "https://images.unsplash.com/photo-1497366216548-37526070297c?w=1600&q=80",
+    "https://images.unsplash.com/photo-1575995872537-3793eb2b26d5?w=1600&q=80",
+    "https://images.unsplash.com/photo-1511578314322-379afb476865?w=1600&q=80"
+  ];
+
+  const [aboutImageIndex, setAboutImageIndex] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setAboutImageIndex(prev => (prev + 1) % aboutImages.length);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // --- End about slideshow ---
 
   useEffect(() => {
     async function fetchProducts() {
@@ -162,7 +188,7 @@ export default function Home() {
 
   return (
     <div>
-      {/* Hero Section - same as before */}
+      {/* Hero Section */}
       <section className="relative text-white">
         <div className="absolute inset-0 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1589939705384-5185137a7f0f?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80')" }}>
           <div className="absolute inset-0 bg-black/50"></div>
@@ -177,7 +203,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Token Workspace - same */}
+      {/* Token Workspace */}
       <section className="bg-gray-100 py-16">
         <div className="container mx-auto px-6 text-center">
           <h2 className="text-3xl font-bold mb-4">Track Your Custom Work</h2>
@@ -190,7 +216,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Featured Pieces - same */}
+      {/* Featured Pieces */}
       <section className="container mx-auto px-6 py-16">
         <h2 className="text-3xl font-bold text-center mb-12">Featured Pieces</h2>
         {loadingProducts ? (
@@ -242,19 +268,39 @@ export default function Home() {
         )}
       </section>
 
-      {/* About Section - styled with handwritten font and different background */}
-      <section className="bg-amber-50/80 py-16 border-t border-amber-100">
-        <div className="container mx-auto px-6 max-w-4xl text-center">
-          <h2 className="text-4xl font-bold mb-6 font-['Dancing_Script',_cursive] text-amber-800">About OKMADE Furniture</h2>
-          <p className="text-gray-700 text-lg leading-relaxed font-light">
-            We are a passionate team of artisans dedicated to creating timeless furniture that blends tradition with modern design. 
-            Every piece is handcrafted with care, using sustainably sourced materials. We believe furniture should not only serve a purpose 
-            but also tell a story of quality and craftsmanship. From custom works to our showroom collection, we bring your vision to life.
+      {/* --- About Section with Slideshow --- */}
+      <section className="relative h-[600px] md:h-[700px] flex items-center overflow-hidden">
+        {/* Background image with fade transition */}
+        <div
+          className="absolute inset-0 transition-opacity duration-1000 bg-cover bg-center"
+          style={{ backgroundImage: `url(${aboutImages[aboutImageIndex]})` }}
+        />
+        {/* Dark overlay for readability */}
+        <div className="absolute inset-0 bg-black/50" />
+
+        {/* Content */}
+        <div className="relative z-10 container mx-auto px-6 text-center text-white">
+          <h2 className="text-4xl md:text-5xl font-bold mb-6 font-['Dancing_Script',_cursive] text-amber-200 drop-shadow-lg">
+            About OKMADE Furniture
+          </h2>
+          <p className="max-w-3xl mx-auto text-lg md:text-xl leading-relaxed bg-black/30 backdrop-blur-sm p-6 rounded-2xl border border-white/10">
+            We are a team of skilled artisans dedicated to transforming spaces with timeless furniture.
+            From <span className="text-amber-200 font-semibold">hotels, churches, and government houses</span> to <span className="text-amber-200 font-semibold">private homes and corporate offices</span>,
+            we bring elegance and functionality to every project.
+            <br /><br />
+            Beyond new creations, we also offer <span className="text-amber-200 font-semibold">expert repairs and restoration</span> –
+            breathing new life into your cherished pieces.
+            Our passion is to craft furniture that tells your story.
           </p>
+          <div className="mt-6 text-sm text-amber-200/70 italic">
+            <span className="inline-block mx-2">✦</span>
+            Featured: Hotels &bull; Churches &bull; Government Houses &bull; Workshops
+            <span className="inline-block mx-2">✦</span>
+          </div>
         </div>
       </section>
 
-      {/* Contact Section - dark background */}
+      {/* Contact Section - Dark Background */}
       <section className="bg-gray-900 text-white py-16">
         <div className="container mx-auto px-6 max-w-4xl">
           <h2 className="text-4xl font-bold text-center mb-10 font-['Dancing_Script',_cursive] text-amber-300">Get in Touch</h2>
@@ -280,7 +326,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Customer Reviews - same */}
+      {/* Customer Reviews */}
       <section className="bg-white py-16 border-t border-gray-200">
         <div className="container mx-auto px-6 max-w-4xl">
           <h2 className="text-3xl font-bold text-center mb-12">Customer Reviews</h2>
@@ -313,7 +359,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Catalog Preview - same */}
+      {/* Catalog Preview */}
       <section className="bg-white py-16 border-t border-gray-200">
         <div className="container mx-auto px-6">
           <h2 className="text-3xl font-bold text-center mb-12">Latest Catalog Space</h2>
@@ -341,7 +387,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Testimonials - same */}
+      {/* Testimonials */}
       <section className="bg-gray-50 py-16">
         <div className="container mx-auto px-6">
           <h2 className="text-3xl font-bold text-center mb-12">Client Testimonials</h2>
