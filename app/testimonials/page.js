@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
-import { getOptimizedImage } from "@/lib/utils";
 import { createClient } from "@supabase/supabase-js";
+import { getOptimizedImage } from "@/lib/utils";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -61,7 +61,11 @@ export default function TestimonialsPage() {
             >
               <div className="h-48 overflow-hidden">
                 {testimonial.image ? (
-                  <img src={getOptimizedImage(testimonial.image, 400)} className="w-full h-full object-cover" />
+                  <img
+                    src={getOptimizedImage(testimonial.image, 400)}
+                    className="w-full h-full object-cover"
+                    alt="Testimonial"
+                  />
                 ) : (
                   <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">No image</div>
                 )}
@@ -79,4 +83,4 @@ export default function TestimonialsPage() {
       )}
     </div>
   );
-                }
+}
