@@ -35,6 +35,7 @@ export default function Home() {
   const [recentReviews, setRecentReviews] = useState([]);
   const [token, setToken] = useState("");
   const [imageIndices, setImageIndices] = useState({});
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const router = useRouter();
 
   const aboutImages = [
@@ -208,10 +209,42 @@ export default function Home() {
     return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
   };
 
+  // Navbar component
+  const Navbar = () => (
+    <nav className="fixed top-0 left-0 w-full z-50 bg-white/90 backdrop-blur-md shadow-sm border-b border-amber-100/20">
+      <div className="container mx-auto px-4 md:px-6 flex items-center justify-between h-16">
+        <a href="#home" className="text-2xl font-bold text-amber-800 font-['Dancing_Script',_cursive]">
+          OKMADE
+        </a>
+        <div className="hidden md:flex gap-8 text-gray-700 font-medium">
+          <a href="#home" className="hover:text-amber-700 transition">Home</a>
+          <a href="#about" className="hover:text-amber-700 transition">About</a>
+          <a href="#contact" className="hover:text-amber-700 transition">Contact</a>
+          <a href="#reviews" className="hover:text-amber-700 transition">Reviews</a>
+          <a href="#testimonials" className="hover:text-amber-700 transition">Testimonials</a>
+        </div>
+        <button className="md:hidden text-2xl" onClick={() => setIsMenuOpen(!isMenuOpen)}>
+          {isMenuOpen ? '✕' : '☰'}
+        </button>
+      </div>
+      {isMenuOpen && (
+        <div className="md:hidden bg-white/95 backdrop-blur-md border-t border-amber-100/20 py-4 px-6 flex flex-col gap-4 text-gray-700 font-medium">
+          <a href="#home" onClick={() => setIsMenuOpen(false)} className="hover:text-amber-700">Home</a>
+          <a href="#about" onClick={() => setIsMenuOpen(false)} className="hover:text-amber-700">About</a>
+          <a href="#contact" onClick={() => setIsMenuOpen(false)} className="hover:text-amber-700">Contact</a>
+          <a href="#reviews" onClick={() => setIsMenuOpen(false)} className="hover:text-amber-700">Reviews</a>
+          <a href="#testimonials" onClick={() => setIsMenuOpen(false)} className="hover:text-amber-700">Testimonials</a>
+        </div>
+      )}
+    </nav>
+  );
+
   return (
     <div>
-      {/* Hero Section */}
-      <section className="relative text-white">
+      <Navbar />
+
+      {/* Home Section */}
+      <section id="home" className="relative text-white pt-16">
         <div className="absolute inset-0 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1589939705384-5185137a7f0f?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80')" }}>
           <div className="absolute inset-0 bg-black/50"></div>
         </div>
@@ -226,7 +259,7 @@ export default function Home() {
       </section>
 
       {/* Token Workspace */}
-      <section className="bg-gray-100 py-16">
+      <section id="token" className="bg-gray-100 py-16">
         <div className="container mx-auto px-6 text-center">
           <h2 className="text-3xl font-bold mb-4">Track Your Custom Work</h2>
           <p className="text-gray-600 mb-6">Enter the private token you received to see your workspace and progress.</p>
@@ -238,22 +271,15 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ============================================================== */}
-      {/* UPDATED FEATURED PIECES SECTION – ELITE DARK BACKGROUND       */}
-      {/* ============================================================== */}
-      <section className="relative py-16 overflow-hidden bg-gradient-to-br from-amber-900/90 via-amber-800/80 to-stone-800">
-        {/* Decorative pattern overlay */}
+      {/* Featured Pieces – Dark Elite Background */}
+      <section id="featured" className="relative py-16 overflow-hidden bg-gradient-to-br from-amber-900/90 via-amber-800/80 to-stone-800">
         <div className="absolute inset-0 opacity-10" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }} />
-        
-        {/* Glow orbs */}
         <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full bg-amber-400/20 blur-3xl pointer-events-none"></div>
         <div className="absolute bottom-[-10%] right-[-5%] w-[500px] h-[500px] rounded-full bg-orange-300/15 blur-3xl pointer-events-none"></div>
-
         <div className="relative z-10 container mx-auto px-6">
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-12 font-['Dancing_Script',_cursive] text-amber-200 drop-shadow-lg">
             Featured Pieces
           </h2>
-
           {loadingProducts ? (
             <p className="text-center text-amber-100/70">Loading products...</p>
           ) : products.length === 0 ? (
@@ -309,7 +335,7 @@ export default function Home() {
       </section>
 
       {/* About Section */}
-      <section className="relative h-[600px] md:h-[700px] flex items-center overflow-hidden">
+      <section id="about" className="relative h-[600px] md:h-[700px] flex items-center overflow-hidden">
         <div className="absolute inset-0 transition-opacity duration-1000 bg-cover bg-center" style={{ backgroundImage: `url(${aboutImages[aboutImageIndex]})` }} />
         <div className="absolute inset-0 bg-black/50" />
         <div className="relative z-10 container mx-auto px-6 text-center text-white">
@@ -332,7 +358,7 @@ export default function Home() {
       </section>
 
       {/* Contact Section */}
-      <section className="bg-gray-900 text-white py-16">
+      <section id="contact" className="bg-gray-900 text-white py-16">
         <div className="container mx-auto px-6 max-w-4xl">
           <h2 className="text-4xl font-bold text-center mb-10 font-['Dancing_Script',_cursive] text-amber-300">Get in Touch</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10 text-left">
@@ -358,7 +384,7 @@ export default function Home() {
       </section>
 
       {/* Customer Reviews */}
-      <section className="bg-white py-16 border-t border-gray-200">
+      <section id="reviews" className="bg-white py-16 border-t border-gray-200">
         <div className="container mx-auto px-6 max-w-4xl">
           <h2 className="text-3xl font-bold text-center mb-12">Customer Reviews</h2>
           {recentReviews.length === 0 ? (
@@ -390,25 +416,27 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Catalog Gallery Carousel */}
-      <section className="relative py-16 overflow-hidden bg-gradient-to-br from-amber-900/90 via-amber-800/80 to-stone-800 text-white">
-        <div className="absolute inset-0 opacity-10" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }} />
+      {/* Catalog Gallery – Light Warm Background */}
+      <section id="catalog-gallery" className="relative py-16 overflow-hidden bg-gradient-to-br from-amber-50/80 via-orange-50/60 to-white border-t border-amber-100/30">
+        <div className="absolute inset-0 opacity-5" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d97706' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }} />
+        <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full bg-amber-200/30 blur-3xl pointer-events-none"></div>
+        <div className="absolute bottom-[-10%] right-[-5%] w-[500px] h-[500px] rounded-full bg-orange-200/20 blur-3xl pointer-events-none"></div>
         <div className="container mx-auto px-4 md:px-6 relative z-10">
-          <h2 className="text-3xl md:text-4xl font-bold text-center mb-8 font-['Dancing_Script',_cursive] text-amber-200 drop-shadow-lg">
+          <h2 className="text-3xl md:text-4xl font-bold text-center mb-8 font-['Dancing_Script',_cursive] text-amber-800 drop-shadow-sm">
             Our Catalog Gallery
           </h2>
           {loadingCatalog ? (
             <div className="flex justify-center items-center h-64">
-              <div className="animate-pulse text-amber-300">Loading catalog images...</div>
+              <div className="animate-pulse text-amber-600">Loading catalog images...</div>
             </div>
           ) : catalogGroups.length === 0 ? (
-            <p className="text-center text-gray-300">No catalog images yet. Add some from the admin panel.</p>
+            <p className="text-center text-gray-500">No catalog images yet. Add some from the admin panel.</p>
           ) : (
             <div className="relative max-w-6xl mx-auto">
-              <div className="overflow-hidden rounded-2xl bg-stone-700/50 p-4">
+              <div className="overflow-hidden rounded-2xl bg-white/60 backdrop-blur-sm p-4 shadow-xl">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4 transition-opacity duration-700">
                   {catalogGroups[catalogGroupIndex]?.map((img, idx) => (
-                    <div key={idx} className="aspect-square overflow-hidden rounded-lg shadow-lg">
+                    <div key={idx} className="aspect-square overflow-hidden rounded-lg shadow-md">
                       <img src={img.image_url} className="w-full h-full object-cover transition hover:scale-105 duration-300" />
                     </div>
                   ))}
@@ -419,13 +447,19 @@ export default function Home() {
                   <button
                     key={idx}
                     onClick={() => setCatalogGroupIndex(idx)}
-                    className={`w-3 h-3 rounded-full transition-all duration-300 ${idx === catalogGroupIndex ? 'bg-amber-400 w-6' : 'bg-white/40 hover:bg-white/70'}`}
+                    className={`w-3 h-3 rounded-full transition-all duration-300 ${
+                      idx === catalogGroupIndex
+                        ? 'bg-amber-600 w-6'
+                        : 'bg-amber-300/60 hover:bg-amber-400'
+                    }`}
                     aria-label={`Go to group ${idx + 1}`}
                   />
                 ))}
               </div>
               <div className="text-center mt-8">
-                <a href="/catalog" className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold px-8 py-3 rounded-full transition shadow-lg hover:shadow-xl">Explore Full Catalog →</a>
+                <a href="/catalog" className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold px-8 py-3 rounded-full transition shadow-lg hover:shadow-xl">
+                  Explore Full Catalog →
+                </a>
               </div>
             </div>
           )}
@@ -433,7 +467,7 @@ export default function Home() {
       </section>
 
       {/* Testimonials */}
-      <section className="bg-gray-50 py-16">
+      <section id="testimonials" className="bg-gray-50 py-16">
         <div className="container mx-auto px-6">
           <h2 className="text-3xl font-bold text-center mb-12">Client Testimonials</h2>
           {loadingTestimonials ? (
