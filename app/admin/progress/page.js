@@ -12,10 +12,8 @@ export default function AdminProgress() {
   const [tokens, setTokens] = useState([]);
   const [selectedTokenId, setSelectedTokenId] = useState("");
   const [selectedTokenString, setSelectedTokenString] = useState("");
-  const [selectedClientName, setSelectedClientName] = useState("");
-  const [selectedClientContact, setSelectedClientContact] = useState("");
-  const [images, setImages] = useState([]);
   const [description, setDescription] = useState("");
+  const [images, setImages] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
   const router = useRouter();
@@ -29,7 +27,7 @@ export default function AdminProgress() {
     async function fetchTokens() {
       const { data, error } = await supabase
         .from("tokens")
-        .select("id, token_string, client_name, client_contact, notification_method")
+        .select("id, token_string, client_name, client_contact")
         .eq("status", "active")
         .order("created_at", { ascending: false });
       if (!error) setTokens(data || []);
@@ -42,8 +40,6 @@ export default function AdminProgress() {
     const token = tokens.find((t) => t.id === id);
     setSelectedTokenId(id);
     setSelectedTokenString(token ? token.token_string : "");
-    setSelectedClientName(token ? token.client_name : "");
-    setSelectedClientContact(token ? token.client_contact : "");
   };
 
   const handleImageChange = (e) => {
@@ -57,15 +53,13 @@ export default function AdminProgress() {
       return;
     }
     if (!description.trim()) {
-      setMessage("Please enter a brief description of this progress.");
+      setMessage("Please enter a progress description.");
       return;
     }
     setUploading(true);
     setMessage("");
-
     try {
-      // 1. Upload each image and insert into progress_images with description
-      const uploadedUrls = [];
+      // Upload each image and store description
       for (let i = 0; i < images.length; i++) {
         const file = images[i];
         const ext = file.name.split(".").pop();
@@ -78,43 +72,38 @@ export default function AdminProgress() {
         const { data: urlData } = supabase.storage
           .from("workspace-progress")
           .getPublicUrl(fileName);
-        const imageUrl = urlData.publicUrl;
 
-        const { error: insertError } = await supabase.from("progress_images").insert([
-          {
-            token_id: selectedTokenId,
-            image_url: imageUrl,
-            description: description, // same description for all images in this batch
-          },
-        ]);
-        if (insertError) throw insertError;
-        uploadedUrls.push(imageUrl);
+        await supabase.from("progress_images").insert({
+          token_id: selectedTokenId,
+          image_url: urlData.publicUrl,
+          description: description,
+        });
       }
 
       setMessage(`Uploaded ${images.length} progress image(s).`);
-
-      // 2. Send WhatsApp notification via CallMeBot
-      if (selectedClientContact) {
-        const workspaceUrl = `${window.location.origin}/workspace/${selectedTokenString}`;
-        const msg = `🪑 *OKMADE Furniture Update* 🪑\n\nHello ${selectedClientName},\n\nYour custom work is progressing!\n\n📌 *${description}*\n\n🔗 Check your workspace: ${workspaceUrl}\n\nThank you for choosing OKMADE Furniture.`;
-        const encodedMsg = encodeURIComponent(msg);
-        const phone = selectedClientContact.replace(/\D/g, ''); // remove non-digits
-        const apiKey = process.env.NEXT_PUBLIC_CALLMEBOT_API_KEY || "";
-
-        // Send to CallMeBot
-        const res = await fetch(
-          `https://api.callmebot.com/whatsapp.php?phone=${phone}&text=${encodedMsg}&apikey=${apiKey}`
-        );
-        // Note: CallMeBot returns a plain text response; we ignore it for now.
-        console.log("WhatsApp notification sent, response:", res.status);
-      } else {
-        console.warn("No client contact available, skipping WhatsApp notification.");
-      }
-
-      // Reset form
       setImages([]);
       setDescription("");
       document.getElementById("progressImages").value = "";
+
+      // --- Send WhatsApp notification to client ---
+      const { data: tokenData } = await supabase
+        .from("tokens")
+        .select("client_name, client_contact, token_string")
+        .eq("id", selectedTokenId)
+        .single();
+      if (tokenData) {
+        const workspaceLink = `${process.env.NEXT_PUBLIC_BASE_URL}/workspace/${tokenData.token_string}`;
+        const whatsappMessage = `Hello ${tokenData.client_name},\n\nYour project has been updated:\n📌 ${description}\n\nView progress: ${workspaceLink}\n\nOKMADE Furniture.`;
+        try {
+          await fetch('/api/send-whatsapp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone: tokenData.client_contact, message: whatsappMessage }),
+          });
+        } catch (err) {
+          console.error('WhatsApp notification failed:', err);
+        }
+      }
     } catch (err) {
       setMessage("Error: " + err.message);
     } finally {
@@ -140,13 +129,11 @@ export default function AdminProgress() {
       // Refresh token list
       const { data } = await supabase
         .from("tokens")
-        .select("id, token_string, client_name, client_contact, notification_method")
+        .select("id, token_string, client_name, client_contact")
         .eq("status", "active");
       setTokens(data || []);
       setSelectedTokenId("");
       setSelectedTokenString("");
-      setSelectedClientName("");
-      setSelectedClientContact("");
     }
     setUploading(false);
   };
@@ -159,23 +146,12 @@ export default function AdminProgress() {
           <label className="block font-medium mb-1">Select Active Token</label>
           <select value={selectedTokenId} onChange={handleTokenChange} className="w-full border p-2 rounded" required>
             <option value="">-- Choose a token --</option>
-            {tokens.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.token_string} - {t.client_name} ({t.client_contact})
-              </option>
-            ))}
+            {tokens.map((t) => <option key={t.id} value={t.id}>{t.token_string} - {t.client_name}</option>)}
           </select>
         </div>
         <div>
-          <label className="block font-medium mb-1">Progress Description *</label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="w-full border p-2 rounded"
-            rows="2"
-            placeholder="E.g., Cutting wood, Assembling, Painting, Final polish..."
-            required
-          />
+          <label className="block font-medium mb-1">Progress Description (e.g., "Cutting wood", "Assembling")</label>
+          <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} className="w-full border p-2 rounded" required />
         </div>
         <div>
           <label className="block font-medium mb-1">Progress Images (multiple allowed)</label>
@@ -183,12 +159,8 @@ export default function AdminProgress() {
           <p className="text-sm text-gray-500 mt-1">{images.length} file(s) selected</p>
         </div>
         <div className="flex gap-3">
-          <button type="submit" disabled={uploading} className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50">
-            {uploading ? "Uploading..." : "Upload Progress & Notify Client"}
-          </button>
-          <button type="button" onClick={handleKill} disabled={uploading || !selectedTokenId} className="bg-red-600 text-white px-4 py-2 rounded disabled:opacity-50">
-            Kill Token
-          </button>
+          <button type="submit" disabled={uploading} className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50">{uploading ? "Uploading..." : "Upload Progress"}</button>
+          <button type="button" onClick={handleKill} disabled={uploading || !selectedTokenId} className="bg-red-600 text-white px-4 py-2 rounded disabled:opacity-50">Kill Token</button>
         </div>
         {message && <p className={`mt-4 ${message.startsWith("Error") ? "text-red-500" : "text-green-500"}`}>{message}</p>}
       </form>
