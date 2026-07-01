@@ -92,13 +92,23 @@ export default function ShowroomPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-amber-50/40 to-white py-12">
-      <div className="container mx-auto px-4 md:px-6">
+    // --- NEW WRAPPER WITH ELITE BACKGROUND ---
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-amber-100/60 via-orange-50/30 to-white py-12">
+      
+      {/* Floating Glow Orbs (Background Decoration) */}
+      <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full bg-amber-200/30 blur-3xl pointer-events-none"></div>
+      <div className="absolute bottom-[-10%] right-[-5%] w-[500px] h-[500px] rounded-full bg-orange-200/20 blur-3xl pointer-events-none"></div>
+
+      {/* Subtle Dotted Pattern Overlay */}
+      <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle, #d97706 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div>
+
+      {/* Main Content - Positioned above the background */}
+      <div className="relative z-10 container mx-auto px-4 md:px-6">
         <div className="text-center mb-12">
           <h1 className="text-4xl md:text-5xl font-bold text-gray-800 mb-3 tracking-tight">
             Our <span className="text-amber-700">Showroom</span>
           </h1>
-          <p className="text-gray-500 max-w-xl mx-auto">Discover handcrafted furniture pieces, each with its own story.</p>
+          <p className="text-gray-600 max-w-xl mx-auto">Discover handcrafted furniture pieces, each with its own story.</p>
         </div>
 
         <div className="max-w-md mx-auto mb-10">
@@ -124,7 +134,6 @@ export default function ShowroomPage() {
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {displayProducts.slice(0, visibleCount).map((product) => {
-                // Carousel state for this product
                 const [currentImageIndex, setCurrentImageIndex] = useState(0);
                 useEffect(() => {
                   if (product.images.length > 1) {
@@ -137,7 +146,7 @@ export default function ShowroomPage() {
                 return (
                   <div
                     key={product.id}
-                    className="group bg-white rounded-2xl shadow-md hover:shadow-2xl transition-all duration-300 overflow-hidden border border-amber-100/30 hover:-translate-y-1"
+                    className="group bg-white/90 backdrop-blur-sm rounded-2xl shadow-md hover:shadow-2xl transition-all duration-300 overflow-hidden border border-amber-100/30 hover:-translate-y-1"
                   >
                     <div className="relative h-64 overflow-hidden bg-amber-50 cursor-pointer" onClick={() => router.push(`/product/${product.id}`)}>
                       {product.images.length > 0 ? (
