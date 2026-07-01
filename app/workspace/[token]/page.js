@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useParams } from "next/navigation";
+import { getOptimizedImage } from "@/lib/utils";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -51,14 +52,21 @@ export default function WorkspacePage() {
         {isActive ? "Your Private Workspace" : "Completed Work – Testimonial"}
       </h1>
       <div className="bg-white rounded-xl shadow-md p-6 space-y-6">
+        {/* Request Image – optimized */}
         <div>
           <h2 className="text-xl font-semibold mb-2">Original Request</h2>
           {data.request_image_url ? (
-            <img src={data.request_image_url} className="w-full max-h-96 object-contain rounded-lg border" />
+            <img
+              src={getOptimizedImage(data.request_image_url, 800)}
+              className="w-full max-h-96 object-contain rounded-lg border"
+              alt="Request"
+            />
           ) : (
             <p className="text-gray-500">No request image uploaded.</p>
           )}
         </div>
+
+        {/* Progress Images – optimized */}
         <div>
           <h2 className="text-xl font-semibold mb-2">
             {isActive ? "Work in Progress" : "Final Result & Progress"}
@@ -68,12 +76,19 @@ export default function WorkspacePage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {progressImages.map((img, idx) => (
-                <img key={idx} src={img.image_url} className="w-full h-64 object-cover rounded-lg shadow" />
+                <img
+                  key={idx}
+                  src={getOptimizedImage(img.image_url, 600)}
+                  className="w-full h-64 object-cover rounded-lg shadow"
+                  alt="Progress"
+                />
               ))}
             </div>
           )}
         </div>
+
         {data.client_name && <p className="text-gray-600">Client: {data.client_name}</p>}
+
         {isActive && (
           <p className="text-blue-600 bg-blue-50 p-3 rounded text-sm">
             Your custom piece is being crafted. Check back later for updates.
@@ -87,4 +102,4 @@ export default function WorkspacePage() {
       </div>
     </div>
   );
-                                    }
+}
