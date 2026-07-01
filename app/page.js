@@ -51,7 +51,6 @@ export default function Home() {
   ];
   const [aboutImageIndex, setAboutImageIndex] = useState(0);
 
-  // Auto-slide about images
   useEffect(() => {
     const interval = setInterval(() => {
       setAboutImageIndex(prev => (prev + 1) % aboutImages.length);
@@ -59,7 +58,6 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
-  // Auto-slide catalog groups
   useEffect(() => {
     if (catalogGroups.length === 0) return;
     const interval = setInterval(() => {
@@ -131,7 +129,6 @@ export default function Home() {
         }
       }
       setCatalogImages(allImages);
-      // Group into chunks of 6
       const groups = [];
       for (let i = 0; i < allImages.length; i += 6) {
         groups.push(allImages.slice(i, i + 6));
@@ -180,7 +177,6 @@ export default function Home() {
     fetchRecentReviews();
   }, []);
 
-  // Auto-rotate product images (featured pieces)
   useEffect(() => {
     if (products.length === 0) return;
     const interval = setInterval(() => {
@@ -242,59 +238,77 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Featured Pieces */}
-      <section className="container mx-auto px-6 py-16">
-        <h2 className="text-3xl font-bold text-center mb-12">Featured Pieces</h2>
-        {loadingProducts ? (
-          <p className="text-center text-gray-500">Loading products...</p>
-        ) : products.length === 0 ? (
-          <p className="text-center text-gray-500">No products yet. Check back soon!</p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {products.slice(0, 6).map((product) => {
-              const idx = imageIndices[product.id] || 0;
-              return (
-                <div key={product.id} className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition">
-                  <div className="relative h-64">
-                    {product.images.length > 0 ? (
-                      <img src={product.images[idx]?.image_url} alt={product.description} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">No image</div>
-                    )}
-                    {product.sold && <span className="absolute top-4 right-4 bg-red-600 text-white px-3 py-1 rounded-full text-sm font-bold">SOLD</span>}
-                    {product.images.length > 1 && (
-                      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5">
-                        {product.images.map((_, i) => (
-                          <span key={i} className={`w-2 h-2 rounded-full transition ${i === idx ? 'bg-white' : 'bg-white/40'}`} />
-                        ))}
+      {/* ============================================================== */}
+      {/* UPDATED FEATURED PIECES SECTION – ELITE DARK BACKGROUND       */}
+      {/* ============================================================== */}
+      <section className="relative py-16 overflow-hidden bg-gradient-to-br from-amber-900/90 via-amber-800/80 to-stone-800">
+        {/* Decorative pattern overlay */}
+        <div className="absolute inset-0 opacity-10" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }} />
+        
+        {/* Glow orbs */}
+        <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full bg-amber-400/20 blur-3xl pointer-events-none"></div>
+        <div className="absolute bottom-[-10%] right-[-5%] w-[500px] h-[500px] rounded-full bg-orange-300/15 blur-3xl pointer-events-none"></div>
+
+        <div className="relative z-10 container mx-auto px-6">
+          <h2 className="text-3xl md:text-4xl font-bold text-center mb-12 font-['Dancing_Script',_cursive] text-amber-200 drop-shadow-lg">
+            Featured Pieces
+          </h2>
+
+          {loadingProducts ? (
+            <p className="text-center text-amber-100/70">Loading products...</p>
+          ) : products.length === 0 ? (
+            <p className="text-center text-amber-100/70">No products yet. Check back soon!</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {products.slice(0, 6).map((product) => {
+                const idx = imageIndices[product.id] || 0;
+                return (
+                  <div key={product.id} className="group bg-white/90 backdrop-blur-sm rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden border border-white/10 hover:border-amber-300/20 hover:-translate-y-1">
+                    <div className="relative h-64">
+                      {product.images.length > 0 ? (
+                        <img src={product.images[idx]?.image_url} alt={product.description} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+                      ) : (
+                        <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">No image</div>
+                      )}
+                      {product.sold && <span className="absolute top-4 right-4 bg-red-600 text-white px-3 py-1 rounded-full text-sm font-bold">SOLD</span>}
+                      {product.images.length > 1 && (
+                        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5">
+                          {product.images.map((_, i) => (
+                            <span key={i} className={`w-2 h-2 rounded-full transition ${i === idx ? 'bg-white' : 'bg-white/40'}`} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-5">
+                      <p className="text-gray-700 text-sm mb-1">{product.description}</p>
+                      <div className="flex justify-between items-center mt-1">
+                        <StarRating rating={product.avgRating || 0} />
+                        <span className="text-xs text-gray-500">({product.reviewCount || 0})</span>
                       </div>
-                    )}
-                  </div>
-                  <div className="p-5">
-                    <p className="text-gray-600 text-sm mb-1">{product.description}</p>
-                    <div className="flex justify-between items-center mt-1">
-                      <StarRating rating={product.avgRating || 0} />
-                      <span className="text-xs text-gray-500">({product.reviewCount || 0})</span>
+                      <div className="flex justify-between items-center mt-2">
+                        <span className="text-xl font-bold text-green-700">₦{product.price}</span>
+                        <a href={getWhatsAppLink(product)} target="_blank" rel="noopener noreferrer" className="text-green-500 hover:text-green-600">📞 WhatsApp</a>
+                      </div>
+                      <button onClick={() => router.push(`/product/${product.id}`)} className="mt-3 w-full bg-amber-600 hover:bg-amber-700 text-white font-medium py-2 rounded-full transition">
+                        View Details
+                      </button>
                     </div>
-                    <div className="flex justify-between items-center mt-2">
-                      <span className="text-xl font-bold text-green-700">₦{product.price}</span>
-                      <a href={getWhatsAppLink(product)} target="_blank" rel="noopener noreferrer" className="text-green-500 hover:text-green-600">📞 WhatsApp</a>
-                    </div>
-                    <button onClick={() => router.push(`/product/${product.id}`)} className="mt-3 w-full bg-gray-800 text-white py-1 rounded hover:bg-gray-900 transition text-sm">View Details</button>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-        {products.length > 6 && (
-          <div className="text-center mt-10">
-            <a href="/showroom" className="inline-block bg-gray-800 text-white px-8 py-3 rounded-full hover:bg-gray-900 transition">View All Products →</a>
-          </div>
-        )}
+                );
+              })}
+            </div>
+          )}
+          {products.length > 6 && (
+            <div className="text-center mt-10">
+              <a href="/showroom" className="inline-block bg-white/10 backdrop-blur-sm hover:bg-white/20 text-white border border-white/20 px-8 py-3 rounded-full transition shadow-lg hover:shadow-xl">
+                View All Products →
+              </a>
+            </div>
+          )}
+        </div>
       </section>
 
-      {/* About Section with Slideshow */}
+      {/* About Section */}
       <section className="relative h-[600px] md:h-[700px] flex items-center overflow-hidden">
         <div className="absolute inset-0 transition-opacity duration-1000 bg-cover bg-center" style={{ backgroundImage: `url(${aboutImages[aboutImageIndex]})` }} />
         <div className="absolute inset-0 bg-black/50" />
@@ -376,14 +390,13 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Catalog Gallery Carousel – 6 images at a time */}
+      {/* Catalog Gallery Carousel */}
       <section className="relative py-16 overflow-hidden bg-gradient-to-br from-amber-900/90 via-amber-800/80 to-stone-800 text-white">
         <div className="absolute inset-0 opacity-10" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }} />
         <div className="container mx-auto px-4 md:px-6 relative z-10">
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-8 font-['Dancing_Script',_cursive] text-amber-200 drop-shadow-lg">
             Our Catalog Gallery
           </h2>
-
           {loadingCatalog ? (
             <div className="flex justify-center items-center h-64">
               <div className="animate-pulse text-amber-300">Loading catalog images...</div>
@@ -401,30 +414,18 @@ export default function Home() {
                   ))}
                 </div>
               </div>
-
-              {/* Dot indicators */}
               <div className="flex justify-center gap-2 mt-6">
                 {catalogGroups.map((_, idx) => (
                   <button
                     key={idx}
                     onClick={() => setCatalogGroupIndex(idx)}
-                    className={`w-3 h-3 rounded-full transition-all duration-300 ${
-                      idx === catalogGroupIndex
-                        ? 'bg-amber-400 w-6'
-                        : 'bg-white/40 hover:bg-white/70'
-                    }`}
+                    className={`w-3 h-3 rounded-full transition-all duration-300 ${idx === catalogGroupIndex ? 'bg-amber-400 w-6' : 'bg-white/40 hover:bg-white/70'}`}
                     aria-label={`Go to group ${idx + 1}`}
                   />
                 ))}
               </div>
-
               <div className="text-center mt-8">
-                <a
-                  href="/catalog"
-                  className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold px-8 py-3 rounded-full transition shadow-lg hover:shadow-xl"
-                >
-                  Explore Full Catalog →
-                </a>
+                <a href="/catalog" className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold px-8 py-3 rounded-full transition shadow-lg hover:shadow-xl">Explore Full Catalog →</a>
               </div>
             </div>
           )}
