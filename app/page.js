@@ -251,7 +251,13 @@ export default function Home() {
         </div>
         <div className="relative container mx-auto px-6 py-32 text-center">
           <h1 className="text-5xl md:text-7xl font-bold mb-4">OKMADE Furniture</h1>
-          <p className="text-xl md:text-2xl max-w-2xl mx-auto">Handcrafted pieces for modern living – timeless design, exceptional quality.</p>
+          {/* 👇 MOTTO ADDED HERE */}
+          <p className="text-2xl md:text-3xl font-['Dancing_Script',_cursive] text-amber-200 mb-4">
+            TRUST THE PROGRESS
+          </p>
+          <p className="text-xl md:text-2xl max-w-2xl mx-auto">
+            Handcrafted pieces for modern living – timeless design, exceptional quality.
+          </p>
           <div className="mt-8 flex gap-4 justify-center flex-wrap">
             <a href="/showroom" className="bg-white text-black px-6 py-3 rounded-full font-semibold hover:bg-gray-200 transition">Browse Showroom</a>
             <a href="/catalog" className="bg-transparent border-2 border-white px-6 py-3 rounded-full font-semibold hover:bg-white hover:text-black transition">View Catalog</a>
