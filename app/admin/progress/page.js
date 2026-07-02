@@ -27,7 +27,7 @@ export default function AdminProgress() {
     async function fetchTokens() {
       const { data, error } = await supabase
         .from("tokens")
-        .select("id, token_string, client_name, client_contact")
+        .select("id, token_string, client_name")
         .eq("status", "active")
         .order("created_at", { ascending: false });
       if (!error) setTokens(data || []);
@@ -59,7 +59,6 @@ export default function AdminProgress() {
     setUploading(true);
     setMessage("");
     try {
-      // Upload each image and store description
       for (let i = 0; i < images.length; i++) {
         const file = images[i];
         const ext = file.name.split(".").pop();
@@ -80,30 +79,10 @@ export default function AdminProgress() {
         });
       }
 
-      setMessage(`Uploaded ${images.length} progress image(s).`);
+      setMessage(`Uploaded ${images.length} progress image(s). Description: "${description}"`);
       setImages([]);
       setDescription("");
       document.getElementById("progressImages").value = "";
-
-      // --- Send WhatsApp notification to client ---
-      const { data: tokenData } = await supabase
-        .from("tokens")
-        .select("client_name, client_contact, token_string")
-        .eq("id", selectedTokenId)
-        .single();
-      if (tokenData) {
-        const workspaceLink = `${process.env.NEXT_PUBLIC_BASE_URL}/workspace/${tokenData.token_string}`;
-        const whatsappMessage = `Hello ${tokenData.client_name},\n\nYour project has been updated:\n📌 ${description}\n\nView progress: ${workspaceLink}\n\nOKMADE Furniture.`;
-        try {
-          await fetch('/api/send-whatsapp', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone: tokenData.client_contact, message: whatsappMessage }),
-          });
-        } catch (err) {
-          console.error('WhatsApp notification failed:', err);
-        }
-      }
     } catch (err) {
       setMessage("Error: " + err.message);
     } finally {
@@ -126,10 +105,9 @@ export default function AdminProgress() {
       setMessage("Error killing token: " + error.message);
     } else {
       setMessage(`Token ${selectedTokenString} killed.`);
-      // Refresh token list
       const { data } = await supabase
         .from("tokens")
-        .select("id, token_string, client_name, client_contact")
+        .select("id, token_string, client_name")
         .eq("status", "active");
       setTokens(data || []);
       setSelectedTokenId("");
