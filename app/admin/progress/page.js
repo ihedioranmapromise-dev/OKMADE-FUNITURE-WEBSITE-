@@ -1,147 +1,521 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
+import { getOptimizedImage } from "@/lib/utils";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-export default function AdminProgress() {
-  const [tokens, setTokens] = useState([]);
-  const [selectedTokenId, setSelectedTokenId] = useState("");
-  const [selectedTokenString, setSelectedTokenString] = useState("");
-  const [description, setDescription] = useState("");
-  const [images, setImages] = useState([]);
-  const [uploading, setUploading] = useState(false);
-  const [message, setMessage] = useState("");
+const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "";
+
+function StarRating({ rating }) {
+  const full = Math.floor(rating);
+  const half = rating % 1 >= 0.5;
+  const empty = 5 - full - (half ? 1 : 0);
+  return (
+    <div className="flex items-center gap-0.5">
+      {[...Array(full)].map((_, i) => <span key={i} className="text-yellow-500">★</span>)}
+      {half && <span className="text-yellow-500">½</span>}
+      {[...Array(empty)].map((_, i) => <span key={i} className="text-gray-300">★</span>)}
+    </div>
+  );
+}
+
+export default function Home() {
+  const [products, setProducts] = useState([]);
+  const [loadingProducts, setLoadingProducts] = useState(true);
+  const [catalogImages, setCatalogImages] = useState([]);
+  const [catalogGroups, setCatalogGroups] = useState([]);
+  const [catalogGroupIndex, setCatalogGroupIndex] = useState(0);
+  const [loadingCatalog, setLoadingCatalog] = useState(true);
+  const [testimonials, setTestimonials] = useState([]);
+  const [loadingTestimonials, setLoadingTestimonials] = useState(true);
+  const [recentReviews, setRecentReviews] = useState([]);
+  const [token, setToken] = useState("");
+  const [imageIndices, setImageIndices] = useState({});
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const router = useRouter();
 
-  if (typeof window !== "undefined" && sessionStorage.getItem("adminAuth") !== "true") {
-    router.push("/admin/login");
-    return null;
-  }
+  const aboutImages = [
+    "https://images.unsplash.com/photo-1616137466211-f939a420be84?w=1600&q=80",
+    "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1600&q=80",
+    "https://images.unsplash.com/photo-1591134523895-0b7e0f57a2f0?w=1600&q=80",
+    "https://images.unsplash.com/photo-1580587771525-78b9dba3b914?w=1600&q=80",
+    "https://images.unsplash.com/photo-1497366216548-37526070297c?w=1600&q=80",
+    "https://images.unsplash.com/photo-1575995872537-3793eb2b26d5?w=1600&q=80",
+    "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=1600&q=80",
+    "https://images.unsplash.com/photo-1564501049412-61c2a3083791?w=1600&q=80",
+    "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1600&q=80",
+    "https://images.unsplash.com/photo-1511578314322-379afb476865?w=1600&q=80"
+  ];
+  const [aboutImageIndex, setAboutImageIndex] = useState(0);
 
   useEffect(() => {
-    async function fetchTokens() {
-      const { data, error } = await supabase
-        .from("tokens")
-        .select("id, token_string, client_name")
-        .eq("status", "active")
-        .order("created_at", { ascending: false });
-      if (!error) setTokens(data || []);
-    }
-    fetchTokens();
+    const interval = setInterval(() => {
+      setAboutImageIndex(prev => (prev + 1) % aboutImages.length);
+    }, 4000);
+    return () => clearInterval(interval);
   }, []);
 
-  const handleTokenChange = (e) => {
-    const id = e.target.value;
-    const token = tokens.find((t) => t.id === id);
-    setSelectedTokenId(id);
-    setSelectedTokenString(token ? token.token_string : "");
-  };
+  useEffect(() => {
+    if (catalogGroups.length === 0) return;
+    const interval = setInterval(() => {
+      setCatalogGroupIndex(prev => (prev + 1) % catalogGroups.length);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [catalogGroups]);
 
-  const handleImageChange = (e) => {
-    setImages(Array.from(e.target.files));
-  };
-
-  const handleUpload = async (e) => {
-    e.preventDefault();
-    if (!selectedTokenId || images.length === 0) {
-      setMessage("Select a token and at least one image.");
-      return;
-    }
-    if (!description.trim()) {
-      setMessage("Please enter a progress description.");
-      return;
-    }
-    setUploading(true);
-    setMessage("");
-    try {
-      for (let i = 0; i < images.length; i++) {
-        const file = images[i];
-        const ext = file.name.split(".").pop();
-        const fileName = `progress/${selectedTokenString}_${Date.now()}_${i}.${ext}`;
-        const { error: uploadError } = await supabase.storage
-          .from("workspace-progress")
-          .upload(fileName, file);
-        if (uploadError) throw uploadError;
-
-        const { data: urlData } = supabase.storage
-          .from("workspace-progress")
-          .getPublicUrl(fileName);
-
-        await supabase.from("progress_images").insert({
-          token_id: selectedTokenId,
-          image_url: urlData.publicUrl,
-          description: description,
-        });
+  useEffect(() => {
+    async function fetchProducts() {
+      const { data: productsData, error } = await supabase
+        .from("showroom")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (!error && productsData) {
+        const productsWithDetails = await Promise.all(
+          productsData.map(async (product) => {
+            const { data: images } = await supabase
+              .from("product_images")
+              .select("image_url")
+              .eq("product_id", product.id)
+              .order("display_order");
+            const { data: ratings } = await supabase
+              .from("ratings")
+              .select("rating")
+              .eq("product_id", product.id);
+            let avgRating = 0;
+            if (ratings && ratings.length) {
+              const sum = ratings.reduce((a, b) => a + b.rating, 0);
+              avgRating = sum / ratings.length;
+            }
+            return {
+              ...product,
+              images: images || [],
+              avgRating,
+              reviewCount: ratings ? ratings.length : 0,
+            };
+          })
+        );
+        setProducts(productsWithDetails);
+        const initialIndices = {};
+        productsWithDetails.forEach(p => { initialIndices[p.id] = 0; });
+        setImageIndices(initialIndices);
       }
-
-      setMessage(`Uploaded ${images.length} progress image(s). Description: "${description}"`);
-      setImages([]);
-      setDescription("");
-      document.getElementById("progressImages").value = "";
-    } catch (err) {
-      setMessage("Error: " + err.message);
-    } finally {
-      setUploading(false);
+      setLoadingProducts(false);
     }
-  };
 
-  const handleKill = async () => {
-    if (!selectedTokenId) {
-      setMessage("Select a token first.");
-      return;
+    async function fetchAllCatalogImages() {
+      setLoadingCatalog(true);
+      const { data: catalogs, error } = await supabase
+        .from("catalogs")
+        .select("id")
+        .order("created_at", { ascending: false });
+      if (error || !catalogs) {
+        setCatalogImages([]);
+        setCatalogGroups([]);
+        setLoadingCatalog(false);
+        return;
+      }
+      let allImages = [];
+      for (const catalog of catalogs) {
+        const { data: images } = await supabase
+          .from("catalog_images")
+          .select("image_url")
+          .eq("catalog_id", catalog.id)
+          .order("display_order");
+        if (images && images.length) {
+          allImages = [...allImages, ...images];
+        }
+      }
+      setCatalogImages(allImages);
+      const groups = [];
+      for (let i = 0; i < allImages.length; i += 6) {
+        groups.push(allImages.slice(i, i + 6));
+      }
+      setCatalogGroups(groups);
+      setLoadingCatalog(false);
     }
-    if (!confirm(`Kill token ${selectedTokenString}?`)) return;
-    setUploading(true);
-    const { error } = await supabase
-      .from("tokens")
-      .update({ status: "killed" })
-      .eq("id", selectedTokenId);
-    if (error) {
-      setMessage("Error killing token: " + error.message);
-    } else {
-      setMessage(`Token ${selectedTokenString} killed.`);
-      const { data } = await supabase
+
+    async function fetchTestimonials() {
+      const { data: killedTokens } = await supabase
         .from("tokens")
-        .select("id, token_string, client_name")
-        .eq("status", "active");
-      setTokens(data || []);
-      setSelectedTokenId("");
-      setSelectedTokenString("");
+        .select("id, token_string, client_name, work_description, created_at")
+        .eq("status", "killed")
+        .order("created_at", { ascending: false })
+        .limit(6);
+      if (killedTokens && killedTokens.length > 0) {
+        const withImages = await Promise.all(
+          killedTokens.map(async (token) => {
+            const { data: images } = await supabase
+              .from("token_request_images")
+              .select("image_url")
+              .eq("token_id", token.id)
+              .limit(1);
+            return { ...token, image: images?.[0]?.image_url || null };
+          })
+        );
+        setTestimonials(withImages);
+      } else {
+        setTestimonials([]);
+      }
+      setLoadingTestimonials(false);
     }
-    setUploading(false);
+
+    async function fetchRecentReviews() {
+      const { data: reviews } = await supabase
+        .from("ratings")
+        .select("*, showroom(description, id)")
+        .order("created_at", { ascending: false })
+        .limit(5);
+      if (reviews) setRecentReviews(reviews);
+    }
+
+    fetchProducts();
+    fetchAllCatalogImages();
+    fetchTestimonials();
+    fetchRecentReviews();
+  }, []);
+
+  useEffect(() => {
+    if (products.length === 0) return;
+    const interval = setInterval(() => {
+      setImageIndices(prev => {
+        const newIndices = { ...prev };
+        products.forEach(p => {
+          if (p.images.length > 1) {
+            newIndices[p.id] = (newIndices[p.id] + 1) % p.images.length;
+          }
+        });
+        return newIndices;
+      });
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [products]);
+
+  const handleTokenSubmit = (e) => {
+    e.preventDefault();
+    if (token.trim()) router.push(`/workspace/${token.trim()}`);
   };
+
+  const getWhatsAppLink = (product) => {
+    const message = `I'm interested in this product: ${product.description} for ₦${product.price}.`;
+    return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
+  };
+
+  const getWhatsAppGeneralLink = () => {
+    const message = "Hello, I have a question about your furniture.";
+    return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
+  };
+
+  // Navbar component
+  const Navbar = () => (
+    <nav className="fixed top-0 left-0 w-full z-50 bg-white/90 backdrop-blur-md shadow-sm border-b border-amber-100/20">
+      <div className="container mx-auto px-4 md:px-6 flex items-center justify-between h-16">
+        <a href="#home" className="text-2xl font-bold text-amber-800 font-['Dancing_Script',_cursive]">
+          OKMADE
+        </a>
+        <div className="hidden md:flex gap-8 text-gray-700 font-medium">
+          <a href="#home" className="hover:text-amber-700 transition">Home</a>
+          <a href="#about" className="hover:text-amber-700 transition">About</a>
+          <a href="#contact" className="hover:text-amber-700 transition">Contact</a>
+          <a href="#reviews" className="hover:text-amber-700 transition">Reviews</a>
+          <a href="#testimonials" className="hover:text-amber-700 transition">Testimonials</a>
+        </div>
+        <button className="md:hidden text-2xl" onClick={() => setIsMenuOpen(!isMenuOpen)}>
+          {isMenuOpen ? '✕' : '☰'}
+        </button>
+      </div>
+      {isMenuOpen && (
+        <div className="md:hidden bg-white/95 backdrop-blur-md border-t border-amber-100/20 py-4 px-6 flex flex-col gap-4 text-gray-700 font-medium">
+          <a href="#home" onClick={() => setIsMenuOpen(false)} className="hover:text-amber-700">Home</a>
+          <a href="#about" onClick={() => setIsMenuOpen(false)} className="hover:text-amber-700">About</a>
+          <a href="#contact" onClick={() => setIsMenuOpen(false)} className="hover:text-amber-700">Contact</a>
+          <a href="#reviews" onClick={() => setIsMenuOpen(false)} className="hover:text-amber-700">Reviews</a>
+          <a href="#testimonials" onClick={() => setIsMenuOpen(false)} className="hover:text-amber-700">Testimonials</a>
+        </div>
+      )}
+    </nav>
+  );
 
   return (
-    <div className="p-8 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">Upload Progress & Manage Tokens</h1>
-      <form onSubmit={handleUpload} className="space-y-4">
-        <div>
-          <label className="block font-medium mb-1">Select Active Token</label>
-          <select value={selectedTokenId} onChange={handleTokenChange} className="w-full border p-2 rounded" required>
-            <option value="">-- Choose a token --</option>
-            {tokens.map((t) => <option key={t.id} value={t.id}>{t.token_string} - {t.client_name}</option>)}
-          </select>
+    <div>
+      <Navbar />
+
+      {/* Home Section */}
+      <section id="home" className="relative text-white pt-16">
+        <div className="absolute inset-0 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1589939705384-5185137a7f0f?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80')" }}>
+          <div className="absolute inset-0 bg-black/50"></div>
         </div>
-        <div>
-          <label className="block font-medium mb-1">Progress Description (e.g., "Cutting wood", "Assembling")</label>
-          <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} className="w-full border p-2 rounded" required />
+        <div className="relative container mx-auto px-6 py-32 text-center">
+          <h1 className="text-5xl md:text-7xl font-bold mb-4">OKMADE Furniture</h1>
+          {/* 👇 MOTTO ADDED HERE */}
+          <p className="text-2xl md:text-3xl font-['Dancing_Script',_cursive] text-amber-200 mb-4">
+            TRUST THE PROGRESS
+          </p>
+          <p className="text-xl md:text-2xl max-w-2xl mx-auto">
+            Handcrafted pieces for modern living – timeless design, exceptional quality.
+          </p>
+          <div className="mt-8 flex gap-4 justify-center flex-wrap">
+            <a href="/showroom" className="bg-white text-black px-6 py-3 rounded-full font-semibold hover:bg-gray-200 transition">Browse Showroom</a>
+            <a href="/catalog" className="bg-transparent border-2 border-white px-6 py-3 rounded-full font-semibold hover:bg-white hover:text-black transition">View Catalog</a>
+          </div>
         </div>
-        <div>
-          <label className="block font-medium mb-1">Progress Images (multiple allowed)</label>
-          <input id="progressImages" type="file" accept="image/*" multiple onChange={handleImageChange} className="w-full border p-2 rounded" />
-          <p className="text-sm text-gray-500 mt-1">{images.length} file(s) selected</p>
+      </section>
+
+      {/* Token Workspace */}
+      <section id="token" className="bg-gray-100 py-16">
+        <div className="container mx-auto px-6 text-center">
+          <h2 className="text-3xl font-bold mb-4">Track Your Custom Work</h2>
+          <p className="text-gray-600 mb-6">Enter the private token you received to see your workspace and progress.</p>
+          <form onSubmit={handleTokenSubmit} className="max-w-md mx-auto flex gap-3">
+            <input type="text" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Your token (e.g., ABC-123)" className="flex-1 p-3 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500" required />
+            <button type="submit" className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition">Track Work →</button>
+          </form>
+          <p className="text-sm text-gray-500 mt-4">Example tokens: ABC123, XYZ789 (check your email or SMS).</p>
         </div>
-        <div className="flex gap-3">
-          <button type="submit" disabled={uploading} className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50">{uploading ? "Uploading..." : "Upload Progress"}</button>
-          <button type="button" onClick={handleKill} disabled={uploading || !selectedTokenId} className="bg-red-600 text-white px-4 py-2 rounded disabled:opacity-50">Kill Token</button>
+      </section>
+
+      {/* Featured Pieces – Dark Elite Background */}
+      <section id="featured" className="relative py-16 overflow-hidden bg-gradient-to-br from-amber-900/90 via-amber-800/80 to-stone-800">
+        <div className="absolute inset-0 opacity-10" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }} />
+        <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full bg-amber-400/20 blur-3xl pointer-events-none"></div>
+        <div className="absolute bottom-[-10%] right-[-5%] w-[500px] h-[500px] rounded-full bg-orange-300/15 blur-3xl pointer-events-none"></div>
+        <div className="relative z-10 container mx-auto px-6">
+          <h2 className="text-3xl md:text-4xl font-bold text-center mb-12 font-['Dancing_Script',_cursive] text-amber-200 drop-shadow-lg">
+            Featured Pieces
+          </h2>
+          {loadingProducts ? (
+            <p className="text-center text-amber-100/70">Loading products...</p>
+          ) : products.length === 0 ? (
+            <p className="text-center text-amber-100/70">No products yet. Check back soon!</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {products.slice(0, 6).map((product) => {
+                const idx = imageIndices[product.id] || 0;
+                return (
+                  <div key={product.id} className="group bg-white/90 backdrop-blur-sm rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden border border-white/10 hover:border-amber-300/20 hover:-translate-y-1">
+                    <div className="relative h-64">
+                      {product.images.length > 0 ? (
+                        <img src={product.images[idx]?.image_url} alt={product.description} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+                      ) : (
+                        <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">No image</div>
+                      )}
+                      {product.sold && <span className="absolute top-4 right-4 bg-red-600 text-white px-3 py-1 rounded-full text-sm font-bold">SOLD</span>}
+                      {product.images.length > 1 && (
+                        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5">
+                          {product.images.map((_, i) => (
+                            <span key={i} className={`w-2 h-2 rounded-full transition ${i === idx ? 'bg-white' : 'bg-white/40'}`} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-5">
+                      <p className="text-gray-700 text-sm mb-1">{product.description}</p>
+                      <div className="flex justify-between items-center mt-1">
+                        <StarRating rating={product.avgRating || 0} />
+                        <span className="text-xs text-gray-500">({product.reviewCount || 0})</span>
+                      </div>
+                      <div className="flex justify-between items-center mt-2">
+                        <span className="text-xl font-bold text-green-700">₦{product.price}</span>
+                        <a href={getWhatsAppLink(product)} target="_blank" rel="noopener noreferrer" className="text-green-500 hover:text-green-600">📞 WhatsApp</a>
+                      </div>
+                      <button onClick={() => router.push(`/product/${product.id}`)} className="mt-3 w-full bg-amber-600 hover:bg-amber-700 text-white font-medium py-2 rounded-full transition">
+                        View Details
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {products.length > 6 && (
+            <div className="text-center mt-10">
+              <a href="/showroom" className="inline-block bg-white/10 backdrop-blur-sm hover:bg-white/20 text-white border border-white/20 px-8 py-3 rounded-full transition shadow-lg hover:shadow-xl">
+                View All Products →
+              </a>
+            </div>
+          )}
         </div>
-        {message && <p className={`mt-4 ${message.startsWith("Error") ? "text-red-500" : "text-green-500"}`}>{message}</p>}
-      </form>
+      </section>
+
+      {/* About Section */}
+      <section id="about" className="relative h-[600px] md:h-[700px] flex items-center overflow-hidden">
+        <div className="absolute inset-0 transition-opacity duration-1000 bg-cover bg-center" style={{ backgroundImage: `url(${aboutImages[aboutImageIndex]})` }} />
+        <div className="absolute inset-0 bg-black/50" />
+        <div className="relative z-10 container mx-auto px-6 text-center text-white">
+          <h2 className="text-4xl md:text-5xl font-bold mb-6 font-['Dancing_Script',_cursive] text-amber-200 drop-shadow-lg">About OKMADE Furniture</h2>
+          <p className="max-w-3xl mx-auto text-lg md:text-xl leading-relaxed bg-black/30 backdrop-blur-sm p-6 rounded-2xl border border-white/10">
+            We are a team of skilled artisans dedicated to transforming spaces with timeless furniture.
+            From <span className="text-amber-200 font-semibold">hotels, churches, and government houses</span> to <span className="text-amber-200 font-semibold">private homes and corporate offices</span>,
+            we bring elegance and functionality to every project.
+            <br /><br />
+            Beyond new creations, we also offer <span className="text-amber-200 font-semibold">expert repairs and restoration</span> –
+            breathing new life into your cherished pieces.
+            Our passion is to craft furniture that tells your story.
+          </p>
+          <div className="mt-6 text-sm text-amber-200/70 italic">
+            <span className="inline-block mx-2">✦</span>
+            Featured: Hotels &bull; Churches &bull; Government Houses &bull; Workshops
+            <span className="inline-block mx-2">✦</span>
+          </div>
+        </div>
+      </section>
+
+      {/* Contact Section */}
+      <section id="contact" className="bg-gray-900 text-white py-16">
+        <div className="container mx-auto px-6 max-w-4xl">
+          <h2 className="text-4xl font-bold text-center mb-10 font-['Dancing_Script',_cursive] text-amber-300">Get in Touch</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-10 text-left">
+            <div>
+              <p className="font-semibold text-amber-200">📧 Email</p>
+              <p className="text-gray-300">okeywoodwork@gmail.com</p>
+              <p className="font-semibold text-amber-200 mt-4">💬 WhatsApp</p>
+              <p className="text-gray-300">09161919164</p>
+              <p className="font-semibold text-amber-200 mt-4">📞 Call</p>
+              <p className="text-gray-300">09166300206</p>
+              <p className="text-gray-300">07049264672</p>
+            </div>
+            <div>
+              <p className="font-semibold text-amber-200">📍 Location</p>
+              <p className="text-gray-300">Aba, Abia State, Nigeria</p>
+              <p className="text-gray-300 text-sm italic">(Open to travelling for appointments)</p>
+              <p className="font-semibold text-amber-200 mt-4">🕒 Hours</p>
+              <p className="text-gray-300">Mon–Fri: 9am – 6pm</p>
+              <p className="text-gray-300">Sat: 10am – 4pm</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Customer Reviews */}
+      <section id="reviews" className="bg-white py-16 border-t border-gray-200">
+        <div className="container mx-auto px-6 max-w-4xl">
+          <h2 className="text-3xl font-bold text-center mb-12">Customer Reviews</h2>
+          {recentReviews.length === 0 ? (
+            <p className="text-center text-gray-500">No reviews yet. Be the first to review a product!</p>
+          ) : (
+            <div className="space-y-6">
+              {recentReviews.map((review) => (
+                <div key={review.id} className="border-b pb-6 last:border-0">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="font-semibold">{review.user_name}</span>
+                      <StarRating rating={review.rating} />
+                    </div>
+                    <span className="text-xs text-gray-400">{new Date(review.created_at).toLocaleDateString()}</span>
+                  </div>
+                  {review.comment && <p className="text-gray-600 mt-2">{review.comment}</p>}
+                  {review.showroom && (
+                    <button
+                      onClick={() => router.push(`/product/${review.showroom.id}`)}
+                      className="text-amber-600 text-sm hover:underline mt-2 inline-block"
+                    >
+                      View product →
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Catalog Gallery – Light Warm Background */}
+      <section id="catalog-gallery" className="relative py-16 overflow-hidden bg-gradient-to-br from-amber-50/80 via-orange-50/60 to-white border-t border-amber-100/30">
+        <div className="absolute inset-0 opacity-5" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d97706' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }} />
+        <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full bg-amber-200/30 blur-3xl pointer-events-none"></div>
+        <div className="absolute bottom-[-10%] right-[-5%] w-[500px] h-[500px] rounded-full bg-orange-200/20 blur-3xl pointer-events-none"></div>
+        <div className="container mx-auto px-4 md:px-6 relative z-10">
+          <h2 className="text-3xl md:text-4xl font-bold text-center mb-8 font-['Dancing_Script',_cursive] text-amber-800 drop-shadow-sm">
+            Our Catalog Gallery
+          </h2>
+          {loadingCatalog ? (
+            <div className="flex justify-center items-center h-64">
+              <div className="animate-pulse text-amber-600">Loading catalog images...</div>
+            </div>
+          ) : catalogGroups.length === 0 ? (
+            <p className="text-center text-gray-500">No catalog images yet. Add some from the admin panel.</p>
+          ) : (
+            <div className="relative max-w-6xl mx-auto">
+              <div className="overflow-hidden rounded-2xl bg-white/60 backdrop-blur-sm p-4 shadow-xl">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 transition-opacity duration-700">
+                  {catalogGroups[catalogGroupIndex]?.map((img, idx) => (
+                    <div key={idx} className="aspect-square overflow-hidden rounded-lg shadow-md">
+                      <img src={img.image_url} className="w-full h-full object-cover transition hover:scale-105 duration-300" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="flex justify-center gap-2 mt-6">
+                {catalogGroups.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setCatalogGroupIndex(idx)}
+                    className={`w-3 h-3 rounded-full transition-all duration-300 ${
+                      idx === catalogGroupIndex
+                        ? 'bg-amber-600 w-6'
+                        : 'bg-amber-300/60 hover:bg-amber-400'
+                    }`}
+                    aria-label={`Go to group ${idx + 1}`}
+                  />
+                ))}
+              </div>
+              <div className="text-center mt-8">
+                <a href="/catalog" className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold px-8 py-3 rounded-full transition shadow-lg hover:shadow-xl">
+                  Explore Full Catalog →
+                </a>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Testimonials – with optimized images */}
+      <section id="testimonials" className="bg-gray-50 py-16">
+        <div className="container mx-auto px-6">
+          <h2 className="text-3xl font-bold text-center mb-12">Client Testimonials</h2>
+          {loadingTestimonials ? (
+            <p className="text-center text-gray-500">Loading testimonials...</p>
+          ) : testimonials.length === 0 ? (
+            <p className="text-center text-gray-500">No testimonials yet. Completed works will appear here.</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {testimonials.map((t) => (
+                <a key={t.id} href={`/workspace/${t.token_string}`} className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition block">
+                  <div className="h-48 overflow-hidden">
+                    {t.image ? (
+                      <img
+                        src={getOptimizedImage(t.image, 400)}
+                        className="w-full h-full object-cover"
+                        alt="Testimonial"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">No image</div>
+                    )}
+                  </div>
+                  <div className="p-5">
+                    <h3 className="font-bold text-xl mb-2">{t.client_name || "Client"}</h3>
+                    <p className="text-gray-600 line-clamp-3">{t.work_description || "Completed furniture piece. See the full story."}</p>
+                    <p className="text-sm text-blue-500 mt-3">View full work →</p>
+                  </div>
+                </a>
+              ))}
+            </div>
+          )}
+          <div className="text-center mt-10">
+            <a href="/testimonials" className="inline-block bg-gray-800 text-white px-8 py-3 rounded-full hover:bg-gray-900 transition">View All Testimonials →</a>
+          </div>
+        </div>
+      </section>
+
+      <a href={getWhatsAppGeneralLink()} target="_blank" rel="noopener noreferrer" className="fixed bottom-6 right-6 bg-green-500 text-white p-4 rounded-full shadow-lg hover:bg-green-600 transition z-50">💬 WhatsApp</a>
+      <footer className="bg-gray-900 text-white text-center py-6 text-sm">
+        <p>© 2026 OKMADE Furniture. All rights reserved.</p>
+        <p className="mt-2"><a href="/admin/login" className="text-gray-400 hover:text-white transition">Admin Login</a></p>
+      </footer>
     </div>
   );
 }
