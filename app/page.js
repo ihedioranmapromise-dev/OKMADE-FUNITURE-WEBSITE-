@@ -37,6 +37,7 @@ export default function Home() {
   const [token, setToken] = useState("");
   const [imageIndices, setImageIndices] = useState({});
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [clientId, setClientId] = useState(null);
   const router = useRouter();
 
   const aboutImages = [
@@ -67,6 +68,13 @@ export default function Home() {
     }, 4000);
     return () => clearInterval(interval);
   }, [catalogGroups]);
+
+  // Check client session
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setClientId(sessionStorage.getItem("clientId"));
+    }
+  }, []);
 
   useEffect(() => {
     async function fetchProducts() {
@@ -210,6 +218,11 @@ export default function Home() {
     return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
   };
 
+  const logout = () => {
+    sessionStorage.removeItem("clientId");
+    window.location.href = "/";
+  };
+
   // Navbar component
   const Navbar = () => (
     <nav className="fixed top-0 left-0 w-full z-50 bg-white/90 backdrop-blur-md shadow-sm border-b border-amber-100/20">
@@ -217,12 +230,20 @@ export default function Home() {
         <a href="#home" className="text-2xl font-bold text-amber-800 font-['Dancing_Script',_cursive]">
           OKMADE
         </a>
-        <div className="hidden md:flex gap-8 text-gray-700 font-medium">
+        <div className="hidden md:flex gap-8 text-gray-700 font-medium items-center">
           <a href="#home" className="hover:text-amber-700 transition">Home</a>
           <a href="#about" className="hover:text-amber-700 transition">About</a>
           <a href="#contact" className="hover:text-amber-700 transition">Contact</a>
           <a href="#reviews" className="hover:text-amber-700 transition">Reviews</a>
-          <a href="#testimonials" className="hover:text-amber-700 transition">Testimonials</a>
+          <a href="#portfolio" className="hover:text-amber-700 transition">Portfolio</a>
+          {clientId ? (
+            <>
+              <a href="/client/dashboard" className="hover:text-amber-700 transition">Dashboard</a>
+              <button onClick={logout} className="text-red-600 hover:text-red-800 transition">Logout</button>
+            </>
+          ) : (
+            <a href="/client/login" className="hover:text-amber-700 transition">Client Login</a>
+          )}
         </div>
         <button className="md:hidden text-2xl" onClick={() => setIsMenuOpen(!isMenuOpen)}>
           {isMenuOpen ? '✕' : '☰'}
@@ -234,7 +255,15 @@ export default function Home() {
           <a href="#about" onClick={() => setIsMenuOpen(false)} className="hover:text-amber-700">About</a>
           <a href="#contact" onClick={() => setIsMenuOpen(false)} className="hover:text-amber-700">Contact</a>
           <a href="#reviews" onClick={() => setIsMenuOpen(false)} className="hover:text-amber-700">Reviews</a>
-          <a href="#testimonials" onClick={() => setIsMenuOpen(false)} className="hover:text-amber-700">Testimonials</a>
+          <a href="#portfolio" onClick={() => setIsMenuOpen(false)} className="hover:text-amber-700">Portfolio</a>
+          {clientId ? (
+            <>
+              <a href="/client/dashboard" onClick={() => setIsMenuOpen(false)} className="hover:text-amber-700">Dashboard</a>
+              <button onClick={logout} className="text-red-600 hover:text-red-800">Logout</button>
+            </>
+          ) : (
+            <a href="/client/login" onClick={() => setIsMenuOpen(false)} className="hover:text-amber-700">Client Login</a>
+          )}
         </div>
       )}
     </nav>
@@ -251,7 +280,6 @@ export default function Home() {
         </div>
         <div className="relative container mx-auto px-6 py-32 text-center">
           <h1 className="text-5xl md:text-7xl font-bold mb-4">OKMADE Furniture</h1>
-          {/* 👇 MOTTO ADDED HERE */}
           <p className="text-2xl md:text-3xl font-['Dancing_Script',_cursive] text-amber-200 mb-4">
             TRUST THE PROGRESS
           </p>
@@ -265,25 +293,6 @@ export default function Home() {
         </div>
       </section>
 
-      <a href={getWhatsAppGeneralLink()} target="_blank" rel="noopener noreferrer" className="fixed bottom-6 right-6 bg-green-500 text-white p-4 rounded-full shadow-lg hover:bg-green-600 transition z-50">💬 WhatsApp</a>
-      <footer className="bg-gray-900 text-white text-center py-6 text-sm">
-        <p>© 2026 OKMADE Furniture. All rights reserved.</p>
-        <p className="mt-2"><a href="/admin/login" className="text-gray-400 hover:text-white transition">Admin Login</a></p>
-      </footer>
-    </div>
-  );
-}
-
-<div className="flex gap-4">
-  {sessionStorage.getItem("clientId") ? (
-    <>
-      <a href="/client/dashboard" className="text-gray-700 hover:text-amber-700">Dashboard</a>
-      <button onClick={() => { sessionStorage.removeItem("clientId"); window.location.href = "/"; }} className="text-gray-700 hover:text-red-600">Logout</button>
-    </>
-  ) : (
-    <a href="/client/login" className="text-gray-700 hover:text-amber-700">Client Login</a>
-  )}
-</div>
       {/* Token Workspace */}
       <section id="token" className="bg-gray-100 py-16">
         <div className="container mx-auto px-6 text-center">
@@ -357,6 +366,46 @@ export default function Home() {
               </a>
             </div>
           )}
+        </div>
+      </section>
+
+      {/* Testimonials / Portfolio Section – MOVED UP */}
+      <section id="portfolio" className="bg-gray-50 py-16">
+        <div className="container mx-auto px-6">
+          <h2 className="text-3xl font-bold text-center mb-12">Our Portfolio</h2>
+          {loadingTestimonials ? (
+            <p className="text-center text-gray-500">Loading projects...</p>
+          ) : testimonials.length === 0 ? (
+            <p className="text-center text-gray-500">No completed projects yet. Check back soon!</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {testimonials.map((t) => (
+                <a key={t.id} href={`/workspace/${t.token_string}`} className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition block group">
+                  <div className="h-64 overflow-hidden relative">
+                    {t.image ? (
+                      <img
+                        src={getOptimizedImage(t.image, 500)}
+                        className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
+                        alt="Project"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">No image</div>
+                    )}
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4">
+                      <p className="text-white font-semibold text-lg">{t.client_name || "Client"}</p>
+                    </div>
+                  </div>
+                  <div className="p-5">
+                    <p className="text-gray-600 line-clamp-2">{t.work_description || "Completed furniture piece. See the full story."}</p>
+                    <p className="text-sm text-amber-600 mt-3 font-medium">View Project →</p>
+                  </div>
+                </a>
+              ))}
+            </div>
+          )}
+          <div className="text-center mt-10">
+            <a href="/testimonials" className="inline-block bg-gray-800 text-white px-8 py-3 rounded-full hover:bg-gray-900 transition">View All Projects →</a>
+          </div>
         </div>
       </section>
 
@@ -492,41 +541,11 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Testimonials – with optimized images */}
-      <section id="testimonials" className="bg-gray-50 py-16">
-        <div className="container mx-auto px-6">
-          <h2 className="text-3xl font-bold text-center mb-12">Client Testimonials</h2>
-          {loadingTestimonials ? (
-            <p className="text-center text-gray-500">Loading testimonials...</p>
-          ) : testimonials.length === 0 ? (
-            <p className="text-center text-gray-500">No testimonials yet. Completed works will appear here.</p>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {testimonials.map((t) => (
-                <a key={t.id} href={`/workspace/${t.token_string}`} className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition block">
-                  <div className="h-48 overflow-hidden">
-                    {t.image ? (
-                      <img
-                        src={getOptimizedImage(t.image, 400)}
-                        className="w-full h-full object-cover"
-                        alt="Testimonial"
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">No image</div>
-                    )}
-                  </div>
-                  <div className="p-5">
-                    <h3 className="font-bold text-xl mb-2">{t.client_name || "Client"}</h3>
-                    <p className="text-gray-600 line-clamp-3">{t.work_description || "Completed furniture piece. See the full story."}</p>
-                    <p className="text-sm text-blue-500 mt-3">View full work →</p>
-                  </div>
-                </a>
-              ))}
-            </div>
-          )}
-          <div className="text-center mt-10">
-            <a href="/testimonials" className="inline-block bg-gray-800 text-white px-8 py-3 rounded-full hover:bg-gray-900 transition">View All Testimonials →</a>
-          </div>
-        </div>
-      </section>
-
+      <a href={getWhatsAppGeneralLink()} target="_blank" rel="noopener noreferrer" className="fixed bottom-6 right-6 bg-green-500 text-white p-4 rounded-full shadow-lg hover:bg-green-600 transition z-50">💬 WhatsApp</a>
+      <footer className="bg-gray-900 text-white text-center py-6 text-sm">
+        <p>© 2026 OKMADE Furniture. All rights reserved.</p>
+        <p className="mt-2"><a href="/admin/login" className="text-gray-400 hover:text-white transition">Admin Login</a></p>
+      </footer>
+    </div>
+  );
+}
