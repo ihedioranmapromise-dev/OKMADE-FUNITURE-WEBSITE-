@@ -265,6 +265,25 @@ export default function Home() {
         </div>
       </section>
 
+      <a href={getWhatsAppGeneralLink()} target="_blank" rel="noopener noreferrer" className="fixed bottom-6 right-6 bg-green-500 text-white p-4 rounded-full shadow-lg hover:bg-green-600 transition z-50">💬 WhatsApp</a>
+      <footer className="bg-gray-900 text-white text-center py-6 text-sm">
+        <p>© 2026 OKMADE Furniture. All rights reserved.</p>
+        <p className="mt-2"><a href="/admin/login" className="text-gray-400 hover:text-white transition">Admin Login</a></p>
+      </footer>
+    </div>
+  );
+}
+
+<div className="flex gap-4">
+  {sessionStorage.getItem("clientId") ? (
+    <>
+      <a href="/client/dashboard" className="text-gray-700 hover:text-amber-700">Dashboard</a>
+      <button onClick={() => { sessionStorage.removeItem("clientId"); window.location.href = "/"; }} className="text-gray-700 hover:text-red-600">Logout</button>
+    </>
+  ) : (
+    <a href="/client/login" className="text-gray-700 hover:text-amber-700">Client Login</a>
+  )}
+</div>
       {/* Token Workspace */}
       <section id="token" className="bg-gray-100 py-16">
         <div className="container mx-auto px-6 text-center">
@@ -511,22 +530,3 @@ export default function Home() {
         </div>
       </section>
 
-      <a href={getWhatsAppGeneralLink()} target="_blank" rel="noopener noreferrer" className="fixed bottom-6 right-6 bg-green-500 text-white p-4 rounded-full shadow-lg hover:bg-green-600 transition z-50">💬 WhatsApp</a>
-      <footer className="bg-gray-900 text-white text-center py-6 text-sm">
-        <p>© 2026 OKMADE Furniture. All rights reserved.</p>
-        <p className="mt-2"><a href="/admin/login" className="text-gray-400 hover:text-white transition">Admin Login</a></p>
-      </footer>
-    </div>
-  );
-}
-
-<div className="flex gap-4">
-  {sessionStorage.getItem("clientId") ? (
-    <>
-      <a href="/client/dashboard" className="text-gray-700 hover:text-amber-700">Dashboard</a>
-      <button onClick={() => { sessionStorage.removeItem("clientId"); window.location.href = "/"; }} className="text-gray-700 hover:text-red-600">Logout</button>
-    </>
-  ) : (
-    <a href="/client/login" className="text-gray-700 hover:text-amber-700">Client Login</a>
-  )}
-</div>
