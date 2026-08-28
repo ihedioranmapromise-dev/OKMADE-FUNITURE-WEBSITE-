@@ -519,3 +519,14 @@ export default function Home() {
     </div>
   );
 }
+
+<div className="flex gap-4">
+  {sessionStorage.getItem("clientId") ? (
+    <>
+      <a href="/client/dashboard" className="text-gray-700 hover:text-amber-700">Dashboard</a>
+      <button onClick={() => { sessionStorage.removeItem("clientId"); window.location.href = "/"; }} className="text-gray-700 hover:text-red-600">Logout</button>
+    </>
+  ) : (
+    <a href="/client/login" className="text-gray-700 hover:text-amber-700">Client Login</a>
+  )}
+</div>
