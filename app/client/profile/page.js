@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 import bcrypt from "bcryptjs";
@@ -21,6 +21,10 @@ export default function ClientProfile() {
   const [facebookUrl, setFacebookUrl] = useState("");
   const [tiktokUrl, setTiktokUrl] = useState("");
   const [instagramUrl, setInstagramUrl] = useState("");
+  const [profilePic, setProfilePic] = useState(null);
+  const [profilePicUrl, setProfilePicUrl] = useState("");
+  const [uploadingPic, setUploadingPic] = useState(false);
+  const fileInputRef = useRef(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -66,7 +70,39 @@ export default function ClientProfile() {
     setFacebookUrl(data.facebook_url || "");
     setTiktokUrl(data.tiktok_url || "");
     setInstagramUrl(data.instagram_url || "");
+    setProfilePicUrl(data.profile_pic || "");
   }
+
+  const handleProfilePicUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploadingPic(true);
+    try {
+      const clientId = sessionStorage.getItem("clientId");
+      const ext = file.name.split(".").pop();
+      const fileName = `profiles/${clientId}_${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("profile-pics")
+        .upload(fileName, file);
+      if (uploadError) throw uploadError;
+      const { data: urlData } = supabase.storage
+        .from("profile-pics")
+        .getPublicUrl(fileName);
+      const publicUrl = urlData.publicUrl;
+      // Update client record
+      const { error: updateError } = await supabase
+        .from("clients")
+        .update({ profile_pic: publicUrl })
+        .eq("id", clientId);
+      if (updateError) throw updateError;
+      setProfilePicUrl(publicUrl);
+      setMessage("Profile picture updated!");
+    } catch (err) {
+      setMessage("Error uploading picture: " + err.message);
+    } finally {
+      setUploadingPic(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -114,14 +150,12 @@ export default function ClientProfile() {
     setPasswordLoading(true);
     setPasswordMessage("");
     try {
-      // Verify current password
       const isValid = bcrypt.compareSync(currentPassword, client.password_hash);
       if (!isValid) {
         setPasswordMessage("Current password is incorrect.");
         setPasswordLoading(false);
         return;
       }
-      // Hash new password
       const salt = bcrypt.genSaltSync(10);
       const hash = bcrypt.hashSync(newPassword, salt);
       const { error } = await supabase
@@ -146,6 +180,39 @@ export default function ClientProfile() {
     <div className="min-h-screen bg-gradient-to-b from-amber-50 to-white py-12 px-4">
       <div className="max-w-md mx-auto bg-white rounded-2xl shadow-xl p-8">
         <h1 className="text-2xl font-bold text-amber-800 mb-6">Edit Profile</h1>
+
+        {/* Profile Picture Upload */}
+        <div className="flex flex-col items-center mb-6">
+          <div className="relative">
+            {profilePicUrl ? (
+              <img
+                src={profilePicUrl}
+                className="w-24 h-24 rounded-full object-cover border-4 border-amber-200"
+                alt="Profile"
+              />
+            ) : (
+              <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center text-gray-400 text-3xl border-4 border-amber-200">
+                👤
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current.click()}
+              className="absolute bottom-0 right-0 bg-amber-600 text-white p-1 rounded-full w-8 h-8 flex items-center justify-center hover:bg-amber-700 transition"
+            >
+              📷
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleProfilePicUpload}
+              className="hidden"
+            />
+          </div>
+          {uploadingPic && <p className="text-sm text-gray-500 mt-2">Uploading...</p>}
+        </div>
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700">Display Name</label>
@@ -156,12 +223,12 @@ export default function ClientProfile() {
             <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows="3" className="w-full mt-1 p-3 border rounded-lg" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Phone (for verification)</label>
+            <label className="block text-sm font-medium text-gray-700">Phone</label>
             <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full mt-1 p-3 border rounded-lg" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Calling Phone (separate business line)</label>
-            <input type="text" value={callingPhone} onChange={(e) => setCallingPhone(e.target.value)} placeholder="e.g., 2348123456789" className="w-full mt-1 p-3 border rounded-lg" />
+            <label className="block text-sm font-medium text-gray-700">Calling Phone</label>
+            <input type="text" value={callingPhone} onChange={(e) => setCallingPhone(e.target.value)} className="w-full mt-1 p-3 border rounded-lg" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">Email</label>
@@ -169,7 +236,7 @@ export default function ClientProfile() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">Work Address</label>
-            <textarea value={workAddress} onChange={(e) => setWorkAddress(e.target.value)} rows="2" placeholder="Your business or workshop address" className="w-full mt-1 p-3 border rounded-lg" />
+            <textarea value={workAddress} onChange={(e) => setWorkAddress(e.target.value)} rows="2" className="w-full mt-1 p-3 border rounded-lg" />
           </div>
           <hr className="my-4" />
           <h2 className="text-lg font-semibold text-gray-800">Social Links</h2>
