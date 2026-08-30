@@ -10,7 +10,6 @@ const supabase = createClient(
 
 export default function CatalogUpload() {
   const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
   const [imageData, setImageData] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
@@ -45,8 +44,8 @@ export default function CatalogUpload() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!title.trim() || !description.trim()) {
-      setMessage("Title and description are required.");
+    if (!title.trim()) {
+      setMessage("Title is required.");
       return;
     }
     if (imageData.length === 0) {
@@ -59,7 +58,7 @@ export default function CatalogUpload() {
     try {
       const { data: catalog, error: catalogError } = await supabase
         .from("catalogs")
-        .insert([{ title, description }])
+        .insert([{ title }]) // no description field anymore
         .select()
         .single();
       if (catalogError) throw catalogError;
@@ -87,7 +86,6 @@ export default function CatalogUpload() {
 
       setMessage(`Catalog "${title}" added with ${imageData.length} image(s).`);
       setTitle("");
-      setDescription("");
       setImageData([]);
       document.getElementById("catalogImages").value = "";
     } catch (err) {
@@ -108,16 +106,6 @@ export default function CatalogUpload() {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             className="w-full border p-2 rounded"
-            required
-          />
-        </div>
-        <div>
-          <label className="block font-medium mb-1">Description *</label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="w-full border p-2 rounded"
-            rows="3"
             required
           />
         </div>

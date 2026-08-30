@@ -14,7 +14,6 @@ export default function AdminTokens() {
   const [clientAddress, setClientAddress] = useState("");
   const [workDescription, setWorkDescription] = useState("");
   const [price, setPrice] = useState("");
-  const [doublePayment, setDoublePayment] = useState(false);
   const [imageData, setImageData] = useState([]);
   const [generatedToken, setGeneratedToken] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -74,7 +73,6 @@ export default function AdminTokens() {
             client_address: clientAddress,
             work_description: workDescription,
             price: price ? parseFloat(price) : null,
-            double_payment: doublePayment,
             status: "active",
             notification_method: "manual",
           },
@@ -111,7 +109,6 @@ export default function AdminTokens() {
       setClientAddress("");
       setWorkDescription("");
       setPrice("");
-      setDoublePayment(false);
       setImageData([]);
       document.getElementById("requestImages").value = "";
     } catch (err) {
@@ -177,16 +174,6 @@ export default function AdminTokens() {
             onChange={(e) => setPrice(e.target.value)}
             className="w-full border p-2 rounded"
           />
-        </div>
-        <div>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={doublePayment}
-              onChange={(e) => setDoublePayment(e.target.checked)}
-            />
-            Double Payment
-          </label>
         </div>
         <div>
           <label className="block font-medium mb-1">Request Images (up to 6) *</label>

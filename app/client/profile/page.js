@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
+import bcrypt from "bcryptjs";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -22,6 +23,17 @@ export default function ClientProfile() {
   const [instagramUrl, setInstagramUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+
+  // Password change state
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState("");
+  const [passwordLoading, setPasswordLoading] = useState(false);
+
   const router = useRouter();
 
   useEffect(() => {
@@ -85,6 +97,49 @@ export default function ClientProfile() {
     }
   };
 
+  const handlePasswordChange = async (e) => {
+    e.preventDefault();
+    if (!currentPassword || !newPassword || !confirmNewPassword) {
+      setPasswordMessage("All password fields are required.");
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setPasswordMessage("New passwords do not match.");
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordMessage("New password must be at least 6 characters.");
+      return;
+    }
+    setPasswordLoading(true);
+    setPasswordMessage("");
+    try {
+      // Verify current password
+      const isValid = bcrypt.compareSync(currentPassword, client.password_hash);
+      if (!isValid) {
+        setPasswordMessage("Current password is incorrect.");
+        setPasswordLoading(false);
+        return;
+      }
+      // Hash new password
+      const salt = bcrypt.genSaltSync(10);
+      const hash = bcrypt.hashSync(newPassword, salt);
+      const { error } = await supabase
+        .from("clients")
+        .update({ password_hash: hash })
+        .eq("id", client.id);
+      if (error) throw error;
+      setPasswordMessage("Password updated successfully!");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmNewPassword("");
+    } catch (err) {
+      setPasswordMessage("Error: " + err.message);
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
   if (!client) return <div className="p-8 text-center">Loading...</div>;
 
   return (
@@ -139,6 +194,78 @@ export default function ClientProfile() {
           </button>
           {message && <p className={`text-center text-sm ${message.includes("Error") ? "text-red-500" : "text-green-600"}`}>{message}</p>}
         </form>
+
+        {/* Change Password Section */}
+        <hr className="my-6" />
+        <h2 className="text-lg font-semibold text-gray-800 mb-4">Change Password</h2>
+        <form onSubmit={handlePasswordChange} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Current Password</label>
+            <div className="relative">
+              <input
+                type={showCurrent ? "text" : "password"}
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                className="w-full mt-1 p-3 border rounded-lg pr-10"
+                required
+              />
+              <button
+                type="button"
+                className="absolute inset-y-0 right-3 flex items-center text-gray-500 hover:text-gray-700"
+                onClick={() => setShowCurrent(!showCurrent)}
+              >
+                {showCurrent ? "👁️" : "👁️‍🗨️"}
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">New Password</label>
+            <div className="relative">
+              <input
+                type={showNew ? "text" : "password"}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="w-full mt-1 p-3 border rounded-lg pr-10"
+                required
+              />
+              <button
+                type="button"
+                className="absolute inset-y-0 right-3 flex items-center text-gray-500 hover:text-gray-700"
+                onClick={() => setShowNew(!showNew)}
+              >
+                {showNew ? "👁️" : "👁️‍🗨️"}
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Confirm New Password</label>
+            <div className="relative">
+              <input
+                type={showConfirm ? "text" : "password"}
+                value={confirmNewPassword}
+                onChange={(e) => setConfirmNewPassword(e.target.value)}
+                className="w-full mt-1 p-3 border rounded-lg pr-10"
+                required
+              />
+              <button
+                type="button"
+                className="absolute inset-y-0 right-3 flex items-center text-gray-500 hover:text-gray-700"
+                onClick={() => setShowConfirm(!showConfirm)}
+              >
+                {showConfirm ? "👁️" : "👁️‍🗨️"}
+              </button>
+            </div>
+          </div>
+          <button
+            type="submit"
+            disabled={passwordLoading}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition disabled:opacity-50"
+          >
+            {passwordLoading ? "Updating..." : "Update Password"}
+          </button>
+          {passwordMessage && <p className={`text-center text-sm ${passwordMessage.includes("Error") ? "text-red-500" : "text-green-600"}`}>{passwordMessage}</p>}
+        </form>
+
         <p className="text-center text-sm text-gray-500 mt-4">
           <a href="/client/dashboard" className="text-amber-600 hover:underline">← Back to Dashboard</a>
         </p>
