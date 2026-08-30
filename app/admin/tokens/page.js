@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 
@@ -9,6 +9,8 @@ const supabase = createClient(
 );
 
 export default function AdminTokens() {
+  const [workers, setWorkers] = useState([]);
+  const [selectedWorkerId, setSelectedWorkerId] = useState("");
   const [clientName, setClientName] = useState("");
   const [clientContact, setClientContact] = useState("");
   const [clientAddress, setClientAddress] = useState("");
@@ -24,6 +26,36 @@ export default function AdminTokens() {
     router.push("/admin/login");
     return null;
   }
+
+  useEffect(() => {
+    fetchWorkers();
+  }, []);
+
+  async function fetchWorkers() {
+    const { data, error } = await supabase
+      .from("clients")
+      .select("id, display_name, first_name, last_name, phone_number, work_address")
+      .order("display_name", { ascending: true });
+    if (!error) setWorkers(data || []);
+  }
+
+  const handleWorkerChange = (e) => {
+    const id = e.target.value;
+    setSelectedWorkerId(id);
+    if (id === "manual") {
+      setClientName("");
+      setClientContact("");
+      setClientAddress("");
+      return;
+    }
+    const worker = workers.find(w => w.id === id);
+    if (worker) {
+      const name = worker.display_name || `${worker.first_name || ''} ${worker.last_name || ''}`.trim();
+      setClientName(name || "");
+      setClientContact(worker.phone_number || "");
+      setClientAddress(worker.work_address || "");
+    }
+  };
 
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files);
@@ -70,11 +102,13 @@ export default function AdminTokens() {
             token_string: tokenString,
             client_name: clientName,
             client_contact: clientContact,
-            client_address: clientAddress,
-            work_description: workDescription,
+            client_address: clientAddress || null,
+            work_description: workDescription || null,
             price: price ? parseFloat(price) : null,
             status: "active",
             notification_method: "manual",
+            // If a worker was selected, link the token to that client
+            client_id: selectedWorkerId !== "manual" && selectedWorkerId !== "" ? selectedWorkerId : null,
           },
         ])
         .select()
@@ -110,6 +144,7 @@ export default function AdminTokens() {
       setWorkDescription("");
       setPrice("");
       setImageData([]);
+      setSelectedWorkerId("");
       document.getElementById("requestImages").value = "";
     } catch (err) {
       setMessage("Error: " + err.message);
@@ -127,6 +162,25 @@ export default function AdminTokens() {
     <div className="p-8 max-w-3xl mx-auto">
       <h1 className="text-2xl font-bold mb-6">Generate Client Token</h1>
       <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block font-medium mb-1">Select Worker (Artisan) – or skip</label>
+          <select
+            value={selectedWorkerId}
+            onChange={handleWorkerChange}
+            className="w-full border p-2 rounded"
+          >
+            <option value="">-- Select a worker (or skip) --</option>
+            <option value="manual">✏️ Enter manually (skip)</option>
+            {workers.map((w) => {
+              const name = w.display_name || `${w.first_name || ''} ${w.last_name || ''}`.trim();
+              return (
+                <option key={w.id} value={w.id}>
+                  {name || w.id.slice(0,8)} {w.phone_number ? `(${w.phone_number})` : ''}
+                </option>
+              );
+            })}
+          </select>
+        </div>
         <div>
           <label className="block font-medium mb-1">Client Name *</label>
           <input

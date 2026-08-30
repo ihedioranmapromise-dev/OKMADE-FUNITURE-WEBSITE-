@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 
@@ -14,8 +14,11 @@ export default function ClientDashboard() {
   const [killedTokens, setKilledTokens] = useState([]);
   const [loading, setLoading] = useState(true);
   const [storyContent, setStoryContent] = useState("");
+  const [storyImage, setStoryImage] = useState(null);
+  const [storyImagePreview, setStoryImagePreview] = useState("");
   const [posting, setPosting] = useState(false);
   const [postMessage, setPostMessage] = useState("");
+  const fileInputRef = useRef(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -49,20 +52,49 @@ export default function ClientDashboard() {
     setLoading(false);
   }
 
+  const handleStoryImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setStoryImage(file);
+      setStoryImagePreview(URL.createObjectURL(file));
+    }
+  };
+
   const handlePostSubmit = async (e) => {
     e.preventDefault();
-    if (!storyContent.trim()) return;
+    if (!storyContent.trim()) {
+      setPostMessage("Please write something.");
+      return;
+    }
     setPosting(true);
     setPostMessage("");
     try {
       const clientId = sessionStorage.getItem("clientId");
+      let imageUrl = null;
+      // Upload image if present
+      if (storyImage) {
+        const ext = storyImage.name.split(".").pop();
+        const fileName = `stories/${clientId}_${Date.now()}.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from("story-images")
+          .upload(fileName, storyImage);
+        if (uploadError) throw uploadError;
+        const { data: urlData } = supabase.storage
+          .from("story-images")
+          .getPublicUrl(fileName);
+        imageUrl = urlData.publicUrl;
+      }
       const { error } = await supabase.from("client_posts").insert({
         client_id: clientId,
         content: storyContent,
+        image_url: imageUrl,
       });
       if (error) throw error;
       setPostMessage("Story posted successfully!");
       setStoryContent("");
+      setStoryImage(null);
+      setStoryImagePreview("");
+      if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (err) {
       setPostMessage("Error: " + err.message);
     } finally {
@@ -81,13 +113,29 @@ export default function ClientDashboard() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-amber-50 to-white py-8 px-4">
       <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-amber-800 font-['Dancing_Script',_cursive]">
-            Welcome, {client?.display_name || client?.username}
-          </h1>
-          <div className="flex gap-4">
-            <a href="/client/profile" className="text-amber-600 hover:underline">Edit Profile</a>
-            <button onClick={logout} className="text-red-600 hover:underline">Logout</button>
+        {/* Profile Card */}
+        <div className="bg-white rounded-xl shadow-md p-6 mb-8 flex items-center gap-6 border border-amber-100">
+          {client?.profile_pic ? (
+            <img
+              src={client.profile_pic}
+              className="w-20 h-20 rounded-full object-cover border-4 border-amber-200"
+              alt="Profile"
+            />
+          ) : (
+            <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center text-gray-400 text-3xl border-4 border-amber-200">
+              👤
+            </div>
+          )}
+          <div>
+            <h1 className="text-2xl font-bold text-amber-800">
+              {client?.display_name || client?.username}
+            </h1>
+            {client?.age && <p className="text-sm text-gray-600">Age: {client.age}</p>}
+            {client?.skill && <p className="text-sm text-gray-600">Skill: {client.skill}</p>}
+            <a href="/client/profile" className="text-sm text-amber-600 hover:underline">Edit Profile</a>
+          </div>
+          <div className="ml-auto">
+            <button onClick={logout} className="text-red-600 hover:underline text-sm">Logout</button>
           </div>
         </div>
 
@@ -103,7 +151,24 @@ export default function ClientDashboard() {
               className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
               required
             />
-            <button type="submit" disabled={posting} className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg transition disabled:opacity-50">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Add an image (optional)</label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleStoryImageChange}
+                className="w-full p-2 border rounded-lg"
+              />
+              {storyImagePreview && (
+                <img src={storyImagePreview} className="mt-2 h-24 w-24 object-cover rounded-lg border" alt="Preview" />
+              )}
+            </div>
+            <button
+              type="submit"
+              disabled={posting}
+              className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg transition disabled:opacity-50"
+            >
               {posting ? "Posting..." : "Post Update"}
             </button>
             {postMessage && <p className={`text-sm ${postMessage.includes("Error") ? "text-red-500" : "text-green-600"}`}>{postMessage}</p>}
@@ -131,7 +196,7 @@ export default function ClientDashboard() {
           )}
         </div>
 
-        {/* Completed Projects (Killed) */}
+        {/* Completed Projects */}
         <div>
           <h2 className="text-2xl font-semibold mb-4">Completed Projects</h2>
           {killedTokens.length === 0 ? (
