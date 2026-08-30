@@ -69,7 +69,6 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [catalogGroups]);
 
-  // Check client session
   useEffect(() => {
     if (typeof window !== "undefined") {
       setClientId(sessionStorage.getItem("clientId"));
@@ -213,23 +212,15 @@ export default function Home() {
     return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
   };
 
-  const getWhatsAppGeneralLink = () => {
-    const message = "Hello, I have a question about your furniture.";
-    return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
-  };
-
   const logout = () => {
     sessionStorage.removeItem("clientId");
     window.location.href = "/";
   };
 
-  // Navbar component
   const Navbar = () => (
     <nav className="fixed top-0 left-0 w-full z-50 bg-white/90 backdrop-blur-md shadow-sm border-b border-amber-100/20">
       <div className="container mx-auto px-4 md:px-6 flex items-center justify-between h-16">
-        <a href="#home" className="text-2xl font-bold text-amber-800 font-['Dancing_Script',_cursive]">
-          OKMADE
-        </a>
+        <a href="#home" className="text-2xl font-bold text-amber-800 font-['Dancing_Script',_cursive]">OKMADE</a>
         <div className="hidden md:flex gap-8 text-gray-700 font-medium items-center">
           <a href="#home" className="hover:text-amber-700 transition">Home</a>
           <a href="#about" className="hover:text-amber-700 transition">About</a>
@@ -273,13 +264,14 @@ export default function Home() {
     <div>
       <Navbar />
 
-      {/* Home Section */}
+      {/* Home Section – Lighter Hero */}
       <section id="home" className="relative text-white pt-16">
         <div className="absolute inset-0 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1589939705384-5185137a7f0f?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80')" }}>
-          <div className="absolute inset-0 bg-black/50"></div>
+          <div className="absolute inset-0 bg-amber-900/30"></div>
         </div>
         <div className="relative container mx-auto px-6 py-32 text-center">
-          <h1 className="text-5xl md:text-7xl font-bold mb-4">OKMADE Furniture</h1>
+          <p className="text-lg md:text-xl font-light text-amber-200/90 uppercase tracking-widest mb-2">Welcome to OKMADE</p>
+          <h1 className="text-5xl md:text-7xl font-bold mb-4">Furniture &amp; Interiors</h1>
           <p className="text-2xl md:text-3xl font-['Dancing_Script',_cursive] text-amber-200 mb-4">
             TRUST THE PROGRESS
           </p>
@@ -294,48 +286,44 @@ export default function Home() {
       </section>
 
       {/* Token Workspace */}
-      <section id="token" className="bg-gray-100 py-16">
+      <section id="token" className="bg-white/80 backdrop-blur-sm py-16 border-b border-amber-100/30">
         <div className="container mx-auto px-6 text-center">
-          <h2 className="text-3xl font-bold mb-4">Track Your Custom Work</h2>
+          <h2 className="text-3xl font-bold text-amber-800 mb-4">Track Your Custom Work</h2>
           <p className="text-gray-600 mb-6">Enter the private token you received to see your workspace and progress.</p>
           <form onSubmit={handleTokenSubmit} className="max-w-md mx-auto flex gap-3">
-            <input type="text" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Your token (e.g., ABC-123)" className="flex-1 p-3 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500" required />
-            <button type="submit" className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition">Track Work →</button>
+            <input type="text" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Your token (e.g., ABC-123)" className="flex-1 p-3 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500" required />
+            <button type="submit" className="bg-amber-600 text-white px-6 py-3 rounded-lg hover:bg-amber-700 transition">Track Work →</button>
           </form>
           <p className="text-sm text-gray-500 mt-4">Example tokens: ABC123, XYZ789 (check your email or SMS).</p>
         </div>
       </section>
 
-      {/* Featured Pieces – Dark Elite Background */}
-      <section id="featured" className="relative py-16 overflow-hidden bg-gradient-to-br from-amber-900/90 via-amber-800/80 to-stone-800">
-        <div className="absolute inset-0 opacity-10" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }} />
-        <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full bg-amber-400/20 blur-3xl pointer-events-none"></div>
-        <div className="absolute bottom-[-10%] right-[-5%] w-[500px] h-[500px] rounded-full bg-orange-300/15 blur-3xl pointer-events-none"></div>
+      {/* Featured Pieces – Lighter Version */}
+      <section id="featured" className="relative py-16 overflow-hidden bg-gradient-to-br from-amber-50/80 via-orange-50/60 to-white border-y border-amber-100/20">
+        <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full bg-amber-200/20 blur-3xl pointer-events-none"></div>
         <div className="relative z-10 container mx-auto px-6">
-          <h2 className="text-3xl md:text-4xl font-bold text-center mb-12 font-['Dancing_Script',_cursive] text-amber-200 drop-shadow-lg">
-            Featured Pieces
-          </h2>
+          <h2 className="text-3xl md:text-4xl font-bold text-center mb-12 font-['Dancing_Script',_cursive] text-amber-800 drop-shadow-sm">Featured Pieces</h2>
           {loadingProducts ? (
-            <p className="text-center text-amber-100/70">Loading products...</p>
+            <p className="text-center text-amber-600">Loading products...</p>
           ) : products.length === 0 ? (
-            <p className="text-center text-amber-100/70">No products yet. Check back soon!</p>
+            <p className="text-center text-gray-500">No products yet. Check back soon!</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {products.slice(0, 6).map((product) => {
                 const idx = imageIndices[product.id] || 0;
                 return (
-                  <div key={product.id} className="group bg-white/90 backdrop-blur-sm rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden border border-white/10 hover:border-amber-300/20 hover:-translate-y-1">
-                    <div className="relative h-64">
+                  <div key={product.id} className="group bg-white rounded-xl shadow-md hover:shadow-2xl transition-all duration-300 overflow-hidden border border-amber-100/30 hover:-translate-y-1">
+                    <div className="relative h-64 overflow-hidden bg-amber-50">
                       {product.images.length > 0 ? (
                         <img src={product.images[idx]?.image_url} alt={product.description} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
                       ) : (
-                        <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">No image</div>
+                        <div className="w-full h-full flex items-center justify-center text-gray-300">No image</div>
                       )}
                       {product.sold && <span className="absolute top-4 right-4 bg-red-600 text-white px-3 py-1 rounded-full text-sm font-bold">SOLD</span>}
                       {product.images.length > 1 && (
                         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5">
                           {product.images.map((_, i) => (
-                            <span key={i} className={`w-2 h-2 rounded-full transition ${i === idx ? 'bg-white' : 'bg-white/40'}`} />
+                            <span key={i} className={`w-2 h-2 rounded-full transition ${i === idx ? 'bg-amber-600' : 'bg-amber-300/60'}`} />
                           ))}
                         </div>
                       )}
@@ -361,7 +349,7 @@ export default function Home() {
           )}
           {products.length > 6 && (
             <div className="text-center mt-10">
-              <a href="/showroom" className="inline-block bg-white/10 backdrop-blur-sm hover:bg-white/20 text-white border border-white/20 px-8 py-3 rounded-full transition shadow-lg hover:shadow-xl">
+              <a href="/showroom" className="inline-block bg-amber-600 hover:bg-amber-700 text-white px-8 py-3 rounded-full transition shadow-lg hover:shadow-xl">
                 View All Products →
               </a>
             </div>
@@ -369,10 +357,10 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Testimonials / Portfolio Section – MOVED UP */}
-      <section id="portfolio" className="bg-gray-50 py-16">
+      {/* Portfolio / Testimonials Section */}
+      <section id="portfolio" className="py-16 bg-gradient-to-b from-white to-amber-50/50">
         <div className="container mx-auto px-6">
-          <h2 className="text-3xl font-bold text-center mb-12">Our Portfolio</h2>
+          <h2 className="text-3xl font-bold text-center mb-12 font-['Dancing_Script',_cursive] text-amber-800">Our Portfolio</h2>
           {loadingTestimonials ? (
             <p className="text-center text-gray-500">Loading projects...</p>
           ) : testimonials.length === 0 ? (
@@ -380,14 +368,10 @@ export default function Home() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {testimonials.map((t) => (
-                <a key={t.id} href={`/workspace/${t.token_string}`} className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition block group">
+                <a key={t.id} href={`/workspace/${t.token_string}`} className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition group">
                   <div className="h-64 overflow-hidden relative">
                     {t.image ? (
-                      <img
-                        src={getOptimizedImage(t.image, 500)}
-                        className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
-                        alt="Project"
-                      />
+                      <img src={getOptimizedImage(t.image, 500)} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" alt="Project" />
                     ) : (
                       <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">No image</div>
                     )}
@@ -404,29 +388,34 @@ export default function Home() {
             </div>
           )}
           <div className="text-center mt-10">
-            <a href="/testimonials" className="inline-block bg-gray-800 text-white px-8 py-3 rounded-full hover:bg-gray-900 transition">View All Projects →</a>
+            <a href="/testimonials" className="inline-block bg-amber-600 text-white px-8 py-3 rounded-full hover:bg-amber-700 transition">View All Projects →</a>
           </div>
         </div>
       </section>
 
-      {/* About Section */}
+      {/* About Section – Enhanced Text */}
       <section id="about" className="relative h-[600px] md:h-[700px] flex items-center overflow-hidden">
         <div className="absolute inset-0 transition-opacity duration-1000 bg-cover bg-center" style={{ backgroundImage: `url(${aboutImages[aboutImageIndex]})` }} />
-        <div className="absolute inset-0 bg-black/50" />
+        <div className="absolute inset-0 bg-black/40"></div>
         <div className="relative z-10 container mx-auto px-6 text-center text-white">
-          <h2 className="text-4xl md:text-5xl font-bold mb-6 font-['Dancing_Script',_cursive] text-amber-200 drop-shadow-lg">About OKMADE Furniture</h2>
-          <p className="max-w-3xl mx-auto text-lg md:text-xl leading-relaxed bg-black/30 backdrop-blur-sm p-6 rounded-2xl border border-white/10">
-            We are a team of skilled artisans dedicated to transforming spaces with timeless furniture.
-            From <span className="text-amber-200 font-semibold">hotels, churches, and government houses</span> to <span className="text-amber-200 font-semibold">private homes and corporate offices</span>,
-            we bring elegance and functionality to every project.
-            <br /><br />
-            Beyond new creations, we also offer <span className="text-amber-200 font-semibold">expert repairs and restoration</span> –
-            breathing new life into your cherished pieces.
-            Our passion is to craft furniture that tells your story.
-          </p>
+          <h2 className="text-4xl md:text-5xl font-bold mb-6 font-['Dancing_Script',_cursive] text-amber-200 drop-shadow-lg">Crafting Interiors, Building Dreams</h2>
+          <div className="max-w-3xl mx-auto bg-black/30 backdrop-blur-sm p-6 rounded-2xl border border-white/10">
+            <p className="text-lg md:text-xl leading-relaxed">
+              At OKMADE, we don't just build furniture – we shape spaces, create atmospheres, and bring visions to life. From the warmth of a wooden dining table to the grandeur of a hotel lobby, our work is defined by precision, passion, and a deep respect for the craft of woodworking.
+            </p>
+            <p className="mt-4 text-base md:text-lg leading-relaxed">
+              We specialize in <span className="text-amber-200 font-semibold">full interior fit-outs</span>: hotels, churches, government houses, corporate offices, and luxury residences. Every project is a collaboration – we listen, design, build, and install with meticulous attention to detail. Our team handles everything from custom cabinetry and bespoke joinery to complete renovations and restoration of antique pieces.
+            </p>
+            <p className="mt-4 text-base md:text-lg leading-relaxed">
+              <span className="text-amber-200 font-semibold">Beyond new creations</span>, we breathe new life into old treasures with expert repairs and restoration. Whether it's a cherished family heirloom or a damaged commercial installation, we restore its beauty and functionality.
+            </p>
+            <p className="mt-4 text-sm italic text-amber-200/80">
+              "Furniture that tells your story – built to last, designed to inspire."
+            </p>
+          </div>
           <div className="mt-6 text-sm text-amber-200/70 italic">
             <span className="inline-block mx-2">✦</span>
-            Featured: Hotels &bull; Churches &bull; Government Houses &bull; Workshops
+            Featured: Hotels &bull; Churches &bull; Government Houses &bull; Corporate Offices &bull; Private Homes
             <span className="inline-block mx-2">✦</span>
           </div>
         </div>
@@ -477,10 +466,7 @@ export default function Home() {
                   </div>
                   {review.comment && <p className="text-gray-600 mt-2">{review.comment}</p>}
                   {review.showroom && (
-                    <button
-                      onClick={() => router.push(`/product/${review.showroom.id}`)}
-                      className="text-amber-600 text-sm hover:underline mt-2 inline-block"
-                    >
+                    <button onClick={() => router.push(`/product/${review.showroom.id}`)} className="text-amber-600 text-sm hover:underline mt-2 inline-block">
                       View product →
                     </button>
                   )}
@@ -491,15 +477,13 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Catalog Gallery – Light Warm Background */}
+      {/* Catalog Gallery – Light */}
       <section id="catalog-gallery" className="relative py-16 overflow-hidden bg-gradient-to-br from-amber-50/80 via-orange-50/60 to-white border-t border-amber-100/30">
         <div className="absolute inset-0 opacity-5" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d97706' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }} />
         <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full bg-amber-200/30 blur-3xl pointer-events-none"></div>
         <div className="absolute bottom-[-10%] right-[-5%] w-[500px] h-[500px] rounded-full bg-orange-200/20 blur-3xl pointer-events-none"></div>
         <div className="container mx-auto px-4 md:px-6 relative z-10">
-          <h2 className="text-3xl md:text-4xl font-bold text-center mb-8 font-['Dancing_Script',_cursive] text-amber-800 drop-shadow-sm">
-            Our Catalog Gallery
-          </h2>
+          <h2 className="text-3xl md:text-4xl font-bold text-center mb-8 font-['Dancing_Script',_cursive] text-amber-800 drop-shadow-sm">Our Catalog Gallery</h2>
           {loadingCatalog ? (
             <div className="flex justify-center items-center h-64">
               <div className="animate-pulse text-amber-600">Loading catalog images...</div>
@@ -522,26 +506,21 @@ export default function Home() {
                   <button
                     key={idx}
                     onClick={() => setCatalogGroupIndex(idx)}
-                    className={`w-3 h-3 rounded-full transition-all duration-300 ${
-                      idx === catalogGroupIndex
-                        ? 'bg-amber-600 w-6'
-                        : 'bg-amber-300/60 hover:bg-amber-400'
-                    }`}
+                    className={`w-3 h-3 rounded-full transition-all duration-300 ${idx === catalogGroupIndex ? 'bg-amber-600 w-6' : 'bg-amber-300/60 hover:bg-amber-400'}`}
                     aria-label={`Go to group ${idx + 1}`}
                   />
                 ))}
               </div>
               <div className="text-center mt-8">
-                <a href="/catalog" className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold px-8 py-3 rounded-full transition shadow-lg hover:shadow-xl">
-                  Explore Full Catalog →
-                </a>
+                <a href="/catalog" className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold px-8 py-3 rounded-full transition shadow-lg hover:shadow-xl">Explore Full Catalog →</a>
               </div>
             </div>
           )}
         </div>
       </section>
 
-      <a href={getWhatsAppGeneralLink()} target="_blank" rel="noopener noreferrer" className="fixed bottom-6 right-6 bg-green-500 text-white p-4 rounded-full shadow-lg hover:bg-green-600 transition z-50">💬 WhatsApp</a>
+      {/* No Floating WhatsApp Icon (Removed) */}
+      
       <footer className="bg-gray-900 text-white text-center py-6 text-sm">
         <p>© 2026 OKMADE Furniture. All rights reserved.</p>
         <p className="mt-2"><a href="/admin/login" className="text-gray-400 hover:text-white transition">Admin Login</a></p>

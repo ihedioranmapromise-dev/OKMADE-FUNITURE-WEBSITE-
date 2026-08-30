@@ -14,6 +14,12 @@ export default function ClientProfile() {
   const [bio, setBio] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [workAddress, setWorkAddress] = useState("");
+  const [callingPhone, setCallingPhone] = useState("");
+  const [whatsappUrl, setWhatsappUrl] = useState("");
+  const [facebookUrl, setFacebookUrl] = useState("");
+  const [tiktokUrl, setTiktokUrl] = useState("");
+  const [instagramUrl, setInstagramUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const router = useRouter();
@@ -42,6 +48,12 @@ export default function ClientProfile() {
     setBio(data.bio || "");
     setPhone(data.phone || "");
     setEmail(data.email || "");
+    setWorkAddress(data.work_address || "");
+    setCallingPhone(data.calling_phone || "");
+    setWhatsappUrl(data.whatsapp_url || "");
+    setFacebookUrl(data.facebook_url || "");
+    setTiktokUrl(data.tiktok_url || "");
+    setInstagramUrl(data.instagram_url || "");
   }
 
   const handleSubmit = async (e) => {
@@ -56,6 +68,12 @@ export default function ClientProfile() {
           bio: bio,
           phone: phone,
           email: email,
+          work_address: workAddress,
+          calling_phone: callingPhone,
+          whatsapp_url: whatsappUrl,
+          facebook_url: facebookUrl,
+          tiktok_url: tiktokUrl,
+          instagram_url: instagramUrl,
         })
         .eq("id", client.id);
       if (error) throw error;
@@ -83,12 +101,38 @@ export default function ClientProfile() {
             <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows="3" className="w-full mt-1 p-3 border rounded-lg" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Phone</label>
+            <label className="block text-sm font-medium text-gray-700">Phone (for verification)</label>
             <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full mt-1 p-3 border rounded-lg" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Calling Phone (separate business line)</label>
+            <input type="text" value={callingPhone} onChange={(e) => setCallingPhone(e.target.value)} placeholder="e.g., 2348123456789" className="w-full mt-1 p-3 border rounded-lg" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">Email</label>
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full mt-1 p-3 border rounded-lg" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Work Address</label>
+            <textarea value={workAddress} onChange={(e) => setWorkAddress(e.target.value)} rows="2" placeholder="Your business or workshop address" className="w-full mt-1 p-3 border rounded-lg" />
+          </div>
+          <hr className="my-4" />
+          <h2 className="text-lg font-semibold text-gray-800">Social Links</h2>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">WhatsApp URL</label>
+            <input type="text" value={whatsappUrl} onChange={(e) => setWhatsappUrl(e.target.value)} placeholder="https://wa.me/2348123456789" className="w-full mt-1 p-3 border rounded-lg" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Facebook URL</label>
+            <input type="text" value={facebookUrl} onChange={(e) => setFacebookUrl(e.target.value)} placeholder="https://facebook.com/yourprofile" className="w-full mt-1 p-3 border rounded-lg" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">TikTok URL</label>
+            <input type="text" value={tiktokUrl} onChange={(e) => setTiktokUrl(e.target.value)} placeholder="https://tiktok.com/@yourprofile" className="w-full mt-1 p-3 border rounded-lg" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Instagram URL</label>
+            <input type="text" value={instagramUrl} onChange={(e) => setInstagramUrl(e.target.value)} placeholder="https://instagram.com/yourprofile" className="w-full mt-1 p-3 border rounded-lg" />
           </div>
           <button type="submit" disabled={loading} className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 rounded-lg transition disabled:opacity-50">
             {loading ? "Saving..." : "Save Changes"}

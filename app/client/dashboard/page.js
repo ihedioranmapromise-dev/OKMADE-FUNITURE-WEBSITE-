@@ -13,6 +13,9 @@ export default function ClientDashboard() {
   const [activeTokens, setActiveTokens] = useState([]);
   const [killedTokens, setKilledTokens] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [storyContent, setStoryContent] = useState("");
+  const [posting, setPosting] = useState(false);
+  const [postMessage, setPostMessage] = useState("");
   const router = useRouter();
 
   useEffect(() => {
@@ -26,7 +29,6 @@ export default function ClientDashboard() {
 
   async function fetchClientData(clientId) {
     setLoading(true);
-    // Get client info
     const { data: clientData, error: clientError } = await supabase
       .from("clients")
       .select("*")
@@ -37,7 +39,6 @@ export default function ClientDashboard() {
       return;
     }
     setClient(clientData);
-    // Get tokens
     const { data: tokens } = await supabase
       .from("tokens")
       .select("id, token_string, status, created_at, work_description")
@@ -47,6 +48,27 @@ export default function ClientDashboard() {
     setKilledTokens(tokens?.filter(t => t.status === "killed") || []);
     setLoading(false);
   }
+
+  const handlePostSubmit = async (e) => {
+    e.preventDefault();
+    if (!storyContent.trim()) return;
+    setPosting(true);
+    setPostMessage("");
+    try {
+      const clientId = sessionStorage.getItem("clientId");
+      const { error } = await supabase.from("client_posts").insert({
+        client_id: clientId,
+        content: storyContent,
+      });
+      if (error) throw error;
+      setPostMessage("Story posted successfully!");
+      setStoryContent("");
+    } catch (err) {
+      setPostMessage("Error: " + err.message);
+    } finally {
+      setPosting(false);
+    }
+  };
 
   const logout = () => {
     sessionStorage.removeItem("clientId");
@@ -67,6 +89,25 @@ export default function ClientDashboard() {
             <a href="/client/profile" className="text-amber-600 hover:underline">Edit Profile</a>
             <button onClick={logout} className="text-red-600 hover:underline">Logout</button>
           </div>
+        </div>
+
+        {/* Post a Story */}
+        <div className="bg-white rounded-xl shadow-md p-6 mb-8 border border-amber-100">
+          <h3 className="text-lg font-semibold text-gray-800 mb-3">📝 Post a Story / Update</h3>
+          <form onSubmit={handlePostSubmit} className="space-y-3">
+            <textarea
+              value={storyContent}
+              onChange={(e) => setStoryContent(e.target.value)}
+              placeholder="What's on your mind? Share a project update, a thought, or a story..."
+              rows="3"
+              className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+              required
+            />
+            <button type="submit" disabled={posting} className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg transition disabled:opacity-50">
+              {posting ? "Posting..." : "Post Update"}
+            </button>
+            {postMessage && <p className={`text-sm ${postMessage.includes("Error") ? "text-red-500" : "text-green-600"}`}>{postMessage}</p>}
+          </form>
         </div>
 
         {/* Active Projects */}

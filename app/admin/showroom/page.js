@@ -9,7 +9,7 @@ const supabase = createClient(
 );
 
 export default function ShowroomUpload() {
-  const [images, setImages] = useState([]);
+  const [imageData, setImageData] = useState([]);
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [sold, setSold] = useState(false);
@@ -24,16 +24,29 @@ export default function ShowroomUpload() {
 
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files);
-    if (files.length > 6) {
-      setMessage("You can upload up to 6 images.");
+    if (imageData.length + files.length > 6) {
+      setMessage("You can upload up to 6 images total.");
       return;
     }
-    setImages(files);
+    const newImages = files.map((file) => ({ file, description: "" }));
+    setImageData([...imageData, ...newImages]);
+  };
+
+  const handleDescriptionChange = (index, value) => {
+    const updated = [...imageData];
+    updated[index].description = value;
+    setImageData(updated);
+  };
+
+  const removeImage = (index) => {
+    const updated = [...imageData];
+    updated.splice(index, 1);
+    setImageData(updated);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (images.length === 0) {
+    if (imageData.length === 0) {
       setMessage("Select at least one product image.");
       return;
     }
@@ -52,8 +65,8 @@ export default function ShowroomUpload() {
         .single();
       if (productError) throw productError;
 
-      for (let i = 0; i < images.length; i++) {
-        const file = images[i];
+      for (let i = 0; i < imageData.length; i++) {
+        const { file, description: imgDesc } = imageData[i];
         const ext = file.name.split(".").pop();
         const fileName = `products/${product.id}_${Date.now()}_${i}.${ext}`;
         const { error: uploadError } = await supabase.storage
@@ -69,11 +82,12 @@ export default function ShowroomUpload() {
           product_id: product.id,
           image_url: urlData.publicUrl,
           display_order: i,
+          description: imgDesc || null,
         });
       }
 
-      setMessage(`Product added with ${images.length} image(s).`);
-      setImages([]);
+      setMessage(`Product added with ${imageData.length} image(s).`);
+      setImageData([]);
       setDescription("");
       setPrice("");
       setSold(false);
@@ -86,33 +100,92 @@ export default function ShowroomUpload() {
   };
 
   return (
-    <div className="p-8 max-w-2xl mx-auto">
+    <div className="p-8 max-w-3xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Add Product to Showroom</h1>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block font-medium mb-1">Product Images (up to 6)</label>
-          <input id="productImages" type="file" accept="image/*" multiple onChange={handleImageChange} className="w-full border p-2 rounded" required />
-          <p className="text-sm text-gray-500 mt-1">{images.length} file(s) selected</p>
+          <input
+            id="productImages"
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={handleImageChange}
+            className="w-full border p-2 rounded"
+          />
+          {imageData.length > 0 && (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
+              {imageData.map((item, idx) => (
+                <div key={idx} className="relative border rounded p-2 bg-gray-50">
+                  <img
+                    src={URL.createObjectURL(item.file)}
+                    className="w-full h-24 object-cover rounded"
+                    alt="Preview"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Image description (optional)"
+                    value={item.description}
+                    onChange={(e) => handleDescriptionChange(idx, e.target.value)}
+                    className="w-full mt-1 p-1 border rounded text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeImage(idx)}
+                    className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="text-sm text-gray-500 mt-1">{imageData.length} file(s) selected</p>
         </div>
         <div>
           <label className="block font-medium mb-1">Description</label>
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} className="w-full border p-2 rounded" rows="3" required />
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            className="w-full border p-2 rounded"
+            rows="3"
+            required
+          />
         </div>
         <div>
           <label className="block font-medium mb-1">Price (₦)</label>
-          <input type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} className="w-full border p-2 rounded" required />
+          <input
+            type="number"
+            step="0.01"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            className="w-full border p-2 rounded"
+            required
+          />
         </div>
         <div>
           <label className="flex items-center gap-2">
-            <input type="checkbox" checked={sold} onChange={(e) => setSold(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={sold}
+              onChange={(e) => setSold(e.target.checked)}
+            />
             Mark as Sold
           </label>
         </div>
-        <button type="submit" disabled={uploading} className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50">
+        <button
+          type="submit"
+          disabled={uploading}
+          className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
+        >
           {uploading ? "Uploading..." : "Add Product"}
         </button>
-        {message && <p className={`mt-4 ${message.startsWith("Error") ? "text-red-500" : "text-green-500"}`}>{message}</p>}
+        {message && (
+          <p className={`mt-4 ${message.startsWith("Error") ? "text-red-500" : "text-green-500"}`}>
+            {message}
+          </p>
+        )}
       </form>
     </div>
   );
-  }
+}
