@@ -41,6 +41,8 @@ export default function ClientPortfolio() {
         return;
       }
       setClient(clientData);
+
+      // Completed projects
       const { data: tokens } = await supabase
         .from("tokens")
         .select("id, token_string, work_description, created_at")
@@ -48,13 +50,17 @@ export default function ClientPortfolio() {
         .eq("status", "killed")
         .order("created_at", { ascending: false });
       setProjects(tokens || []);
+
+      // Stories – only those posted within the last 24 hours
       const { data: posts } = await supabase
         .from("client_posts")
         .select("*")
         .eq("client_id", clientData.id)
+        .gt("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()) // 24hr filter
         .order("created_at", { ascending: false })
         .limit(10);
       setClientPosts(posts || []);
+
       setLoading(false);
     }
     fetchData();
@@ -67,12 +73,21 @@ export default function ClientPortfolio() {
     <div className="min-h-screen bg-gradient-to-b from-amber-50 to-white py-12 px-4">
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-12">
+          {client.profile_pic && (
+            <img
+              src={client.profile_pic}
+              className="w-24 h-24 rounded-full object-cover border-4 border-amber-200 mx-auto mb-4"
+              alt="Profile"
+            />
+          )}
           <h1 className="text-4xl font-bold text-amber-800 font-['Dancing_Script',_cursive]">
             {client.display_name || client.username}
           </h1>
           {client.bio && <p className="text-gray-600 mt-2 max-w-2xl mx-auto">{client.bio}</p>}
           {client.work_address && <p className="text-gray-500 text-sm mt-1">📍 {client.work_address}</p>}
           {client.calling_phone && <p className="text-gray-500 text-sm mt-1">📞 {client.calling_phone}</p>}
+          {client.age && <p className="text-gray-500 text-sm mt-1">Age: {client.age}</p>}
+          {client.skill && <p className="text-gray-500 text-sm mt-1">Skill: {client.skill}</p>}
           <div className="flex justify-center gap-3 mt-4">
             {client.whatsapp_url && (
               <SocialIcon href={client.whatsapp_url}>
@@ -97,15 +112,18 @@ export default function ClientPortfolio() {
           </div>
         </div>
 
-        {/* Client Posts / Stories */}
+        {/* Stories – 24h */}
         <div className="mb-12">
           <h2 className="text-2xl font-semibold text-amber-800 mb-4">Latest Stories</h2>
           {clientPosts.length === 0 ? (
-            <p className="text-gray-500">No stories posted yet.</p>
+            <p className="text-gray-500">No recent stories.</p>
           ) : (
             <div className="space-y-4">
               {clientPosts.map((post) => (
                 <div key={post.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                  {post.image_url && (
+                    <img src={post.image_url} className="w-full max-h-64 object-cover rounded-lg mb-3" alt="Story" />
+                  )}
                   <p className="text-gray-800">{post.content}</p>
                   <p className="text-xs text-gray-400 mt-2">{new Date(post.created_at).toLocaleDateString()}</p>
                 </div>
