@@ -42,7 +42,6 @@ export default function ClientPortfolio() {
       }
       setClient(clientData);
 
-      // Completed projects
       const { data: tokens } = await supabase
         .from("tokens")
         .select("id, token_string, work_description, created_at")
@@ -51,16 +50,14 @@ export default function ClientPortfolio() {
         .order("created_at", { ascending: false });
       setProjects(tokens || []);
 
-      // Stories – only those posted within the last 24 hours
       const { data: posts } = await supabase
         .from("client_posts")
         .select("*")
         .eq("client_id", clientData.id)
-        .gt("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()) // 24hr filter
+        .gt("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
         .order("created_at", { ascending: false })
         .limit(10);
       setClientPosts(posts || []);
-
       setLoading(false);
     }
     fetchData();
@@ -83,6 +80,7 @@ export default function ClientPortfolio() {
           <h1 className="text-4xl font-bold text-amber-800 font-['Dancing_Script',_cursive]">
             {client.display_name || client.username}
           </h1>
+          <p className="text-sm text-gray-500">@{client.username}</p>
           {client.bio && <p className="text-gray-600 mt-2 max-w-2xl mx-auto">{client.bio}</p>}
           {client.work_address && <p className="text-gray-500 text-sm mt-1">📍 {client.work_address}</p>}
           {client.calling_phone && <p className="text-gray-500 text-sm mt-1">📞 {client.calling_phone}</p>}
@@ -112,7 +110,7 @@ export default function ClientPortfolio() {
           </div>
         </div>
 
-        {/* Stories – 24h */}
+        {/* Stories */}
         <div className="mb-12">
           <h2 className="text-2xl font-semibold text-amber-800 mb-4">Latest Stories</h2>
           {clientPosts.length === 0 ? (
@@ -124,7 +122,11 @@ export default function ClientPortfolio() {
                   {post.image_url && (
                     <img src={post.image_url} className="w-full max-h-64 object-cover rounded-lg mb-3" alt="Story" />
                   )}
-                  <p className="text-gray-800">{post.content}</p>
+                  {post.content && (
+                    <p className="text-gray-800" style={{ fontFamily: post.font_family || 'sans-serif' }}>
+                      {post.content}
+                    </p>
+                  )}
                   <p className="text-xs text-gray-400 mt-2">{new Date(post.created_at).toLocaleDateString()}</p>
                 </div>
               ))}
