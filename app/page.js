@@ -228,6 +228,7 @@ export default function Home() {
           <a href="#contact" className="hover:text-amber-700 transition">Contact</a>
           <a href="#reviews" className="hover:text-amber-700 transition">Reviews</a>
           <a href="#portfolio" className="hover:text-amber-700 transition">Portfolio</a>
+          <a href="/workers" className="hover:text-amber-700 transition">Artisans</a>
           {clientId ? (
             <>
               <a href="/client/dashboard" className="hover:text-amber-700 transition">Dashboard</a>
@@ -248,6 +249,7 @@ export default function Home() {
           <a href="#contact" onClick={() => setIsMenuOpen(false)} className="hover:text-amber-700">Contact</a>
           <a href="#reviews" onClick={() => setIsMenuOpen(false)} className="hover:text-amber-700">Reviews</a>
           <a href="#portfolio" onClick={() => setIsMenuOpen(false)} className="hover:text-amber-700">Portfolio</a>
+          <a href="/workers" onClick={() => setIsMenuOpen(false)} className="hover:text-amber-700">Artisans</a>
           {clientId ? (
             <>
               <a href="/client/dashboard" onClick={() => setIsMenuOpen(false)} className="hover:text-amber-700">Dashboard</a>
@@ -303,7 +305,6 @@ export default function Home() {
       <section id="featured" className="relative py-16 overflow-hidden bg-gradient-to-br from-amber-50/80 via-orange-50/60 to-white border-y border-amber-100/20">
         <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full bg-amber-200/20 blur-3xl pointer-events-none"></div>
         <div className="relative z-10 container mx-auto px-6">
-          {/* NO TITLE HERE */}
           {loadingProducts ? (
             <p className="text-center text-amber-600">Loading products...</p>
           ) : products.length === 0 ? (
@@ -422,7 +423,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Contact Section – updated */}
+      {/* Contact Section */}
       <section id="contact" className="bg-gray-900 text-white py-16">
         <div className="container mx-auto px-6 max-w-4xl">
           <h2 className="text-4xl font-bold text-center mb-10 font-['Dancing_Script',_cursive] text-amber-300">Get in Touch</h2>

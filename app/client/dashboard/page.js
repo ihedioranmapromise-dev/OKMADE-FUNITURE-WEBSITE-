@@ -8,6 +8,25 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
+// 15 Fonts for the story selector
+const FONT_OPTIONS = [
+  { label: "Sans-serif", value: "sans-serif" },
+  { label: "Serif", value: "serif" },
+  { label: "Cursive", value: "cursive" },
+  { label: "Monospace", value: "monospace" },
+  { label: "Dancing Script", value: "'Dancing Script', cursive" },
+  { label: "Playfair Display", value: "'Playfair Display', serif" },
+  { label: "Lobster", value: "'Lobster', cursive" },
+  { label: "Montserrat", value: "'Montserrat', sans-serif" },
+  { label: "Open Sans", value: "'Open Sans', sans-serif" },
+  { label: "Roboto", value: "'Roboto', sans-serif" },
+  { label: "Oswald", value: "'Oswald', sans-serif" },
+  { label: "Raleway", value: "'Raleway', sans-serif" },
+  { label: "Merriweather", value: "'Merriweather', serif" },
+  { label: "Pacifico", value: "'Pacifico', cursive" },
+  { label: "Cormorant Garamond", value: "'Cormorant Garamond', serif" },
+];
+
 export default function ClientDashboard() {
   const [client, setClient] = useState(null);
   const [activeTokens, setActiveTokens] = useState([]);
@@ -16,7 +35,7 @@ export default function ClientDashboard() {
   const [storyContent, setStoryContent] = useState("");
   const [storyImage, setStoryImage] = useState(null);
   const [storyImagePreview, setStoryImagePreview] = useState("");
-  const [storyFont, setStoryFont] = useState("sans-serif");
+  const [storyFont, setStoryFont] = useState("'Dancing Script', cursive"); // default
   const [posting, setPosting] = useState(false);
   const [postMessage, setPostMessage] = useState("");
   const fileInputRef = useRef(null);
@@ -106,7 +125,7 @@ export default function ClientDashboard() {
       setStoryContent("");
       setStoryImage(null);
       setStoryImagePreview("");
-      setStoryFont("sans-serif");
+      setStoryFont("'Dancing Script', cursive");
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (err) {
       setPostMessage("Error: " + err.message);
@@ -163,12 +182,17 @@ export default function ClientDashboard() {
                 value={storyFont}
                 onChange={(e) => setStoryFont(e.target.value)}
                 className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-amber-500"
+                style={{ fontFamily: storyFont }}
               >
-                <option value="sans-serif">Sans-serif</option>
-                <option value="serif">Serif</option>
-                <option value="cursive">Cursive</option>
-                <option value="monospace">Monospace</option>
-                <option value="'Dancing Script', cursive">Handwriting</option>
+                {FONT_OPTIONS.map((font) => (
+                  <option
+                    key={font.value}
+                    value={font.value}
+                    style={{ fontFamily: font.value }}
+                  >
+                    {font.label}
+                  </option>
+                ))}
               </select>
             </div>
             <textarea
@@ -177,6 +201,7 @@ export default function ClientDashboard() {
               placeholder="What's on your mind? Share a project update, a thought, or a story..."
               rows="3"
               className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+              style={{ fontFamily: storyFont }}
             />
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Add an image (optional)</label>
@@ -211,7 +236,7 @@ export default function ClientDashboard() {
           </form>
         </div>
 
-        {/* Active Projects */}
+        {/* Active Projects and Completed Projects sections remain the same */}
         <div className="mb-12">
           <h2 className="text-2xl font-semibold mb-4">Active Projects</h2>
           {activeTokens.length === 0 ? (
@@ -232,7 +257,6 @@ export default function ClientDashboard() {
           )}
         </div>
 
-        {/* Completed Projects */}
         <div>
           <h2 className="text-2xl font-semibold mb-4">Completed Projects</h2>
           {killedTokens.length === 0 ? (
