@@ -8,10 +8,25 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
+// SVG Icons
+const BellIcon = ({ unread }) => (
+  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+    {unread > 0 && <circle cx="20" cy="4" r="3" fill="#ef4444" stroke="#fff" strokeWidth="2" />}
+  </svg>
+);
+
+const CloseIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+  </svg>
+);
+
 export default function AdminProgress() {
   const [tokens, setTokens] = useState([]);
   const [selectedTokenId, setSelectedTokenId] = useState("");
   const [selectedTokenString, setSelectedTokenString] = useState("");
+  const [selectedWorkerId, setSelectedWorkerId] = useState("");
   const [overallDescription, setOverallDescription] = useState("");
   const [imageData, setImageData] = useState([]);
   const [uploading, setUploading] = useState(false);
@@ -21,6 +36,7 @@ export default function AdminProgress() {
   const [editExplanation, setEditExplanation] = useState("");
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [showNotifications, setShowNotifications] = useState(false);
   const router = useRouter();
 
   if (typeof window !== "undefined" && sessionStorage.getItem("adminAuth") !== "true") {
@@ -36,7 +52,7 @@ export default function AdminProgress() {
   async function fetchTokens() {
     const { data, error } = await supabase
       .from("tokens")
-      .select("id, token_string, client_name")
+      .select("id, token_string, client_name, client_id")
       .eq("status", "active")
       .order("created_at", { ascending: false });
     if (!error) setTokens(data || []);
@@ -59,6 +75,7 @@ export default function AdminProgress() {
     const token = tokens.find((t) => t.id === id);
     setSelectedTokenId(id);
     setSelectedTokenString(token ? token.token_string : "");
+    setSelectedWorkerId(token ? token.client_id : "");
     if (id) {
       const { data } = await supabase
         .from("progress_images")
@@ -124,12 +141,15 @@ export default function AdminProgress() {
         });
       }
 
-      // Create notification
-      await supabase.from("notifications").insert({
-        token_id: selectedTokenId,
-        type: "client_upload",
-        message: `Admin uploaded ${imageData.length} progress image(s) on token ${selectedTokenString}`,
-      });
+      // Create notification for the artisan (if linked)
+      if (selectedWorkerId) {
+        await supabase.from("notifications").insert({
+          client_id: selectedWorkerId,
+          type: "progress_uploaded",
+          message: `New progress update on token "${selectedTokenString}".`,
+          target_url: `/workspace/${selectedTokenString}`,
+        });
+      }
 
       setMessage(`Uploaded ${imageData.length} progress image(s).`);
       setImageData([]);
@@ -143,6 +163,7 @@ export default function AdminProgress() {
         .eq("token_id", selectedTokenId)
         .order("created_at", { ascending: false });
       setProgressData(data || []);
+      fetchNotifications(); // refresh unread count
     } catch (err) {
       setMessage("Error: " + err.message);
     } finally {
@@ -206,11 +227,15 @@ export default function AdminProgress() {
     if (error) {
       setMessage("Error killing token: " + error.message);
     } else {
-      await supabase.from("notifications").insert({
-        token_id: selectedTokenId,
-        type: "token_killed",
-        message: `Token ${selectedTokenString} was killed.`,
-      });
+      // Notify artisan if linked
+      if (selectedWorkerId) {
+        await supabase.from("notifications").insert({
+          client_id: selectedWorkerId,
+          type: "token_killed",
+          message: `Token "${selectedTokenString}" has been marked as completed.`,
+          target_url: `/workspace/${selectedTokenString}`,
+        });
+      }
       setMessage(`Token ${selectedTokenString} killed.`);
       fetchTokens();
       setSelectedTokenId("");
@@ -220,10 +245,16 @@ export default function AdminProgress() {
     setUploading(false);
   };
 
-  const markNotificationsRead = async () => {
-    await supabase.from("notifications").update({ is_read: true }).neq("is_read", true);
-    setUnreadCount(0);
-    fetchNotifications();
+  const markAsRead = async (id) => {
+    await supabase.from("notifications").update({ is_read: true }).eq("id", id);
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+    setUnreadCount(prev => Math.max(0, prev - 1));
+  };
+
+  const handleNotificationClick = (notif) => {
+    markAsRead(notif.id);
+    if (notif.target_url) router.push(notif.target_url);
+    setShowNotifications(false);
   };
 
   return (
@@ -232,16 +263,30 @@ export default function AdminProgress() {
         <h1 className="text-2xl font-bold">Upload Progress & Manage Tokens</h1>
         <div className="relative">
           <button
-            onClick={markNotificationsRead}
-            className="bg-amber-100 p-2 rounded-full hover:bg-amber-200 transition"
+            onClick={() => setShowNotifications(!showNotifications)}
+            className="relative p-2 hover:bg-gray-100 rounded-full transition"
           >
-            🔔{" "}
-            {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                {unreadCount}
-              </span>
-            )}
+            <BellIcon unread={unreadCount} />
           </button>
+          {showNotifications && (
+            <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-100 z-10 max-h-96 overflow-y-auto">
+              <div className="p-3 border-b font-semibold">Notifications</div>
+              {notifications.length === 0 ? (
+                <div className="p-4 text-center text-gray-500 text-sm">No notifications.</div>
+              ) : (
+                notifications.map((n) => (
+                  <div
+                    key={n.id}
+                    onClick={() => handleNotificationClick(n)}
+                    className={`p-3 border-b hover:bg-gray-50 cursor-pointer transition ${!n.is_read ? 'bg-amber-50' : ''}`}
+                  >
+                    <p className="text-sm">{n.message}</p>
+                    <p className="text-xs text-gray-400 mt-1">{new Date(n.created_at).toLocaleString()}</p>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -265,13 +310,13 @@ export default function AdminProgress() {
             </select>
           </div>
           <div>
-            <label className="block font-medium mb-1">Overall Description / Complaints (optional)</label>
+            <label className="block font-medium mb-1">Overall Description / Notes</label>
             <textarea
               value={overallDescription}
               onChange={(e) => setOverallDescription(e.target.value)}
               rows="3"
               className="w-full border p-2 rounded"
-              placeholder="Write any general notes, complaints, or overall update about this progress..."
+              placeholder="Write any general notes about this progress..."
             />
           </div>
           <div>
@@ -305,7 +350,7 @@ export default function AdminProgress() {
                       onClick={() => removeImage(idx)}
                       className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
                     >
-                      ✕
+                      <CloseIcon />
                     </button>
                   </div>
                 ))}
@@ -416,22 +461,6 @@ export default function AdminProgress() {
           </div>
         </div>
       )}
-
-      <div className="mt-8 bg-white p-6 rounded-xl shadow-md">
-        <h2 className="text-lg font-semibold mb-4">Recent Notifications</h2>
-        {notifications.length === 0 ? (
-          <p className="text-gray-500">No notifications.</p>
-        ) : (
-          <ul className="space-y-2">
-            {notifications.map((n) => (
-              <li key={n.id} className={`p-2 rounded ${n.is_read ? "bg-gray-50" : "bg-amber-50"}`}>
-                <p className="text-sm">{n.message}</p>
-                <p className="text-xs text-gray-400">{new Date(n.created_at).toLocaleString()}</p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
     </div>
   );
 }
