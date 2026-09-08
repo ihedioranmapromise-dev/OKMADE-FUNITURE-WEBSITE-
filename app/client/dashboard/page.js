@@ -8,7 +8,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-// SVG Icons (defined inline for simplicity)
+// SVG Icons
 const BellIcon = ({ unread }) => (
   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
@@ -29,7 +29,25 @@ const CameraIcon = () => (
   </svg>
 );
 
-// 15 fonts for stories
+const EditIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+  </svg>
+);
+
+const TrashIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+  </svg>
+);
+
+const UserIcon = () => (
+  <svg className="w-10 h-10" fill="currentColor" viewBox="0 0 24 24">
+    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+  </svg>
+);
+
+// 15 fonts
 const FONT_OPTIONS = [
   { label: "Sans-serif", value: "sans-serif" },
   { label: "Serif", value: "serif" },
@@ -59,10 +77,18 @@ export default function ClientDashboard() {
   const [storyFont, setStoryFont] = useState("'Dancing Script', cursive");
   const [posting, setPosting] = useState(false);
   const [postMessage, setPostMessage] = useState("");
+  const [myStories, setMyStories] = useState([]);
+  const [editingStory, setEditingStory] = useState(null);
+  const [editContent, setEditContent] = useState("");
+  const [editFont, setEditFont] = useState("");
+  const [editImage, setEditImage] = useState(null);
+  const [editImagePreview, setEditImagePreview] = useState("");
+  const [editImageRemoved, setEditImageRemoved] = useState(false);
+  const fileInputRef = useRef(null);
+  const editFileInputRef = useRef(null);
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  const fileInputRef = useRef(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -94,7 +120,14 @@ export default function ClientDashboard() {
       .order("created_at", { ascending: false });
     setActiveTokens(tokens?.filter(t => t.status === "active") || []);
     setKilledTokens(tokens?.filter(t => t.status === "killed") || []);
-
+    // My stories
+    const { data: stories } = await supabase
+      .from("client_posts")
+      .select("*")
+      .eq("client_id", clientId)
+      .gt("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+      .order("created_at", { ascending: false });
+    setMyStories(stories || []);
     // Notifications
     const { data: notifs } = await supabase
       .from("notifications")
@@ -171,10 +204,140 @@ export default function ClientDashboard() {
       setStoryImagePreview("");
       setStoryFont("'Dancing Script', cursive");
       if (fileInputRef.current) fileInputRef.current.value = "";
+      // Refresh stories
+      const { data: stories } = await supabase
+        .from("client_posts")
+        .select("*")
+        .eq("client_id", clientId)
+        .gt("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+        .order("created_at", { ascending: false });
+      setMyStories(stories || []);
     } catch (err) {
       setPostMessage("Error: " + err.message);
     } finally {
       setPosting(false);
+    }
+  };
+
+  // ----- Edit/Delete Stories -----
+  const startEdit = (story) => {
+    setEditingStory(story.id);
+    setEditContent(story.content || "");
+    setEditFont(story.font_family || "'Dancing Script', cursive");
+    setEditImage(null);
+    setEditImagePreview(story.image_url || "");
+    setEditImageRemoved(false);
+  };
+
+  const cancelEdit = () => {
+    setEditingStory(null);
+    setEditContent("");
+    setEditFont("");
+    setEditImage(null);
+    setEditImagePreview("");
+    setEditImageRemoved(false);
+    if (editFileInputRef.current) editFileInputRef.current.value = "";
+  };
+
+  const handleEditImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setEditImage(file);
+      setEditImagePreview(URL.createObjectURL(file));
+      setEditImageRemoved(false);
+    }
+  };
+
+  const removeEditImage = () => {
+    setEditImage(null);
+    setEditImagePreview("");
+    setEditImageRemoved(true);
+    if (editFileInputRef.current) editFileInputRef.current.value = "";
+  };
+
+  const saveEdit = async (storyId) => {
+    const hasContent = editContent.trim().length > 0;
+    const hasImage = !!editImage || (editImagePreview && !editImageRemoved);
+    if (!hasContent && !hasImage) {
+      alert("Story must have content or image.");
+      return;
+    }
+    try {
+      let imageUrl = null;
+      if (editImage) {
+        // Upload new image
+        const ext = editImage.name.split(".").pop();
+        const fileName = `stories/${client.id}_${Date.now()}.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from("story-images")
+          .upload(fileName, editImage);
+        if (uploadError) throw uploadError;
+        const { data: urlData } = supabase.storage
+          .from("story-images")
+          .getPublicUrl(fileName);
+        imageUrl = urlData.publicUrl;
+      } else if (editImageRemoved) {
+        imageUrl = null;
+      } else {
+        // Keep existing image
+        const story = myStories.find(s => s.id === storyId);
+        imageUrl = story?.image_url || null;
+      }
+      // If image was removed, we should also delete the old image from storage
+      if (editImageRemoved) {
+        const story = myStories.find(s => s.id === storyId);
+        if (story?.image_url) {
+          const path = story.image_url.split("/public/")[1];
+          if (path) {
+            await supabase.storage.from("story-images").remove([path]);
+          }
+        }
+      }
+      const { error } = await supabase
+        .from("client_posts")
+        .update({
+          content: editContent.trim() || null,
+          font_family: editFont,
+          image_url: imageUrl,
+        })
+        .eq("id", storyId);
+      if (error) throw error;
+      // Refresh stories
+      const { data: stories } = await supabase
+        .from("client_posts")
+        .select("*")
+        .eq("client_id", client.id)
+        .gt("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+        .order("created_at", { ascending: false });
+      setMyStories(stories || []);
+      cancelEdit();
+    } catch (err) {
+      alert("Error updating story: " + err.message);
+    }
+  };
+
+  const deleteStory = async (storyId) => {
+    if (!confirm("Delete this story? All likes, comments, and views will be removed.")) return;
+    try {
+      const story = myStories.find(s => s.id === storyId);
+      // Delete image from storage if exists
+      if (story?.image_url) {
+        const path = story.image_url.split("/public/")[1];
+        if (path) {
+          await supabase.storage.from("story-images").remove([path]);
+        }
+      }
+      await supabase.from("client_posts").delete().eq("id", storyId);
+      // Refresh stories
+      const { data: stories } = await supabase
+        .from("client_posts")
+        .select("*")
+        .eq("client_id", client.id)
+        .gt("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+        .order("created_at", { ascending: false });
+      setMyStories(stories || []);
+    } catch (err) {
+      alert("Error deleting story: " + err.message);
     }
   };
 
@@ -194,7 +357,7 @@ export default function ClientDashboard() {
           {client?.profile_pic ? (
             <img src={client.profile_pic} className="w-20 h-20 rounded-full object-cover border-4 border-amber-200" alt="Profile" />
           ) : (
-            <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center text-gray-400 text-3xl border-4 border-amber-200">
+            <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center text-gray-400">
               <UserIcon />
             </div>
           )}
@@ -283,7 +446,85 @@ export default function ClientDashboard() {
           </form>
         </div>
 
-        {/* Active Projects & Completed Projects (unchanged) */}
+        {/* My Stories */}
+        <div className="bg-white rounded-xl shadow-md p-6 mb-8 border border-amber-100">
+          <h3 className="text-lg font-semibold text-gray-800 mb-3">My Stories</h3>
+          {myStories.length === 0 ? (
+            <p className="text-gray-500">You haven't posted any stories yet.</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {myStories.map((story) => {
+                const isEditing = editingStory === story.id;
+                return (
+                  <div key={story.id} className="border rounded-lg p-3 bg-gray-50 relative">
+                    {isEditing ? (
+                      // Edit mode
+                      <div className="space-y-2">
+                        <select
+                          value={editFont}
+                          onChange={(e) => setEditFont(e.target.value)}
+                          className="w-full p-1 border rounded text-sm"
+                          style={{ fontFamily: editFont }}
+                        >
+                          {FONT_OPTIONS.map((font) => (
+                            <option key={font.value} value={font.value} style={{ fontFamily: font.value }}>
+                              {font.label}
+                            </option>
+                          ))}
+                        </select>
+                        <textarea
+                          value={editContent}
+                          onChange={(e) => setEditContent(e.target.value)}
+                          rows="2"
+                          className="w-full p-1 border rounded text-sm"
+                          style={{ fontFamily: editFont }}
+                        />
+                        <div className="flex items-center gap-2">
+                          <label className="cursor-pointer bg-gray-200 p-1 rounded text-xs">
+                            Change Image
+                            <input type="file" accept="image/*" onChange={handleEditImageChange} className="hidden" ref={editFileInputRef} />
+                          </label>
+                          {editImagePreview && (
+                            <div className="relative inline-block">
+                              <img src={editImagePreview} className="h-12 w-12 object-cover rounded border" alt="Edit" />
+                              <button type="button" onClick={removeEditImage} className="absolute -top-1 -right-1 bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-xs">✕</button>
+                            </div>
+                          )}
+                          {!editImagePreview && story.image_url && !editImageRemoved && (
+                            <span className="text-xs text-gray-500">Current image (click Change Image to replace)</span>
+                          )}
+                        </div>
+                        <div className="flex gap-2 mt-2">
+                          <button onClick={() => saveEdit(story.id)} className="bg-green-600 text-white px-3 py-1 rounded text-sm">Save</button>
+                          <button onClick={cancelEdit} className="bg-gray-300 px-3 py-1 rounded text-sm">Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
+                      // View mode
+                      <>
+                        {story.image_url && <img src={story.image_url} className="w-full h-32 object-cover rounded mb-2" alt="Story" />}
+                        {story.content && <p className="text-sm" style={{ fontFamily: story.font_family || 'sans-serif' }}>{story.content}</p>}
+                        <div className="flex justify-between items-center mt-2">
+                          <span className="text-xs text-gray-400">{new Date(story.created_at).toLocaleString()}</span>
+                          <div className="flex gap-2">
+                            <button onClick={() => startEdit(story)} className="text-blue-600 hover:underline text-xs flex items-center gap-1">
+                              <EditIcon /> Edit
+                            </button>
+                            <button onClick={() => deleteStory(story.id)} className="text-red-600 hover:underline text-xs flex items-center gap-1">
+                              <TrashIcon /> Delete
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Active Projects */}
         <div className="mb-12">
           <h2 className="text-2xl font-semibold mb-4">Active Projects</h2>
           {activeTokens.length === 0 ? (
@@ -304,6 +545,7 @@ export default function ClientDashboard() {
           )}
         </div>
 
+        {/* Completed Projects */}
         <div>
           <h2 className="text-2xl font-semibold mb-4">Completed Projects</h2>
           {killedTokens.length === 0 ? (
@@ -324,10 +566,3 @@ export default function ClientDashboard() {
     </div>
   );
 }
-
-// Helper SVG components
-const UserIcon = () => (
-  <svg className="w-10 h-10" fill="currentColor" viewBox="0 0 24 24">
-    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-  </svg>
-);
