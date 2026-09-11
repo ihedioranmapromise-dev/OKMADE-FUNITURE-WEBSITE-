@@ -8,7 +8,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-// ---------- SVG Icons ----------
+// SVG Icons
 const LocationIcon = () => (
   <svg className="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -22,7 +22,6 @@ const PhoneIcon = () => (
   </svg>
 );
 
-// SocialIcon (same as before)
 const SocialIcon = ({ href, children }) => {
   if (!href) return null;
   return (
@@ -32,19 +31,18 @@ const SocialIcon = ({ href, children }) => {
   );
 };
 
-// Reaction emojis (WhatsApp style – kept as emojis, as per your request)
+// Reaction emojis (WhatsApp style)
 const REACTIONS = [
-  { type: 'like', emoji: '❤️' },
-  { type: 'love', emoji: '😍' },
-  { type: 'haha', emoji: '😂' },
-  { type: 'wow', emoji: '😮' },
-  { type: 'sad', emoji: '😢' },
-  { type: 'pray', emoji: '🙏' }
+  { type: "like", emoji: "❤️" },
+  { type: "love", emoji: "😍" },
+  { type: "haha", emoji: "😂" },
+  { type: "wow", emoji: "😮" },
+  { type: "sad", emoji: "😢" },
+  { type: "pray", emoji: "🙏" },
 ];
 
-// Generate or retrieve viewer ID from localStorage
 const getViewerId = () => {
-  if (typeof window === 'undefined') return 'anonymous';
+  if (typeof window === "undefined") return "anonymous";
   let id = localStorage.getItem("viewer_id");
   if (!id) {
     id = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15);
@@ -78,14 +76,14 @@ export default function ClientPortfolio() {
       }
       setClient(clientData);
 
-      // Completed projects
-      const { data: tokens } = await supabase
-        .from("tokens")
-        .select("id, token_string, work_description, created_at")
+      // Completed projects for this client
+      const { data: projs } = await supabase
+        .from("projects")
+        .select("id, token_string, work_description, created_at, city")
         .eq("client_id", clientData.id)
         .eq("status", "killed")
         .order("created_at", { ascending: false });
-      setProjects(tokens || []);
+      setProjects(projs || []);
 
       // Stories (24hr filter)
       const { data: posts } = await supabase
@@ -95,21 +93,17 @@ export default function ClientPortfolio() {
         .gt("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
         .order("created_at", { ascending: false })
         .limit(10);
-      
-      // Load reactions, views, and comments for each story
+
       const postsWithInteractions = await Promise.all(
         (posts || []).map(async (post) => {
-          // Views count
           const { count: viewCount } = await supabase
             .from("story_views")
-            .select("*", { count: 'exact', head: true })
+            .select("*", { count: "exact", head: true })
             .eq("story_id", post.id);
-          // Reactions
           const { data: reactions } = await supabase
             .from("story_reactions")
             .select("reaction_type, user_id")
             .eq("story_id", post.id);
-          // Comments
           const { data: comments } = await supabase
             .from("story_comments")
             .select("*")
@@ -129,7 +123,7 @@ export default function ClientPortfolio() {
     fetchData();
   }, [username]);
 
-  // Track view (runs once per story)
+  // Track view
   useEffect(() => {
     if (clientPosts.length === 0) return;
     clientPosts.forEach(async (post) => {
@@ -165,7 +159,6 @@ export default function ClientPortfolio() {
         reaction_type: type,
       });
     }
-    // Refresh to update counts (simplest)
     window.location.reload();
   };
 
@@ -253,12 +246,10 @@ export default function ClientPortfolio() {
                 }, {});
                 return (
                   <div key={post.id} className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-100">
-                    {post.image_url && (
-                      <img src={post.image_url} className="w-full h-64 object-cover" alt="Story" />
-                    )}
+                    {post.image_url && <img src={post.image_url} className="w-full h-64 object-cover" alt="Story" />}
                     <div className="p-4">
                       {post.content && (
-                        <p className="text-gray-800" style={{ fontFamily: post.font_family || 'sans-serif' }}>
+                        <p className="text-gray-800" style={{ fontFamily: post.font_family || "sans-serif" }}>
                           {post.content}
                         </p>
                       )}
@@ -267,16 +258,16 @@ export default function ClientPortfolio() {
                         <span>💬 {post.comments?.length || 0}</span>
                       </div>
 
-                      {/* Reactions (WhatsApp style) */}
+                      {/* Reactions */}
                       <div className="flex flex-wrap gap-1 mt-3">
                         {REACTIONS.map(({ type, emoji }) => {
                           const count = reactionCounts[type] || 0;
-                          const hasReacted = post.reactions.some(r => r.reaction_type === type && r.user_id === viewerId);
+                          const hasReacted = post.reactions.some((r) => r.reaction_type === type && r.user_id === viewerId);
                           return (
                             <button
                               key={type}
                               onClick={() => handleReaction(post.id, type)}
-                              className={`px-2 py-1 rounded-full border text-sm transition ${hasReacted ? 'bg-amber-100 border-amber-300' : 'bg-gray-50 border-gray-200 hover:bg-gray-100'}`}
+                              className={`px-2 py-1 rounded-full border text-sm transition ${hasReacted ? "bg-amber-100 border-amber-300" : "bg-gray-50 border-gray-200 hover:bg-gray-100"}`}
                             >
                               {emoji} {count > 0 && count}
                             </button>
@@ -321,7 +312,9 @@ export default function ClientPortfolio() {
                           <div className="mt-3 space-y-2">
                             {post.comments.map((c) => (
                               <div key={c.id} className="bg-gray-50 p-2 rounded-lg text-sm">
-                                <p><strong>{c.author_name}</strong> {c.content}</p>
+                                <p>
+                                  <strong>{c.author_name}</strong> {c.content}
+                                </p>
                                 {!c.parent_id && (
                                   <button
                                     onClick={() => setReplyingTo(c.id)}
@@ -366,10 +359,19 @@ export default function ClientPortfolio() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {projects.map((project) => (
-              <a key={project.id} href={`/workspace/${project.token_string}`} className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition block">
+              <a
+                key={project.id}
+                href={`/workspace/${project.token_string || project.id}`}
+                className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition block"
+              >
                 <div className="p-4">
-                  <p className="font-semibold text-gray-800">{project.work_description || "Completed Project"}</p>
-                  <p className="text-sm text-gray-500">Completed: {new Date(project.created_at).toLocaleDateString()}</p>
+                  <p className="font-semibold text-gray-800">
+                    {project.work_description || "Completed Project"}
+                  </p>
+                  {project.city && <p className="text-xs text-gray-500 mt-1">📍 {project.city}</p>}
+                  <p className="text-sm text-gray-500 mt-1">
+                    Completed: {new Date(project.created_at).toLocaleDateString()}
+                  </p>
                   <p className="text-amber-600 text-sm mt-2">View Project →</p>
                 </div>
               </a>

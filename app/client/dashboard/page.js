@@ -68,8 +68,8 @@ const FONT_OPTIONS = [
 
 export default function ClientDashboard() {
   const [client, setClient] = useState(null);
-  const [activeTokens, setActiveTokens] = useState([]);
-  const [killedTokens, setKilledTokens] = useState([]);
+  const [activeProjects, setActiveProjects] = useState([]);
+  const [killedProjects, setKilledProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [storyContent, setStoryContent] = useState("");
   const [storyImage, setStoryImage] = useState(null);
@@ -112,14 +112,17 @@ export default function ClientDashboard() {
       return;
     }
     setClient(clientData);
-    // Tokens
-    const { data: tokens } = await supabase
-      .from("tokens")
-      .select("id, token_string, status, created_at, work_description")
+
+    // Fetch projects (both active and killed) linked to this client
+    const { data: projects } = await supabase
+      .from("projects")
+      .select("id, token_string, status, created_at, work_description, city, duration_weeks, is_standalone")
       .eq("client_id", clientId)
       .order("created_at", { ascending: false });
-    setActiveTokens(tokens?.filter(t => t.status === "active") || []);
-    setKilledTokens(tokens?.filter(t => t.status === "killed") || []);
+
+    setActiveProjects(projects?.filter((p) => p.status === "active") || []);
+    setKilledProjects(projects?.filter((p) => p.status === "killed") || []);
+
     // My stories
     const { data: stories } = await supabase
       .from("client_posts")
@@ -128,6 +131,7 @@ export default function ClientDashboard() {
       .gt("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
       .order("created_at", { ascending: false });
     setMyStories(stories || []);
+
     // Notifications
     const { data: notifs } = await supabase
       .from("notifications")
@@ -136,14 +140,14 @@ export default function ClientDashboard() {
       .order("created_at", { ascending: false })
       .limit(20);
     setNotifications(notifs || []);
-    setUnreadCount(notifs?.filter(n => !n.is_read).length || 0);
+    setUnreadCount(notifs?.filter((n) => !n.is_read).length || 0);
     setLoading(false);
   }
 
   const markAsRead = async (id) => {
     await supabase.from("notifications").update({ is_read: true }).eq("id", id);
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
-    setUnreadCount(prev => Math.max(0, prev - 1));
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)));
+    setUnreadCount((prev) => Math.max(0, prev - 1));
   };
 
   const handleNotificationClick = (notif) => {
@@ -204,7 +208,6 @@ export default function ClientDashboard() {
       setStoryImagePreview("");
       setStoryFont("'Dancing Script', cursive");
       if (fileInputRef.current) fileInputRef.current.value = "";
-      // Refresh stories
       const { data: stories } = await supabase
         .from("client_posts")
         .select("*")
@@ -265,7 +268,6 @@ export default function ClientDashboard() {
     try {
       let imageUrl = null;
       if (editImage) {
-        // Upload new image
         const ext = editImage.name.split(".").pop();
         const fileName = `stories/${client.id}_${Date.now()}.${ext}`;
         const { error: uploadError } = await supabase.storage
@@ -279,13 +281,11 @@ export default function ClientDashboard() {
       } else if (editImageRemoved) {
         imageUrl = null;
       } else {
-        // Keep existing image
-        const story = myStories.find(s => s.id === storyId);
+        const story = myStories.find((s) => s.id === storyId);
         imageUrl = story?.image_url || null;
       }
-      // If image was removed, we should also delete the old image from storage
       if (editImageRemoved) {
-        const story = myStories.find(s => s.id === storyId);
+        const story = myStories.find((s) => s.id === storyId);
         if (story?.image_url) {
           const path = story.image_url.split("/public/")[1];
           if (path) {
@@ -302,7 +302,6 @@ export default function ClientDashboard() {
         })
         .eq("id", storyId);
       if (error) throw error;
-      // Refresh stories
       const { data: stories } = await supabase
         .from("client_posts")
         .select("*")
@@ -319,8 +318,7 @@ export default function ClientDashboard() {
   const deleteStory = async (storyId) => {
     if (!confirm("Delete this story? All likes, comments, and views will be removed.")) return;
     try {
-      const story = myStories.find(s => s.id === storyId);
-      // Delete image from storage if exists
+      const story = myStories.find((s) => s.id === storyId);
       if (story?.image_url) {
         const path = story.image_url.split("/public/")[1];
         if (path) {
@@ -328,7 +326,6 @@ export default function ClientDashboard() {
         }
       }
       await supabase.from("client_posts").delete().eq("id", storyId);
-      // Refresh stories
       const { data: stories } = await supabase
         .from("client_posts")
         .select("*")
@@ -384,7 +381,7 @@ export default function ClientDashboard() {
                       <div
                         key={n.id}
                         onClick={() => handleNotificationClick(n)}
-                        className={`p-3 border-b hover:bg-gray-50 cursor-pointer transition ${!n.is_read ? 'bg-amber-50' : ''}`}
+                        className={`p-3 border-b hover:bg-gray-50 cursor-pointer transition ${!n.is_read ? "bg-amber-50" : ""}`}
                       >
                         <p className="text-sm">{n.message}</p>
                         <p className="text-xs text-gray-400 mt-1">{new Date(n.created_at).toLocaleString()}</p>
@@ -458,7 +455,6 @@ export default function ClientDashboard() {
                 return (
                   <div key={story.id} className="border rounded-lg p-3 bg-gray-50 relative">
                     {isEditing ? (
-                      // Edit mode
                       <div className="space-y-2">
                         <select
                           value={editFont}
@@ -500,10 +496,9 @@ export default function ClientDashboard() {
                         </div>
                       </div>
                     ) : (
-                      // View mode
                       <>
                         {story.image_url && <img src={story.image_url} className="w-full h-32 object-cover rounded mb-2" alt="Story" />}
-                        {story.content && <p className="text-sm" style={{ fontFamily: story.font_family || 'sans-serif' }}>{story.content}</p>}
+                        {story.content && <p className="text-sm" style={{ fontFamily: story.font_family || "sans-serif" }}>{story.content}</p>}
                         <div className="flex justify-between items-center mt-2">
                           <span className="text-xs text-gray-400">{new Date(story.created_at).toLocaleString()}</span>
                           <div className="flex gap-2">
@@ -527,17 +522,21 @@ export default function ClientDashboard() {
         {/* Active Projects */}
         <div className="mb-12">
           <h2 className="text-2xl font-semibold mb-4">Active Projects</h2>
-          {activeTokens.length === 0 ? (
+          {activeProjects.length === 0 ? (
             <p className="text-gray-500">No active projects right now.</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {activeTokens.map((token) => (
-                <div key={token.id} className="bg-white rounded-xl shadow-md p-6 border border-amber-100">
-                  <p className="text-sm text-gray-500">Token: <span className="font-mono">{token.token_string}</span></p>
-                  <p className="text-gray-700 mt-2">{token.work_description || "Project in progress"}</p>
+              {activeProjects.map((project) => (
+                <div key={project.id} className="bg-white rounded-xl shadow-md p-6 border border-amber-100">
+                  <p className="text-sm text-gray-500">
+                    Token: <span className="font-mono">{project.token_string || "Standalone"}</span>
+                  </p>
+                  <p className="text-gray-700 mt-2 font-medium">{project.work_description || "Project in progress"}</p>
+                  {project.city && <p className="text-xs text-gray-500 mt-1">📍 {project.city}</p>}
+                  {project.duration_weeks && <p className="text-xs text-gray-500">⏱️ {project.duration_weeks} weeks</p>}
                   <div className="flex gap-3 mt-4 flex-wrap">
-                    <a href={`/workspace/${token.token_string}`} className="text-amber-600 hover:underline text-sm">View Workspace</a>
-                    <a href={`/client/upload/${token.id}`} className="bg-amber-600 text-white px-4 py-1 rounded-full text-sm hover:bg-amber-700 transition">Share Update</a>
+                    <a href={`/workspace/${project.token_string || project.id}`} className="text-amber-600 hover:underline text-sm">View Workspace</a>
+                    <a href={`/client/upload/${project.id}`} className="bg-amber-600 text-white px-4 py-1 rounded-full text-sm hover:bg-amber-700 transition">Share Update</a>
                   </div>
                 </div>
               ))}
@@ -548,15 +547,19 @@ export default function ClientDashboard() {
         {/* Completed Projects */}
         <div>
           <h2 className="text-2xl font-semibold mb-4">Completed Projects</h2>
-          {killedTokens.length === 0 ? (
+          {killedProjects.length === 0 ? (
             <p className="text-gray-500">No completed projects yet.</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {killedTokens.map((token) => (
-                <div key={token.id} className="bg-white rounded-xl shadow-md p-6 border border-gray-200">
-                  <p className="text-sm text-gray-500">Token: <span className="font-mono">{token.token_string}</span> <span className="ml-2 text-green-600">✅ Completed</span></p>
-                  <p className="text-gray-700 mt-2">{token.work_description || "Completed project"}</p>
-                  <a href={`/workspace/${token.token_string}`} className="text-amber-600 hover:underline text-sm">View Public Page</a>
+              {killedProjects.map((project) => (
+                <div key={project.id} className="bg-white rounded-xl shadow-md p-6 border border-gray-200">
+                  <p className="text-sm text-gray-500">
+                    Token: <span className="font-mono">{project.token_string || "Standalone"}</span>{" "}
+                    <span className="ml-2 text-green-600">✅ Completed</span>
+                  </p>
+                  <p className="text-gray-700 mt-2 font-medium">{project.work_description || "Completed project"}</p>
+                  {project.city && <p className="text-xs text-gray-500 mt-1">📍 {project.city}</p>}
+                  <a href={`/workspace/${project.token_string || project.id}`} className="text-amber-600 hover:underline text-sm mt-2 inline-block">View Public Page</a>
                 </div>
               ))}
             </div>
