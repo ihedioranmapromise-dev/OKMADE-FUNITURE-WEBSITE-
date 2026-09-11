@@ -23,9 +23,9 @@ const CloseIcon = () => (
 );
 
 export default function AdminProgress() {
-  const [tokens, setTokens] = useState([]);
-  const [selectedTokenId, setSelectedTokenId] = useState("");
-  const [selectedTokenString, setSelectedTokenString] = useState("");
+  const [projects, setProjects] = useState([]);
+  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [selectedProjectLabel, setSelectedProjectLabel] = useState("");
   const [selectedWorkerId, setSelectedWorkerId] = useState("");
   const [overallDescription, setOverallDescription] = useState("");
   const [imageData, setImageData] = useState([]);
@@ -45,17 +45,17 @@ export default function AdminProgress() {
   }
 
   useEffect(() => {
-    fetchTokens();
+    fetchProjects();
     fetchNotifications();
   }, []);
 
-  async function fetchTokens() {
+  async function fetchProjects() {
     const { data, error } = await supabase
-      .from("tokens")
-      .select("id, token_string, client_name, client_id")
+      .from("projects")
+      .select("id, token_string, work_description, client_name, is_standalone, client_id")
       .eq("status", "active")
       .order("created_at", { ascending: false });
-    if (!error) setTokens(data || []);
+    if (!error) setProjects(data || []);
   }
 
   async function fetchNotifications() {
@@ -70,17 +70,21 @@ export default function AdminProgress() {
     }
   }
 
-  const handleTokenChange = async (e) => {
+  const handleProjectChange = async (e) => {
     const id = e.target.value;
-    const token = tokens.find((t) => t.id === id);
-    setSelectedTokenId(id);
-    setSelectedTokenString(token ? token.token_string : "");
-    setSelectedWorkerId(token ? token.client_id : "");
+    const project = projects.find((p) => p.id === id);
+    setSelectedProjectId(id);
+    setSelectedProjectLabel(
+      project
+        ? `${project.work_description || "Untitled"} ${project.token_string ? `(#${project.token_string})` : "(Standalone)"}`
+        : ""
+    );
+    setSelectedWorkerId(project ? project.client_id : "");
     if (id) {
       const { data } = await supabase
         .from("progress_images")
         .select("*, clients(display_name, username)")
-        .eq("token_id", id)
+        .eq("project_id", id)
         .order("created_at", { ascending: false });
       setProgressData(data || []);
     } else {
@@ -112,8 +116,8 @@ export default function AdminProgress() {
 
   const handleUpload = async (e) => {
     e.preventDefault();
-    if (!selectedTokenId || imageData.length === 0) {
-      setMessage("Select a token and at least one image.");
+    if (!selectedProjectId || imageData.length === 0) {
+      setMessage("Select a project and at least one image.");
       return;
     }
     setUploading(true);
@@ -122,7 +126,7 @@ export default function AdminProgress() {
       for (let i = 0; i < imageData.length; i++) {
         const { file, description: imgDesc } = imageData[i];
         const ext = file.name.split(".").pop();
-        const fileName = `progress/${selectedTokenString}_${Date.now()}_${i}.${ext}`;
+        const fileName = `progress/${selectedProjectId}_${Date.now()}_${i}.${ext}`;
         const { error: uploadError } = await supabase.storage
           .from("workspace-progress")
           .upload(fileName, file);
@@ -133,21 +137,21 @@ export default function AdminProgress() {
           .getPublicUrl(fileName);
 
         await supabase.from("progress_images").insert({
-          token_id: selectedTokenId,
+          project_id: selectedProjectId,
           image_url: urlData.publicUrl,
           description: imgDesc || null,
           explanation: overallDescription || null,
-          uploaded_by: null, // null means admin
+          uploaded_by: null,
         });
       }
 
-      // Create notification for the artisan (if linked)
+      // Notify artisan if this is a client project
       if (selectedWorkerId) {
         await supabase.from("notifications").insert({
           client_id: selectedWorkerId,
           type: "progress_uploaded",
-          message: `New progress update on token "${selectedTokenString}".`,
-          target_url: `/workspace/${selectedTokenString}`,
+          message: `New progress update on project "${selectedProjectLabel}".`,
+          target_url: `/workspace/${selectedProjectLabel.split("#")[1]?.replace(")", "") || ""}`,
         });
       }
 
@@ -156,14 +160,13 @@ export default function AdminProgress() {
       setOverallDescription("");
       document.getElementById("progressImages").value = "";
 
-      // Refresh progress list
       const { data } = await supabase
         .from("progress_images")
         .select("*, clients(display_name, username)")
-        .eq("token_id", selectedTokenId)
+        .eq("project_id", selectedProjectId)
         .order("created_at", { ascending: false });
       setProgressData(data || []);
-      fetchNotifications(); // refresh unread count
+      fetchNotifications();
     } catch (err) {
       setMessage("Error: " + err.message);
     } finally {
@@ -174,17 +177,16 @@ export default function AdminProgress() {
   const handleEditExplanation = async (id) => {
     if (!editExplanation.trim()) return;
     try {
-      const { error } = await supabase
+      await supabase
         .from("progress_images")
         .update({ explanation: editExplanation })
         .eq("id", id);
-      if (error) throw error;
       setEditingId(null);
       setEditExplanation("");
       const { data } = await supabase
         .from("progress_images")
         .select("*, clients(display_name, username)")
-        .eq("token_id", selectedTokenId)
+        .eq("project_id", selectedProjectId)
         .order("created_at", { ascending: false });
       setProgressData(data || []);
       setMessage("Explanation updated.");
@@ -204,7 +206,7 @@ export default function AdminProgress() {
       const { data } = await supabase
         .from("progress_images")
         .select("*, clients(display_name, username)")
-        .eq("token_id", selectedTokenId)
+        .eq("project_id", selectedProjectId)
         .order("created_at", { ascending: false });
       setProgressData(data || []);
       setMessage("Image deleted.");
@@ -214,32 +216,31 @@ export default function AdminProgress() {
   };
 
   const handleKill = async () => {
-    if (!selectedTokenId) {
-      setMessage("Select a token first.");
+    if (!selectedProjectId) {
+      setMessage("Select a project first.");
       return;
     }
-    if (!confirm(`Kill token ${selectedTokenString}?`)) return;
+    if (!confirm(`Mark project as complete? This will publish it to the portfolio.`)) return;
     setUploading(true);
     const { error } = await supabase
-      .from("tokens")
+      .from("projects")
       .update({ status: "killed" })
-      .eq("id", selectedTokenId);
+      .eq("id", selectedProjectId);
     if (error) {
-      setMessage("Error killing token: " + error.message);
+      setMessage("Error completing project: " + error.message);
     } else {
-      // Notify artisan if linked
       if (selectedWorkerId) {
         await supabase.from("notifications").insert({
           client_id: selectedWorkerId,
-          type: "token_killed",
-          message: `Token "${selectedTokenString}" has been marked as completed.`,
-          target_url: `/workspace/${selectedTokenString}`,
+          type: "project_killed",
+          message: `Project "${selectedProjectLabel}" has been marked as completed.`,
+          target_url: `/workspace/${selectedProjectLabel.split("#")[1]?.replace(")", "") || ""}`,
         });
       }
-      setMessage(`Token ${selectedTokenString} killed.`);
-      fetchTokens();
-      setSelectedTokenId("");
-      setSelectedTokenString("");
+      setMessage(`Project completed and published to portfolio.`);
+      fetchProjects();
+      setSelectedProjectId("");
+      setSelectedProjectLabel("");
       setProgressData([]);
     }
     setUploading(false);
@@ -247,8 +248,8 @@ export default function AdminProgress() {
 
   const markAsRead = async (id) => {
     await supabase.from("notifications").update({ is_read: true }).eq("id", id);
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
-    setUnreadCount(prev => Math.max(0, prev - 1));
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)));
+    setUnreadCount((prev) => Math.max(0, prev - 1));
   };
 
   const handleNotificationClick = (notif) => {
@@ -260,7 +261,7 @@ export default function AdminProgress() {
   return (
     <div className="p-8 max-w-4xl mx-auto">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Upload Progress & Manage Tokens</h1>
+        <h1 className="text-2xl font-bold">Upload Progress & Manage Projects</h1>
         <div className="relative">
           <button
             onClick={() => setShowNotifications(!showNotifications)}
@@ -278,10 +279,12 @@ export default function AdminProgress() {
                   <div
                     key={n.id}
                     onClick={() => handleNotificationClick(n)}
-                    className={`p-3 border-b hover:bg-gray-50 cursor-pointer transition ${!n.is_read ? 'bg-amber-50' : ''}`}
+                    className={`p-3 border-b hover:bg-gray-50 cursor-pointer transition ${!n.is_read ? "bg-amber-50" : ""}`}
                   >
                     <p className="text-sm">{n.message}</p>
-                    <p className="text-xs text-gray-400 mt-1">{new Date(n.created_at).toLocaleString()}</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {new Date(n.created_at).toLocaleString()}
+                    </p>
                   </div>
                 ))
               )}
@@ -294,17 +297,19 @@ export default function AdminProgress() {
         <h2 className="text-lg font-semibold mb-4">Upload Progress</h2>
         <form onSubmit={handleUpload} className="space-y-4">
           <div>
-            <label className="block font-medium mb-1">Select Active Token</label>
+            <label className="block font-medium mb-1">Select Active Project (Token or Standalone)</label>
             <select
-              value={selectedTokenId}
-              onChange={handleTokenChange}
+              value={selectedProjectId}
+              onChange={handleProjectChange}
               className="w-full border p-2 rounded"
               required
             >
-              <option value="">-- Choose a token --</option>
-              {tokens.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.token_string} - {t.client_name}
+              <option value="">-- Choose a project --</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.work_description || "Untitled"}{" "}
+                  {p.token_string ? `(#${p.token_string})` : "(Standalone)"}
+                  {p.client_name ? ` – ${p.client_name}` : ""}
                 </option>
               ))}
             </select>
@@ -369,10 +374,10 @@ export default function AdminProgress() {
             <button
               type="button"
               onClick={handleKill}
-              disabled={uploading || !selectedTokenId}
+              disabled={uploading || !selectedProjectId}
               className="bg-red-600 text-white px-4 py-2 rounded disabled:opacity-50"
             >
-              Kill Token
+              Mark Complete & Publish
             </button>
           </div>
           {message && (
@@ -397,9 +402,11 @@ export default function AdminProgress() {
                   <div className="flex justify-between items-start">
                     <div>
                       <p className="text-sm font-medium text-gray-700">
-                        {isClient ? "👤 Client" : "🛠️ Admin"} – {uploaderName}
+                        {isClient ? "Client" : "Admin"} – {uploaderName}
                       </p>
-                      <p className="text-sm text-gray-500">{new Date(item.created_at).toLocaleString()}</p>
+                      <p className="text-sm text-gray-500">
+                        {new Date(item.created_at).toLocaleString()}
+                      </p>
                       {item.description && (
                         <p className="text-sm text-gray-600">
                           <strong>Image desc:</strong> {item.description}
@@ -432,6 +439,7 @@ export default function AdminProgress() {
                   <img
                     src={item.image_url}
                     className="w-full max-h-60 object-cover rounded-lg mt-2"
+                    alt="Progress"
                   />
                   {editingId === item.id && (
                     <div className="mt-2 flex gap-2">
