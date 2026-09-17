@@ -16,6 +16,7 @@ export default function PortfolioPage() {
   const [cities, setCities] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedCity, setSelectedCity] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
   const [visibleCount, setVisibleCount] = useState(9);
   const [stats, setStats] = useState({
@@ -38,28 +39,38 @@ export default function PortfolioPage() {
     if (selectedCity) {
       filtered = filtered.filter((p) => p.city === selectedCity);
     }
+    if (searchTerm.trim() !== "") {
+      const term = searchTerm.toLowerCase().trim();
+      filtered = filtered.filter((p) => {
+        const title = (p.work_description || "").toLowerCase();
+        const city = (p.city || "").toLowerCase();
+        const details = (p.project_details || "").toLowerCase();
+        return (
+          title.includes(term) || city.includes(term) || details.includes(term)
+        );
+      });
+    }
     setFilteredProjects(filtered);
     setVisibleCount(9);
-  }, [selectedCategory, selectedCity, projects]);
+  }, [selectedCategory, selectedCity, searchTerm, projects]);
 
   async function fetchData() {
     setLoading(true);
-    // Fetch categories
     const { data: cats } = await supabase
       .from("categories")
       .select("*")
       .order("name");
     setCategories(cats || []);
 
-    // Fetch killed projects (portfolio items)
     const { data: projs, error } = await supabase
       .from("projects")
-      .select("id, token_string, work_description, city, duration_weeks, project_details, category_id, created_at, is_standalone, categories(name)")
+      .select(
+        "id, token_string, work_description, city, duration_weeks, project_details, category_id, created_at, is_standalone, categories(name)"
+      )
       .eq("status", "killed")
       .order("created_at", { ascending: false });
 
     if (!error && projs) {
-      // Fetch the first request image for each project
       const projectsWithImages = await Promise.all(
         projs.map(async (p) => {
           const { data: imgs } = await supabase
@@ -74,18 +85,19 @@ export default function PortfolioPage() {
       setProjects(projectsWithImages);
       setFilteredProjects(projectsWithImages);
 
-      // Compute stats
       const uniqueCities = new Set(projs.map((p) => p.city).filter(Boolean));
-      const uniqueCategories = new Set(projs.map((p) => p.category_id).filter(Boolean));
-      const uniqueClients = new Set(projs.filter((p) => !p.is_standalone).map((p) => p.token_string));
+      const uniqueCategories = new Set(
+        projs.map((p) => p.category_id).filter(Boolean)
+      );
+      const uniqueClients = new Set(
+        projs.filter((p) => !p.is_standalone).map((p) => p.token_string)
+      );
       setStats({
         totalProjects: projs.length,
         totalCities: uniqueCities.size,
         totalCategories: uniqueCategories.size,
         totalClients: uniqueClients.size,
       });
-
-      // Extract unique cities for filter
       setCities([...uniqueCities].sort());
     }
     setLoading(false);
@@ -114,14 +126,14 @@ export default function PortfolioPage() {
             Where Wood Meets Artistry
           </h1>
           <p className="text-lg md:text-xl leading-relaxed text-white/90">
-            Explore the spaces we've transformed – from hotels, churches, and government
-            houses to private homes and corporate offices. Every project tells a story of
-            craftsmanship, precision, and passion.
+            Explore the spaces we've transformed – from hotels, churches, and
+            government houses to private homes and corporate offices. Every
+            project tells a story of craftsmanship, precision, and passion.
           </p>
         </div>
       </section>
 
-      {/* Stats Counters */}
+      {/* Stats */}
       <section className="bg-gradient-to-r from-amber-900 to-stone-800 text-white py-12">
         <div className="container mx-auto px-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
@@ -129,32 +141,76 @@ export default function PortfolioPage() {
               <p className="text-4xl md:text-5xl font-bold text-amber-300">
                 {stats.totalProjects}+
               </p>
-              <p className="text-sm md:text-base mt-2 text-amber-100/80">Projects Completed</p>
+              <p className="text-sm md:text-base mt-2 text-amber-100/80">
+                Projects Completed
+              </p>
             </div>
             <div className="text-center">
               <p className="text-4xl md:text-5xl font-bold text-amber-300">
                 {stats.totalClients}+
               </p>
-              <p className="text-sm md:text-base mt-2 text-amber-100/80">Happy Clients</p>
+              <p className="text-sm md:text-base mt-2 text-amber-100/80">
+                Happy Clients
+              </p>
             </div>
             <div className="text-center">
               <p className="text-4xl md:text-5xl font-bold text-amber-300">
                 {stats.totalCities}+
               </p>
-              <p className="text-sm md:text-base mt-2 text-amber-100/80">Cities Reached</p>
+              <p className="text-sm md:text-base mt-2 text-amber-100/80">
+                Cities Reached
+              </p>
             </div>
             <div className="text-center">
               <p className="text-4xl md:text-5xl font-bold text-amber-300">
                 {stats.totalCategories}+
               </p>
-              <p className="text-sm md:text-base mt-2 text-amber-100/80">Categories Served</p>
+              <p className="text-sm md:text-base mt-2 text-amber-100/80">
+                Categories Served
+              </p>
             </div>
           </div>
         </div>
       </section>
 
+      {/* Search Bar */}
+      <section className="container mx-auto px-6 pt-10">
+        <div className="max-w-2xl mx-auto">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search projects by name, city, or keyword..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full p-4 pl-12 border border-amber-200 rounded-full shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-300 bg-white/90 backdrop-blur-sm transition text-sm md:text-base"
+            />
+            <svg
+              className="absolute left-4 top-4 h-5 w-5 text-gray-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm("")}
+                className="absolute right-4 top-4 text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+      </section>
+
       {/* Filters */}
-      <section className="container mx-auto px-6 py-10">
+      <section className="container mx-auto px-6 py-6">
         <div className="max-w-4xl mx-auto">
           <div className="flex flex-wrap gap-4 justify-center items-center">
             <div className="flex-1 min-w-[200px]">
@@ -195,15 +251,17 @@ export default function PortfolioPage() {
         </div>
       </section>
 
-      {/* Projects Gallery */}
+      {/* Projects */}
       <section className="container mx-auto px-6 pb-16">
         {loading ? (
           <div className="flex justify-center items-center h-64">
-            <div className="animate-pulse text-amber-600 text-lg">Loading portfolio...</div>
+            <div className="animate-pulse text-amber-600 text-lg">
+              Loading portfolio...
+            </div>
           </div>
         ) : filteredProjects.length === 0 ? (
           <div className="text-center py-16 text-gray-500 text-lg">
-            No projects match your filters. Try adjusting the category or city.
+            No projects match your filters. Try adjusting your search.
           </div>
         ) : (
           <>
@@ -211,7 +269,11 @@ export default function PortfolioPage() {
               {filteredProjects.slice(0, visibleCount).map((project) => (
                 <div
                   key={project.id}
-                  onClick={() => router.push(`/workspace/${project.token_string || project.id}`)}
+                  onClick={() =>
+                    router.push(
+                      `/workspace/${project.token_string || project.id}`
+                    )
+                  }
                   className="group bg-white rounded-2xl shadow-md overflow-hidden hover:shadow-2xl transition-all duration-300 cursor-pointer border border-amber-100/30 hover:-translate-y-2"
                 >
                   <div className="relative h-64 overflow-hidden bg-amber-50">
@@ -227,13 +289,11 @@ export default function PortfolioPage() {
                         No image
                       </div>
                     )}
-                    {/* Category badge */}
                     {project.categories?.name && (
                       <div className="absolute top-4 left-4 bg-amber-700/90 backdrop-blur-sm text-white text-xs px-3 py-1 rounded-full shadow-lg">
                         {project.categories.name}
                       </div>
                     )}
-                    {/* Token number */}
                     {project.token_string && (
                       <div className="absolute top-4 right-4 bg-black/50 text-white text-xs px-3 py-1 rounded-full backdrop-blur-sm font-mono">
                         #{project.token_string}
@@ -318,8 +378,8 @@ export default function PortfolioPage() {
             Ready to Create Your Own Masterpiece?
           </h2>
           <p className="text-white/80 max-w-2xl mx-auto mb-8">
-            Let's transform your space with timeless furniture and interiors. Get in touch
-            with us today to discuss your project.
+            Let's transform your space with timeless furniture and interiors.
+            Get in touch with us today to discuss your project.
           </p>
           <a
             href="/#contact"
