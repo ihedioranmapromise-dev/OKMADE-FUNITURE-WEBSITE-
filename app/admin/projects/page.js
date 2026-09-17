@@ -23,7 +23,7 @@ export default function AdminProjects() {
   const [price, setPrice] = useState("");
   const [imageData, setImageData] = useState([]);
   const [generatedToken, setGeneratedToken] = useState("");
-  const [isStandalone, setIsStandalone] = useState(false); // toggle: client project or standalone
+  const [isStandalone, setIsStandalone] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
   const router = useRouter();
@@ -39,11 +39,16 @@ export default function AdminProjects() {
   }, []);
 
   async function fetchWorkers() {
-    const { data, error } = await supabase
-      .from("clients")
-      .select("id, display_name, first_name, last_name, phone_number, work_address")
-      .order("display_name", { ascending: true });
-    if (!error) setWorkers(data || []);
+    const res = await fetch("/api/admin/workers", {
+      headers: {
+        "x-admin-key":
+          process.env.NEXT_PUBLIC_ADMIN_API_KEY || "okmade_super_secret_2026",
+      },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setWorkers(data || []);
+    }
   }
 
   async function fetchCategories() {
@@ -65,7 +70,9 @@ export default function AdminProjects() {
     }
     const worker = workers.find((w) => w.id === id);
     if (worker) {
-      const name = worker.display_name || `${worker.first_name || ""} ${worker.last_name || ""}`.trim();
+      const name =
+        worker.display_name ||
+        `${worker.first_name || ""} ${worker.last_name || ""}`.trim();
       setClientName(name || "");
       setClientContact(worker.phone_number || "");
       setClientAddress(worker.work_address || "");
@@ -101,7 +108,6 @@ export default function AdminProjects() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Validation
     if (!workDescription || imageData.length === 0) {
       setMessage("Please enter a work description and select at least one image.");
       return;
@@ -115,7 +121,6 @@ export default function AdminProjects() {
     setMessage("");
 
     try {
-      // Only generate a token string if it's a client project
       const tokenString = isStandalone ? null : generateTokenString();
 
       const { data: project, error: projectError } = await supabase
@@ -134,14 +139,18 @@ export default function AdminProjects() {
             price: price ? parseFloat(price) : null,
             status: "active",
             is_standalone: isStandalone,
-            client_id: !isStandalone && selectedWorkerId !== "manual" && selectedWorkerId !== "" ? selectedWorkerId : null,
+            client_id:
+              !isStandalone &&
+              selectedWorkerId !== "manual" &&
+              selectedWorkerId !== ""
+                ? selectedWorkerId
+                : null,
           },
         ])
         .select()
         .single();
       if (projectError) throw projectError;
 
-      // Upload request images
       for (let i = 0; i < imageData.length; i++) {
         const { file, description: imgDesc } = imageData[i];
         const ext = file.name.split(".").pop();
@@ -164,7 +173,6 @@ export default function AdminProjects() {
         });
       }
 
-      // Send notification to the selected artisan (only for client projects)
       if (!isStandalone && selectedWorkerId !== "manual" && selectedWorkerId !== "") {
         await supabase.from("notifications").insert({
           client_id: selectedWorkerId,
@@ -175,14 +183,15 @@ export default function AdminProjects() {
       }
 
       if (isStandalone) {
-        setMessage(`Standalone project created successfully (ID: ${project.id.slice(0, 8)}).`);
+        setMessage(
+          `Standalone project created successfully (ID: ${project.id.slice(0, 8)}).`
+        );
         setGeneratedToken("");
       } else {
         setGeneratedToken(tokenString);
         setMessage(`Project token generated: ${tokenString}`);
       }
 
-      // Reset form
       setClientName("");
       setClientContact("");
       setClientAddress("");
@@ -211,7 +220,6 @@ export default function AdminProjects() {
     <div className="p-8 max-w-3xl mx-auto">
       <h1 className="text-2xl font-bold mb-6">Generate Project</h1>
 
-      {/* Standalone toggle */}
       <div className="mb-6 bg-gray-50 p-4 rounded-lg border border-gray-200">
         <label className="flex items-center gap-2 cursor-pointer">
           <input
@@ -232,7 +240,6 @@ export default function AdminProjects() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Worker select (only for client projects) */}
         {!isStandalone && (
           <div>
             <label className="block font-medium mb-1">Select Worker (Artisan) – or skip</label>
@@ -244,10 +251,13 @@ export default function AdminProjects() {
               <option value="">-- Select a worker (or skip) --</option>
               <option value="manual">✏️ Enter manually (skip)</option>
               {workers.map((w) => {
-                const name = w.display_name || `${w.first_name || ""} ${w.last_name || ""}`.trim();
+                const name =
+                  w.display_name ||
+                  `${w.first_name || ""} ${w.last_name || ""}`.trim();
                 return (
                   <option key={w.id} value={w.id}>
-                    {name || w.id.slice(0, 8)} {w.phone_number ? `(${w.phone_number})` : ""}
+                    {name || w.id.slice(0, 8)}{" "}
+                    {w.phone_number ? `(${w.phone_number})` : ""}
                   </option>
                 );
               })}
@@ -255,7 +265,6 @@ export default function AdminProjects() {
           </div>
         )}
 
-        {/* Client fields (hidden for standalone) */}
         {!isStandalone && (
           <>
             <div>
@@ -290,7 +299,6 @@ export default function AdminProjects() {
           </>
         )}
 
-        {/* Project fields (always visible) */}
         <div>
           <label className="block font-medium mb-1">Work Description (Project Title) *</label>
           <textarea
@@ -365,7 +373,9 @@ export default function AdminProjects() {
         </div>
 
         <div>
-          <label className="block font-medium mb-1">Request / Concept Images (up to 6) *</label>
+          <label className="block font-medium mb-1">
+            Request / Concept Images (up to 6) *
+          </label>
           <input
             id="requestImages"
             type="file"
@@ -443,7 +453,9 @@ export default function AdminProjects() {
                 Copy Link
               </button>
             </div>
-            <p className="text-sm text-gray-500 mt-2">Share this link with the client via WhatsApp.</p>
+            <p className="text-sm text-gray-500 mt-2">
+              Share this link with the client via WhatsApp.
+            </p>
           </div>
         )}
       </form>
