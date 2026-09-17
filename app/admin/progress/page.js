@@ -24,6 +24,7 @@ const CloseIcon = () => (
 
 export default function AdminProgress() {
   const [projects, setProjects] = useState([]);
+  const [workers, setWorkers] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [selectedProjectLabel, setSelectedProjectLabel] = useState("");
   const [selectedWorkerId, setSelectedWorkerId] = useState("");
@@ -47,6 +48,7 @@ export default function AdminProgress() {
   useEffect(() => {
     fetchProjects();
     fetchNotifications();
+    fetchWorkers();
   }, []);
 
   async function fetchProjects() {
@@ -56,6 +58,19 @@ export default function AdminProgress() {
       .eq("status", "active")
       .order("created_at", { ascending: false });
     if (!error) setProjects(data || []);
+  }
+
+  async function fetchWorkers() {
+    const res = await fetch("/api/admin/workers", {
+      headers: {
+        "x-admin-key":
+          process.env.NEXT_PUBLIC_ADMIN_API_KEY || "okmade_super_secret_2026",
+      },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setWorkers(data || []);
+    }
   }
 
   async function fetchNotifications() {
@@ -76,14 +91,16 @@ export default function AdminProgress() {
     setSelectedProjectId(id);
     setSelectedProjectLabel(
       project
-        ? `${project.work_description || "Untitled"} ${project.token_string ? `(#${project.token_string})` : "(Standalone)"}`
+        ? `${project.work_description || "Untitled"} ${
+            project.token_string ? `(#${project.token_string})` : "(Standalone)"
+          }`
         : ""
     );
     setSelectedWorkerId(project ? project.client_id : "");
     if (id) {
       const { data } = await supabase
         .from("progress_images")
-        .select("*, clients(display_name, username)")
+        .select("*")
         .eq("project_id", id)
         .order("created_at", { ascending: false });
       setProgressData(data || []);
@@ -151,7 +168,9 @@ export default function AdminProgress() {
           client_id: selectedWorkerId,
           type: "progress_uploaded",
           message: `New progress update on project "${selectedProjectLabel}".`,
-          target_url: `/workspace/${selectedProjectLabel.split("#")[1]?.replace(")", "") || ""}`,
+          target_url: `/workspace/${
+            selectedProjectLabel.split("#")[1]?.replace(")", "") || ""
+          }`,
         });
       }
 
@@ -162,7 +181,7 @@ export default function AdminProgress() {
 
       const { data } = await supabase
         .from("progress_images")
-        .select("*, clients(display_name, username)")
+        .select("*")
         .eq("project_id", selectedProjectId)
         .order("created_at", { ascending: false });
       setProgressData(data || []);
@@ -185,7 +204,7 @@ export default function AdminProgress() {
       setEditExplanation("");
       const { data } = await supabase
         .from("progress_images")
-        .select("*, clients(display_name, username)")
+        .select("*")
         .eq("project_id", selectedProjectId)
         .order("created_at", { ascending: false });
       setProgressData(data || []);
@@ -205,7 +224,7 @@ export default function AdminProgress() {
       await supabase.from("progress_images").delete().eq("id", imageId);
       const { data } = await supabase
         .from("progress_images")
-        .select("*, clients(display_name, username)")
+        .select("*")
         .eq("project_id", selectedProjectId)
         .order("created_at", { ascending: false });
       setProgressData(data || []);
@@ -220,7 +239,8 @@ export default function AdminProgress() {
       setMessage("Select a project first.");
       return;
     }
-    if (!confirm(`Mark project as complete? This will publish it to the portfolio.`)) return;
+    if (!confirm("Mark project as complete? This will publish it to the portfolio."))
+      return;
     setUploading(true);
     const { error } = await supabase
       .from("projects")
@@ -234,7 +254,9 @@ export default function AdminProgress() {
           client_id: selectedWorkerId,
           type: "project_killed",
           message: `Project "${selectedProjectLabel}" has been marked as completed.`,
-          target_url: `/workspace/${selectedProjectLabel.split("#")[1]?.replace(")", "") || ""}`,
+          target_url: `/workspace/${
+            selectedProjectLabel.split("#")[1]?.replace(")", "") || ""
+          }`,
         });
       }
       setMessage(`Project completed and published to portfolio.`);
@@ -248,7 +270,9 @@ export default function AdminProgress() {
 
   const markAsRead = async (id) => {
     await supabase.from("notifications").update({ is_read: true }).eq("id", id);
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)));
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
+    );
     setUnreadCount((prev) => Math.max(0, prev - 1));
   };
 
@@ -273,13 +297,17 @@ export default function AdminProgress() {
             <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-100 z-10 max-h-96 overflow-y-auto">
               <div className="p-3 border-b font-semibold">Notifications</div>
               {notifications.length === 0 ? (
-                <div className="p-4 text-center text-gray-500 text-sm">No notifications.</div>
+                <div className="p-4 text-center text-gray-500 text-sm">
+                  No notifications.
+                </div>
               ) : (
                 notifications.map((n) => (
                   <div
                     key={n.id}
                     onClick={() => handleNotificationClick(n)}
-                    className={`p-3 border-b hover:bg-gray-50 cursor-pointer transition ${!n.is_read ? "bg-amber-50" : ""}`}
+                    className={`p-3 border-b hover:bg-gray-50 cursor-pointer transition ${
+                      !n.is_read ? "bg-amber-50" : ""
+                    }`}
                   >
                     <p className="text-sm">{n.message}</p>
                     <p className="text-xs text-gray-400 mt-1">
@@ -297,7 +325,9 @@ export default function AdminProgress() {
         <h2 className="text-lg font-semibold mb-4">Upload Progress</h2>
         <form onSubmit={handleUpload} className="space-y-4">
           <div>
-            <label className="block font-medium mb-1">Select Active Project (Token or Standalone)</label>
+            <label className="block font-medium mb-1">
+              Select Active Project (Token or Standalone)
+            </label>
             <select
               value={selectedProjectId}
               onChange={handleProjectChange}
@@ -315,7 +345,9 @@ export default function AdminProgress() {
             </select>
           </div>
           <div>
-            <label className="block font-medium mb-1">Overall Description / Notes</label>
+            <label className="block font-medium mb-1">
+              Overall Description / Notes
+            </label>
             <textarea
               value={overallDescription}
               onChange={(e) => setOverallDescription(e.target.value)}
@@ -325,7 +357,9 @@ export default function AdminProgress() {
             />
           </div>
           <div>
-            <label className="block font-medium mb-1">Progress Images (up to 6)</label>
+            <label className="block font-medium mb-1">
+              Progress Images (up to 6)
+            </label>
             <input
               id="progressImages"
               type="file"
@@ -337,7 +371,10 @@ export default function AdminProgress() {
             {imageData.length > 0 && (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
                 {imageData.map((item, idx) => (
-                  <div key={idx} className="relative border rounded p-2 bg-gray-50">
+                  <div
+                    key={idx}
+                    className="relative border rounded p-2 bg-gray-50"
+                  >
                     <img
                       src={URL.createObjectURL(item.file)}
                       className="w-full h-24 object-cover rounded"
@@ -347,7 +384,9 @@ export default function AdminProgress() {
                       type="text"
                       placeholder="Image description (optional)"
                       value={item.description}
-                      onChange={(e) => handleDescriptionChange(idx, e.target.value)}
+                      onChange={(e) =>
+                        handleDescriptionChange(idx, e.target.value)
+                      }
                       className="w-full mt-1 p-1 border rounded text-sm"
                     />
                     <button
@@ -361,7 +400,9 @@ export default function AdminProgress() {
                 ))}
               </div>
             )}
-            <p className="text-sm text-gray-500 mt-1">{imageData.length} file(s) selected</p>
+            <p className="text-sm text-gray-500 mt-1">
+              {imageData.length} file(s) selected
+            </p>
           </div>
           <div className="flex gap-3">
             <button
@@ -381,7 +422,11 @@ export default function AdminProgress() {
             </button>
           </div>
           {message && (
-            <p className={`mt-2 ${message.startsWith("Error") ? "text-red-500" : "text-green-500"}`}>
+            <p
+              className={`mt-2 ${
+                message.startsWith("Error") ? "text-red-500" : "text-green-500"
+              }`}
+            >
               {message}
             </p>
           )}
@@ -394,15 +439,19 @@ export default function AdminProgress() {
           <div className="space-y-6">
             {progressData.map((item) => {
               const isClient = item.uploaded_by !== null;
-              const uploaderName = isClient
-                ? item.clients?.display_name || item.clients?.username || "Client"
-                : "Admin";
+              let uploaderName = "Admin";
+              if (isClient) {
+                const worker = workers.find((w) => w.id === item.uploaded_by);
+                uploaderName = worker
+                  ? worker.display_name || worker.username || "Client"
+                  : "Client";
+              }
               return (
                 <div key={item.id} className="border-b pb-4 last:border-0">
                   <div className="flex justify-between items-start">
                     <div>
                       <p className="text-sm font-medium text-gray-700">
-                        {isClient ? "Client" : "Admin"} – {uploaderName}
+                        {isClient ? "👤 Client" : "🛠️ Admin"} – {uploaderName}
                       </p>
                       <p className="text-sm text-gray-500">
                         {new Date(item.created_at).toLocaleString()}
@@ -429,7 +478,9 @@ export default function AdminProgress() {
                         Edit Note
                       </button>
                       <button
-                        onClick={() => handleDeleteImage(item.id, item.image_url)}
+                        onClick={() =>
+                          handleDeleteImage(item.id, item.image_url)
+                        }
                         className="text-red-600 hover:underline text-sm"
                       >
                         Delete
