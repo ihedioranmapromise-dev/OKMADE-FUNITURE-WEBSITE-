@@ -18,11 +18,16 @@ export default function EditKilledProject() {
   const [projectDetails, setProjectDetails] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [price, setPrice] = useState("");
-  const [existingImages, setExistingImages] = useState([]);
-  const [newImageData, setNewImageData] = useState([]);
+  const [requestImages, setRequestImages] = useState([]);
+  const [progressImages, setProgressImages] = useState([]);
+  const [newRequestImages, setNewRequestImages] = useState([]);
+  const [newProgressImages, setNewProgressImages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [editingProgressId, setEditingProgressId] = useState(null);
+  const [editDesc, setEditDesc] = useState("");
+  const [editExp, setEditExp] = useState("");
 
   if (typeof window !== "undefined" && sessionStorage.getItem("adminAuth") !== "true") {
     router.push("/admin/login");
@@ -58,47 +63,107 @@ export default function EditKilledProject() {
     setCategoryId(data.category_id || "");
     setPrice(data.price || "");
 
-    const { data: imgs } = await supabase
+    // Fetch request images
+    const { data: reqImgs } = await supabase
       .from("project_request_images")
       .select("id, image_url, display_order, description")
       .eq("project_id", id)
       .order("display_order");
-    setExistingImages(imgs || []);
+    setRequestImages(reqImgs || []);
+
+    // Fetch progress images
+    const { data: progImgs } = await supabase
+      .from("progress_images")
+      .select("id, image_url, description, explanation, created_at")
+      .eq("project_id", id)
+      .order("created_at", { ascending: true });
+    setProgressImages(progImgs || []);
+
     setLoading(false);
   }
 
-  const handleImageChange = (e) => {
+  // ----- Request Images -----
+  const handleRequestImageChange = (e) => {
     const files = Array.from(e.target.files);
-    if (existingImages.length + newImageData.length + files.length > 6) {
-      setMessage("You can have up to 6 images total.");
+    if (requestImages.length + newRequestImages.length + files.length > 6) {
+      setMessage("You can have up to 6 request images total.");
       return;
     }
-    const newImages = files.map((file) => ({ file, description: "" }));
-    setNewImageData([...newImageData, ...newImages]);
+    setNewRequestImages([...newRequestImages, ...files]);
   };
 
-  const handleNewDescriptionChange = (index, value) => {
-    const updated = [...newImageData];
-    updated[index].description = value;
-    setNewImageData(updated);
-  };
-
-  const removeNewImage = (index) => {
-    const updated = [...newImageData];
+  const removeNewRequestImage = (index) => {
+    const updated = [...newRequestImages];
     updated.splice(index, 1);
-    setNewImageData(updated);
+    setNewRequestImages(updated);
   };
 
-  const deleteExistingImage = async (imageId, imageUrl) => {
-    if (!confirm("Delete this image?")) return;
+  const deleteRequestImage = async (imageId, imageUrl) => {
+    if (!confirm("Delete this request image?")) return;
     const path = imageUrl.split("/public/")[1];
     if (path) {
       await supabase.storage.from("workspace-requests").remove([path]);
     }
     await supabase.from("project_request_images").delete().eq("id", imageId);
-    setExistingImages(existingImages.filter((img) => img.id !== imageId));
+    setRequestImages(requestImages.filter((img) => img.id !== imageId));
   };
 
+  // ----- Progress Images -----
+  const handleProgressImageChange = (e) => {
+    const files = Array.from(e.target.files);
+    setNewProgressImages([...newProgressImages, ...files]);
+  };
+
+  const removeNewProgressImage = (index) => {
+    const updated = [...newProgressImages];
+    updated.splice(index, 1);
+    setNewProgressImages(updated);
+  };
+
+  const deleteProgressImage = async (imageId, imageUrl) => {
+    if (!confirm("Delete this progress image?")) return;
+    const path = imageUrl.split("/public/")[1];
+    if (path) {
+      await supabase.storage.from("workspace-progress").remove([path]);
+    }
+    await supabase.from("progress_images").delete().eq("id", imageId);
+    setProgressImages(progressImages.filter((img) => img.id !== imageId));
+  };
+
+  const startEditProgress = (img) => {
+    setEditingProgressId(img.id);
+    setEditDesc(img.description || "");
+    setEditExp(img.explanation || "");
+  };
+
+  const cancelEditProgress = () => {
+    setEditingProgressId(null);
+    setEditDesc("");
+    setEditExp("");
+  };
+
+  const saveProgressEdit = async () => {
+    try {
+      const { error } = await supabase
+        .from("progress_images")
+        .update({ description: editDesc, explanation: editExp })
+        .eq("id", editingProgressId);
+      if (error) throw error;
+      setProgressImages((prev) =>
+        prev.map((img) =>
+          img.id === editingProgressId
+            ? { ...img, description: editDesc, explanation: editExp }
+            : img
+        )
+      );
+      cancelEditProgress();
+      setMessage("Progress description updated.");
+    } catch (err) {
+      setMessage("Error: " + err.message);
+    }
+  };
+
+  // ----- Submit -----
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
@@ -117,9 +182,9 @@ export default function EditKilledProject() {
         .eq("id", id);
       if (updateError) throw updateError;
 
-      // Upload new images
-      for (let i = 0; i < newImageData.length; i++) {
-        const { file, description: imgDesc } = newImageData[i];
+      // Upload new request images
+      for (let i = 0; i < newRequestImages.length; i++) {
+        const file = newRequestImages[i];
         const ext = file.name.split(".").pop();
         const fileName = `requests/${id}_${Date.now()}_${i}.${ext}`;
         const { error: uploadError } = await supabase.storage
@@ -132,14 +197,36 @@ export default function EditKilledProject() {
         await supabase.from("project_request_images").insert({
           project_id: id,
           image_url: urlData.publicUrl,
-          display_order: existingImages.length + i,
-          description: imgDesc || null,
+          display_order: requestImages.length + i,
+        });
+      }
+
+      // Upload new progress images
+      for (let i = 0; i < newProgressImages.length; i++) {
+        const file = newProgressImages[i];
+        const ext = file.name.split(".").pop();
+        const fileName = `progress/${id}_${Date.now()}_${i}.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from("workspace-progress")
+          .upload(fileName, file);
+        if (uploadError) throw uploadError;
+        const { data: urlData } = supabase.storage
+          .from("workspace-progress")
+          .getPublicUrl(fileName);
+        await supabase.from("progress_images").insert({
+          project_id: id,
+          image_url: urlData.publicUrl,
+          description: null,
+          explanation: null,
+          uploaded_by: null,
         });
       }
 
       setMessage("Project updated successfully!");
-      setNewImageData([]);
-      document.getElementById("newImages").value = "";
+      setNewRequestImages([]);
+      setNewProgressImages([]);
+      document.getElementById("newRequestImages").value = "";
+      document.getElementById("newProgressImages").value = "";
       fetchProject();
     } catch (err) {
       setMessage("Error: " + err.message);
@@ -153,89 +240,98 @@ export default function EditKilledProject() {
   return (
     <div className="p-8 max-w-3xl mx-auto">
       <h1 className="text-2xl font-bold mb-6">Edit Killed Project</h1>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block font-medium mb-1">Work Description (Title) *</label>
-          <textarea
-            value={workDescription}
-            onChange={(e) => setWorkDescription(e.target.value)}
-            className="w-full border p-2 rounded"
-            rows="2"
-            required
-          />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block font-medium mb-1">City</label>
-            <input
-              type="text"
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-              className="w-full border p-2 rounded"
-            />
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Project details */}
+        <div className="bg-white p-5 rounded-xl shadow-sm border">
+          <h2 className="font-semibold text-lg mb-4">Project Details</h2>
+          <div className="space-y-4">
+            <div>
+              <label className="block font-medium mb-1">Work Description (Title) *</label>
+              <textarea
+                value={workDescription}
+                onChange={(e) => setWorkDescription(e.target.value)}
+                className="w-full border p-2 rounded"
+                rows="2"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block font-medium mb-1">City</label>
+                <input
+                  type="text"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  className="w-full border p-2 rounded"
+                />
+              </div>
+              <div>
+                <label className="block font-medium mb-1">Duration (weeks)</label>
+                <input
+                  type="number"
+                  value={durationWeeks}
+                  onChange={(e) => setDurationWeeks(e.target.value)}
+                  className="w-full border p-2 rounded"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block font-medium mb-1">Category</label>
+              <select
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+                className="w-full border p-2 rounded"
+              >
+                <option value="">-- Select Category --</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block font-medium mb-1">Project Details</label>
+              <textarea
+                value={projectDetails}
+                onChange={(e) => setProjectDetails(e.target.value)}
+                className="w-full border p-2 rounded"
+                rows="5"
+              />
+            </div>
+            <div>
+              <label className="block font-medium mb-1">Price (₦)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                className="w-full border p-2 rounded"
+              />
+            </div>
           </div>
-          <div>
-            <label className="block font-medium mb-1">Duration (weeks)</label>
-            <input
-              type="number"
-              value={durationWeeks}
-              onChange={(e) => setDurationWeeks(e.target.value)}
-              className="w-full border p-2 rounded"
-            />
-          </div>
-        </div>
-        <div>
-          <label className="block font-medium mb-1">Category</label>
-          <select
-            value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-            className="w-full border p-2 rounded"
-          >
-            <option value="">-- Select Category --</option>
-            {categories.map((cat) => (
-              <option key={cat.id} value={cat.id}>
-                {cat.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block font-medium mb-1">Project Details</label>
-          <textarea
-            value={projectDetails}
-            onChange={(e) => setProjectDetails(e.target.value)}
-            className="w-full border p-2 rounded"
-            rows="5"
-          />
-        </div>
-        <div>
-          <label className="block font-medium mb-1">Price (₦)</label>
-          <input
-            type="number"
-            step="0.01"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            className="w-full border p-2 rounded"
-          />
         </div>
 
-        {/* Existing images */}
-        <div>
-          <label className="block font-medium mb-2">Existing Images</label>
-          {existingImages.length === 0 ? (
-            <p className="text-sm text-gray-500">No images.</p>
+        {/* Request Images */}
+        <div className="bg-white p-5 rounded-xl shadow-sm border">
+          <h2 className="font-semibold text-lg mb-1">Request / Concept Images</h2>
+          <p className="text-sm text-gray-500 mb-4">
+            The original images the client requested (shown first on the workspace page).
+          </p>
+          {requestImages.length === 0 ? (
+            <p className="text-sm text-gray-500">No request images.</p>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {existingImages.map((img) => (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+              {requestImages.map((img) => (
                 <div key={img.id} className="relative border rounded p-2 bg-gray-50">
                   <img
                     src={img.image_url}
                     className="w-full h-24 object-cover rounded"
-                    alt="Existing"
+                    alt="Request"
                   />
                   <button
                     type="button"
-                    onClick={() => deleteExistingImage(img.id, img.image_url)}
+                    onClick={() => deleteRequestImage(img.id, img.image_url)}
                     className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-700"
                   >
                     ✕
@@ -249,40 +345,27 @@ export default function EditKilledProject() {
               ))}
             </div>
           )}
-        </div>
-
-        {/* New images */}
-        <div>
-          <label className="block font-medium mb-1">Add New Images</label>
+          <label className="block font-medium mb-1 text-sm">Add New Request Images</label>
           <input
-            id="newImages"
+            id="newRequestImages"
             type="file"
             accept="image/*"
             multiple
-            onChange={handleImageChange}
+            onChange={handleRequestImageChange}
             className="w-full border p-2 rounded"
           />
-          {newImageData.length > 0 && (
+          {newRequestImages.length > 0 && (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-3">
-              {newImageData.map((item, idx) => (
+              {newRequestImages.map((file, idx) => (
                 <div key={idx} className="relative border rounded p-2 bg-gray-50">
                   <img
-                    src={URL.createObjectURL(item.file)}
+                    src={URL.createObjectURL(file)}
                     className="w-full h-24 object-cover rounded"
                     alt="New"
                   />
-                  <input
-                    type="text"
-                    placeholder="Description (optional)"
-                    value={item.description}
-                    onChange={(e) =>
-                      handleNewDescriptionChange(idx, e.target.value)
-                    }
-                    className="w-full mt-1 p-1 border rounded text-xs"
-                  />
                   <button
                     type="button"
-                    onClick={() => removeNewImage(idx)}
+                    onClick={() => removeNewRequestImage(idx)}
                     className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
                   >
                     ✕
@@ -293,16 +376,148 @@ export default function EditKilledProject() {
           )}
         </div>
 
+        {/* Progress Images */}
+        <div className="bg-white p-5 rounded-xl shadow-sm border">
+          <h2 className="font-semibold text-lg mb-1">Progress / Final Images</h2>
+          <p className="text-sm text-gray-500 mb-4">
+            The work-in-progress and final result images. Edit their descriptions or delete them.
+          </p>
+          {progressImages.length === 0 ? (
+            <p className="text-sm text-gray-500">No progress images yet.</p>
+          ) : (
+            <div className="space-y-4">
+              {progressImages.map((img) => {
+                const isEditing = editingProgressId === img.id;
+                return (
+                  <div
+                    key={img.id}
+                    className="border rounded-lg p-3 bg-gray-50 flex flex-col md:flex-row gap-3"
+                  >
+                    <img
+                      src={img.image_url}
+                      className="w-full md:w-40 h-40 object-cover rounded"
+                      alt="Progress"
+                    />
+                    <div className="flex-1">
+                      {isEditing ? (
+                        <div className="space-y-2">
+                          <input
+                            type="text"
+                            placeholder="Short description"
+                            value={editDesc}
+                            onChange={(e) => setEditDesc(e.target.value)}
+                            className="w-full border p-2 rounded text-sm"
+                          />
+                          <textarea
+                            placeholder="Full explanation"
+                            value={editExp}
+                            onChange={(e) => setEditExp(e.target.value)}
+                            rows="3"
+                            className="w-full border p-2 rounded text-sm"
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={saveProgressEdit}
+                              className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700"
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              onClick={cancelEditProgress}
+                              className="bg-gray-300 px-3 py-1 rounded text-sm hover:bg-gray-400"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          {img.description && (
+                            <p className="text-sm font-medium text-gray-700">
+                              {img.description}
+                            </p>
+                          )}
+                          {img.explanation && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              {img.explanation}
+                            </p>
+                          )}
+                          <p className="text-xs text-gray-400 mt-2">
+                            {new Date(img.created_at).toLocaleString()}
+                          </p>
+                          <div className="flex gap-2 mt-2">
+                            <button
+                              type="button"
+                              onClick={() => startEditProgress(img)}
+                              className="text-blue-600 hover:underline text-sm"
+                            >
+                              Edit Description
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deleteProgressImage(img.id, img.image_url)}
+                              className="text-red-600 hover:underline text-sm"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div className="mt-4">
+            <label className="block font-medium mb-1 text-sm">Add New Progress Images</label>
+            <input
+              id="newProgressImages"
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleProgressImageChange}
+              className="w-full border p-2 rounded"
+            />
+            {newProgressImages.length > 0 && (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-3">
+                {newProgressImages.map((file, idx) => (
+                  <div key={idx} className="relative border rounded p-2 bg-gray-50">
+                    <img
+                      src={URL.createObjectURL(file)}
+                      className="w-full h-24 object-cover rounded"
+                      alt="New Progress"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeNewProgressImage(idx)}
+                      className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
         <button
           type="submit"
           disabled={saving}
           className="w-full bg-amber-600 text-white px-4 py-3 rounded font-semibold hover:bg-amber-700 disabled:opacity-50"
         >
-          {saving ? "Saving..." : "Save Changes"}
+          {saving ? "Saving..." : "Save All Changes"}
         </button>
 
         {message && (
-          <p className={`text-sm ${message.startsWith("Error") ? "text-red-500" : "text-green-600"}`}>
+          <p
+            className={`text-sm text-center ${
+              message.startsWith("Error") ? "text-red-500" : "text-green-600"
+            }`}
+          >
             {message}
           </p>
         )}
