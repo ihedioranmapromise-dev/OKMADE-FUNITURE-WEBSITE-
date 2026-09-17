@@ -23,10 +23,9 @@ export default function ManageTestimonials() {
   }, []);
 
   async function fetchTestimonials() {
-    // Fetch killed projects that have a client (testimonials)
     const { data, error } = await supabase
       .from("projects")
-      .select("id, token_string, client_name, work_description, created_at, is_standalone")
+      .select("id, token_string, client_name, work_description, city, created_at, is_standalone")
       .eq("status", "killed")
       .eq("is_standalone", false)
       .order("created_at", { ascending: false });
@@ -36,7 +35,6 @@ export default function ManageTestimonials() {
 
   async function deleteTestimonial(id, tokenString) {
     if (!confirm(`Delete testimonial for ${tokenString}? This action cannot be undone.`)) return;
-    // Delete request images from storage
     const { data: reqImages } = await supabase
       .from("project_request_images")
       .select("image_url")
@@ -49,66 +47,77 @@ export default function ManageTestimonials() {
     for (const img of allImages) {
       const path = img.image_url.split("/public/")[1];
       if (path) {
-        const bucket = path.startsWith("requests/") || path.startsWith("standalone")
-          ? "workspace-requests"
-          : "workspace-progress";
+        const bucket =
+          path.startsWith("requests/") || path.startsWith("standalone")
+            ? "workspace-requests"
+            : "workspace-progress";
         await supabase.storage.from(bucket).remove([path]);
       }
     }
-    // Delete child rows
     await supabase.from("project_request_images").delete().eq("project_id", id);
     await supabase.from("progress_images").delete().eq("project_id", id);
-    // Delete project
     const { error } = await supabase.from("projects").delete().eq("id", id);
     if (error) alert("Error deleting testimonial: " + error.message);
     else fetchTestimonials();
   }
 
   return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold mb-6">Manage Testimonials</h1>
+    <div className="p-8 max-w-6xl mx-auto">
+      <h1 className="text-2xl font-bold mb-6">Manage Portfolio (Killed Projects)</h1>
       {loading ? (
         <p>Loading...</p>
       ) : testimonials.length === 0 ? (
-        <p>No testimonials yet.</p>
+        <p>No killed projects yet.</p>
       ) : (
-        <table className="min-w-full bg-white border">
-          <thead>
-            <tr>
-              <th className="py-2 px-4 border">Token</th>
-              <th className="py-2 px-4 border">Client Name</th>
-              <th className="py-2 px-4 border">Description</th>
-              <th className="py-2 px-4 border">Created</th>
-              <th className="py-2 px-4 border">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {testimonials.map((t) => (
-              <tr key={t.id}>
-                <td className="py-2 px-4 border">{t.token_string}</td>
-                <td className="py-2 px-4 border">{t.client_name}</td>
-                <td className="py-2 px-4 border">{t.work_description?.slice(0, 50)}</td>
-                <td className="py-2 px-4 border">
-                  {new Date(t.created_at).toLocaleDateString()}
-                </td>
-                <td className="py-2 px-4 border">
-                  <button
-                    onClick={() => router.push(`/workspace/${t.token_string}`)}
-                    className="bg-blue-500 text-white px-3 py-1 rounded mr-2"
-                  >
-                    View
-                  </button>
-                  <button
-                    onClick={() => deleteTestimonial(t.id, t.token_string)}
-                    className="bg-red-500 text-white px-3 py-1 rounded"
-                  >
-                    Delete
-                  </button>
-                </td>
+        <div className="overflow-x-auto">
+          <table className="min-w-full bg-white border">
+            <thead>
+              <tr className="bg-gray-50">
+                <th className="py-2 px-4 border text-left">Token</th>
+                <th className="py-2 px-4 border text-left">Client Name</th>
+                <th className="py-2 px-4 border text-left">Description</th>
+                <th className="py-2 px-4 border text-left">City</th>
+                <th className="py-2 px-4 border text-left">Created</th>
+                <th className="py-2 px-4 border text-left">Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {testimonials.map((t) => (
+                <tr key={t.id} className="hover:bg-gray-50">
+                  <td className="py-2 px-4 border font-mono text-sm">{t.token_string}</td>
+                  <td className="py-2 px-4 border">{t.client_name}</td>
+                  <td className="py-2 px-4 border">{t.work_description?.slice(0, 40)}</td>
+                  <td className="py-2 px-4 border">{t.city || "—"}</td>
+                  <td className="py-2 px-4 border text-sm">
+                    {new Date(t.created_at).toLocaleDateString()}
+                  </td>
+                  <td className="py-2 px-4 border">
+                    <div className="flex gap-2 flex-wrap">
+                      <button
+                        onClick={() => router.push(`/workspace/${t.token_string}`)}
+                        className="bg-blue-500 text-white px-3 py-1 rounded text-xs hover:bg-blue-600"
+                      >
+                        View
+                      </button>
+                      <button
+                        onClick={() => router.push(`/admin/testimonials/edit/${t.id}`)}
+                        className="bg-amber-500 text-white px-3 py-1 rounded text-xs hover:bg-amber-600"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => deleteTestimonial(t.id, t.token_string)}
+                        className="bg-red-500 text-white px-3 py-1 rounded text-xs hover:bg-red-600"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
