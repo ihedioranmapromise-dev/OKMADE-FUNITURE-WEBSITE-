@@ -9,6 +9,45 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
+// SVG Icons
+const HeartIcon = ({ filled }) => (
+  <svg
+    className={`w-6 h-6 ${filled ? "text-red-500" : "text-gray-400"}`}
+    fill={filled ? "currentColor" : "none"}
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+    />
+  </svg>
+);
+
+const REACTIONS = [
+  { type: "like", emoji: "❤️" },
+  { type: "love", emoji: "😍" },
+  { type: "haha", emoji: "😂" },
+  { type: "wow", emoji: "😮" },
+  { type: "sad", emoji: "😢" },
+  { type: "pray", emoji: "🙏" },
+];
+
+const getViewerId = () => {
+  if (typeof window === "undefined") return "anonymous";
+  let id = localStorage.getItem("viewer_id");
+  if (!id) {
+    id =
+      crypto.randomUUID
+        ? crypto.randomUUID()
+        : Math.random().toString(36).substring(2, 15);
+    localStorage.setItem("viewer_id", id);
+  }
+  return id;
+};
+
 export default function WorkspacePage() {
   const { token } = useParams();
   const [data, setData] = useState(null);
@@ -18,10 +57,26 @@ export default function WorkspacePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Happy Clients like
+  const [liked, setLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(0);
+
+  // Reactions
+  const [reactions, setReactions] = useState([]);
+
+  // Comments
+  const [comments, setComments] = useState([]);
+  const [commentName, setCommentName] = useState("");
+  const [commentEmail, setCommentEmail] = useState("");
+  const [commentContent, setCommentContent] = useState("");
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const viewerId = getViewerId();
+
   useEffect(() => {
     if (!token) return;
     async function fetchWorkspace() {
-      // Try to find by token_string first (client projects)
       let projectData = null;
       const { data: byToken, error: tokenError } = await supabase
         .from("projects")
@@ -32,7 +87,6 @@ export default function WorkspacePage() {
       if (!tokenError && byToken) {
         projectData = byToken;
       } else {
-        // Try by UUID (standalone projects accessed by ID)
         const { data: byId, error: idError } = await supabase
           .from("projects")
           .select("*")
@@ -50,7 +104,7 @@ export default function WorkspacePage() {
       }
       setData(projectData);
 
-      // Get category name if exists
+      // Category
       if (projectData.category_id) {
         const { data: cat } = await supabase
           .from("categories")
@@ -76,15 +130,132 @@ export default function WorkspacePage() {
         .order("uploaded_at", { ascending: true });
       setProgressImages(progImages || []);
 
+      // If killed – fetch likes, reactions, comments
+      if (projectData.status === "killed") {
+        // Likes count
+        const { count: likes } = await supabase
+          .from("project_likes")
+          .select("*", { count: "exact", head: true })
+          .eq("project_id", projectData.id);
+        setLikeCount(likes || 0);
+
+        // Did current viewer like it?
+        const { data: myLike } = await supabase
+          .from("project_likes")
+          .select("id")
+          .eq("project_id", projectData.id)
+          .eq("user_id", viewerId)
+          .single();
+        setLiked(!!myLike);
+
+        // Reactions
+        const { data: reacts } = await supabase
+          .from("story_reactions")
+          .select("reaction_type, user_id")
+          .eq("story_id", projectData.id);
+        setReactions(reacts || []);
+
+        // Public comments (using public_comments table)
+        const { data: comms } = await supabase
+          .from("public_comments")
+          .select("*")
+          .eq("project_id", projectData.id)
+          .order("created_at", { ascending: true });
+        setComments(comms || []);
+      }
+
       setLoading(false);
     }
     fetchWorkspace();
   }, [token]);
 
+  // Toggle like (Happy Client)
+  const toggleLike = async () => {
+    if (!data || data.status !== "killed") return;
+    if (liked) {
+      await supabase
+        .from("project_likes")
+        .delete()
+        .eq("project_id", data.id)
+        .eq("user_id", viewerId);
+      setLiked(false);
+      setLikeCount((c) => Math.max(0, c - 1));
+    } else {
+      await supabase.from("project_likes").insert({
+        project_id: data.id,
+        user_id: viewerId,
+      });
+      setLiked(true);
+      setLikeCount((c) => c + 1);
+    }
+  };
+
+  // Toggle reaction
+  const toggleReaction = async (type) => {
+    if (!data || data.status !== "killed") return;
+    const existing = reactions.find(
+      (r) => r.reaction_type === type && r.user_id === viewerId
+    );
+    if (existing) {
+      await supabase
+        .from("story_reactions")
+        .delete()
+        .eq("story_id", data.id)
+        .eq("user_id", viewerId)
+        .eq("reaction_type", type);
+      setReactions(
+        reactions.filter(
+          (r) =>
+            !(r.reaction_type === type && r.user_id === viewerId)
+        )
+      );
+    } else {
+      await supabase.from("story_reactions").insert({
+        story_id: data.id,
+        user_id: viewerId,
+        reaction_type: type,
+      });
+      setReactions([...reactions, { reaction_type: type, user_id: viewerId }]);
+    }
+  };
+
+  // Post comment (or reply)
+  const postComment = async (parentId = null) => {
+    if (!commentContent.trim() || !commentName.trim()) {
+      alert("Please enter your name and comment.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const { data: inserted, error: insertError } = await supabase
+        .from("public_comments")
+        .insert({
+          project_id: data.id,
+          parent_id: parentId,
+          author_name: commentName,
+          author_email: commentEmail || null,
+          message: commentContent,
+        })
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+      setComments([...comments, inserted]);
+      setCommentContent("");
+      setReplyingTo(null);
+    } catch (err) {
+      alert("Error: " + err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   if (loading)
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-amber-900/90 via-amber-800/80 to-stone-800">
-        <div className="text-amber-200 text-xl animate-pulse">Loading project...</div>
+        <div className="text-amber-200 text-xl animate-pulse">
+          Loading project...
+        </div>
       </div>
     );
 
@@ -98,6 +269,10 @@ export default function WorkspacePage() {
     );
 
   const isActive = data.status === "active";
+  const reactionCounts = reactions.reduce((acc, r) => {
+    acc[r.reaction_type] = (acc[r.reaction_type] || 0) + 1;
+    return acc;
+  }, {});
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-amber-900/90 via-amber-800/80 to-stone-800 py-12">
@@ -119,11 +294,14 @@ export default function WorkspacePage() {
         </p>
 
         <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-2xl p-6 md:p-8 space-y-6 border border-white/20">
-          {/* Meta Info */}
-          <div className="flex flex-wrap gap-4 text-sm text-gray-600 border-b border-gray-200 pb-4">
+          {/* Meta */}
+          <div className="flex flex-wrap gap-4 text-sm text-gray-600 border-b border-gray-200 pb-4 items-center">
             {data.token_string && (
               <span>
-                Token: <span className="font-mono font-semibold">{data.token_string}</span>
+                Token:{" "}
+                <span className="font-mono font-semibold">
+                  {data.token_string}
+                </span>
               </span>
             )}
             {data.city && <span>📍 {data.city}</span>}
@@ -135,10 +313,37 @@ export default function WorkspacePage() {
             )}
           </div>
 
+          {/* Happy Client Like Button (killed only) */}
+          {!isActive && (
+            <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div>
+                <p className="text-base font-semibold text-gray-800">
+                  Are you happy with this project?
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Click the heart if this work impressed you.
+                </p>
+              </div>
+              <button
+                onClick={toggleLike}
+                className={`flex items-center gap-2 px-5 py-2 rounded-full font-medium transition border ${
+                  liked
+                    ? "bg-red-500 text-white border-red-500 hover:bg-red-600"
+                    : "bg-white text-red-500 border-red-300 hover:bg-red-50"
+                }`}
+              >
+                <HeartIcon filled={liked} />
+                <span>{likeCount} {likeCount === 1 ? "Like" : "Likes"}</span>
+              </button>
+            </div>
+          )}
+
           {/* Project Details */}
           {data.project_details && (
             <div>
-              <h2 className="text-xl font-semibold text-gray-800 mb-2">Project Details</h2>
+              <h2 className="text-xl font-semibold text-gray-800 mb-2">
+                Project Details
+              </h2>
               <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">
                 {data.project_details}
               </p>
@@ -147,7 +352,9 @@ export default function WorkspacePage() {
 
           {/* Request Images */}
           <div>
-            <h2 className="text-xl font-semibold text-gray-800 mb-2">Original Request</h2>
+            <h2 className="text-xl font-semibold text-gray-800 mb-2">
+              Original Request
+            </h2>
             {requestImages.length === 0 ? (
               <p className="text-gray-500">No request images uploaded.</p>
             ) : (
@@ -158,7 +365,7 @@ export default function WorkspacePage() {
                     className="bg-white rounded-lg overflow-hidden border border-gray-200 shadow-sm"
                   >
                     <img
-                      src={getOptimizedImage(img.image_url, 400)}
+                      src={getOptimizedImage(img.image_url, 350)}
                       loading="lazy"
                       className="w-full h-48 object-cover"
                       alt={`Request ${idx + 1}`}
@@ -189,7 +396,7 @@ export default function WorkspacePage() {
                     className="bg-white rounded-lg shadow overflow-hidden border border-gray-200"
                   >
                     <img
-                      src={getOptimizedImage(img.image_url, 500)}
+                      src={getOptimizedImage(img.image_url, 400)}
                       loading="lazy"
                       className="w-full h-64 object-cover"
                       alt="Progress"
@@ -202,16 +409,21 @@ export default function WorkspacePage() {
                           </p>
                         )}
                         {img.explanation && (
-                          <p className="text-xs text-gray-500 mt-1">{img.explanation}</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {img.explanation}
+                          </p>
                         )}
                         <p className="text-xs text-gray-400 mt-1">
-                          {new Date(img.uploaded_at).toLocaleDateString("en-GB", {
-                            day: "2-digit",
-                            month: "short",
-                            year: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
+                          {new Date(img.uploaded_at).toLocaleDateString(
+                            "en-GB",
+                            {
+                              day: "2-digit",
+                              month: "short",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            }
+                          )}
                         </p>
                       </div>
                     )}
@@ -222,7 +434,161 @@ export default function WorkspacePage() {
           </div>
 
           {data.client_name && !data.is_standalone && (
-            <p className="text-gray-700 font-medium">Client: {data.client_name}</p>
+            <p className="text-gray-700 font-medium">
+              Client: {data.client_name}
+            </p>
+          )}
+
+          {/* Reactions (killed only) */}
+          {!isActive && (
+            <div className="border-t border-gray-200 pt-6">
+              <h2 className="text-xl font-semibold text-gray-800 mb-3">
+                React to this Project
+              </h2>
+              <div className="flex flex-wrap gap-2">
+                {REACTIONS.map(({ type, emoji }) => {
+                  const count = reactionCounts[type] || 0;
+                  const hasReacted = reactions.some(
+                    (r) => r.reaction_type === type && r.user_id === viewerId
+                  );
+                  return (
+                    <button
+                      key={type}
+                      onClick={() => toggleReaction(type)}
+                      className={`px-3 py-2 rounded-full border text-sm transition ${
+                        hasReacted
+                          ? "bg-amber-100 border-amber-400"
+                          : "bg-gray-50 border-gray-200 hover:bg-gray-100"
+                      }`}
+                    >
+                      {emoji} {count > 0 && count}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Public Comments (killed only) */}
+          {!isActive && (
+            <div className="border-t border-gray-200 pt-6">
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">
+                Public Comments
+              </h2>
+
+              {/* Comment form */}
+              <div className="mb-6 space-y-2">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Your name *"
+                    value={commentName}
+                    onChange={(e) => setCommentName(e.target.value)}
+                    className="flex-1 p-2 border rounded-lg text-sm"
+                  />
+                  <input
+                    type="email"
+                    placeholder="Email (optional)"
+                    value={commentEmail}
+                    onChange={(e) => setCommentEmail(e.target.value)}
+                    className="flex-1 p-2 border rounded-lg text-sm"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Write a comment..."
+                    value={commentContent}
+                    onChange={(e) => setCommentContent(e.target.value)}
+                    className="flex-1 p-2 border rounded-lg text-sm"
+                  />
+                  <button
+                    onClick={() => postComment(null)}
+                    disabled={submitting}
+                    className="bg-amber-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-amber-700 transition disabled:opacity-50"
+                  >
+                    {submitting ? "..." : "Comment"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Comments list */}
+              {comments.length === 0 ? (
+                <p className="text-gray-500 text-sm">
+                  No comments yet. Be the first to leave one!
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {comments
+                    .filter((c) => !c.parent_id)
+                    .map((parent) => (
+                      <div key={parent.id} className="space-y-2">
+                        <div className="bg-gray-50 p-3 rounded-lg">
+                          <p className="text-sm font-semibold text-gray-800">
+                            {parent.author_name}
+                          </p>
+                          <p className="text-sm text-gray-700 mt-1">
+                            {parent.message}
+                          </p>
+                          <div className="flex items-center gap-3 mt-2">
+                            <p className="text-xs text-gray-400">
+                              {new Date(parent.created_at).toLocaleString()}
+                            </p>
+                            <button
+                              onClick={() => setReplyingTo(parent.id)}
+                              className="text-xs text-amber-600 hover:underline"
+                            >
+                              Reply
+                            </button>
+                          </div>
+
+                          {/* Reply input */}
+                          {replyingTo === parent.id && (
+                            <div className="mt-3 flex gap-2">
+                              <input
+                                type="text"
+                                placeholder="Write a reply..."
+                                value={commentContent}
+                                onChange={(e) =>
+                                  setCommentContent(e.target.value)
+                                }
+                                className="flex-1 p-2 border rounded-lg text-sm"
+                              />
+                              <button
+                                onClick={() => postComment(parent.id)}
+                                disabled={submitting}
+                                className="bg-gray-600 text-white px-3 py-2 rounded text-sm hover:bg-gray-700 disabled:opacity-50"
+                              >
+                                Reply
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Nested replies */}
+                        {comments
+                          .filter((c) => c.parent_id === parent.id)
+                          .map((reply) => (
+                            <div
+                              key={reply.id}
+                              className="bg-gray-50 p-3 rounded-lg ml-6 border-l-2 border-amber-200"
+                            >
+                              <p className="text-sm font-semibold text-gray-800">
+                                {reply.author_name}
+                              </p>
+                              <p className="text-sm text-gray-700 mt-1">
+                                {reply.message}
+                              </p>
+                              <p className="text-xs text-gray-400 mt-2">
+                                {new Date(reply.created_at).toLocaleString()}
+                              </p>
+                            </div>
+                          ))}
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
           )}
 
           {isActive ? (
