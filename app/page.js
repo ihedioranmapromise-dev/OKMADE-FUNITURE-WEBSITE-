@@ -24,7 +24,6 @@ function StarRating({ rating }) {
   );
 }
 
-// SVG Icons
 const MenuIcon = ({ isOpen }) => (
   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     {isOpen ? (
@@ -189,7 +188,6 @@ export default function Home() {
     }
 
     async function fetchTestimonials() {
-      // Use projects table; only non-standalone killed projects
       const { data: killedProjects } = await supabase
         .from("projects")
         .select("id, token_string, client_name, work_description, created_at, is_standalone")
@@ -261,11 +259,13 @@ export default function Home() {
     window.location.href = "/";
   };
 
-  // Navbar
   const Navbar = () => (
     <nav className="fixed top-0 left-0 w-full z-50 bg-white/90 backdrop-blur-md shadow-sm border-b border-amber-100/20">
       <div className="container mx-auto px-4 md:px-6 flex items-center justify-between h-16">
-        <a href="#home" className="text-2xl font-bold text-amber-800 font-['Dancing_Script',_cursive]">OKMADE</a>
+        <a href="#home" className="flex items-center gap-2 text-2xl font-bold text-amber-800 font-['Dancing_Script',_cursive]">
+          <img src="/favicon.ico" alt="OKMADE" className="w-8 h-8 object-contain" />
+          <span>OKMADE</span>
+        </a>
         <div className="hidden md:flex gap-8 text-gray-700 font-medium items-center">
           <a href="#home" className="hover:text-amber-700 transition">Home</a>
           <a href="#about" className="hover:text-amber-700 transition">About</a>
@@ -332,28 +332,28 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Token Workspace */}
-      <section id="token" className="bg-white/80 backdrop-blur-sm py-16 border-b border-amber-100/30">
+      {/* Token Workspace – mobile-friendly input */}
+      <section id="token" className="bg-white/80 backdrop-blur-sm py-12 md:py-16 border-b border-amber-100/30">
         <div className="container mx-auto px-6 text-center">
-          <h2 className="text-3xl font-bold text-amber-800 mb-4">Track Your Custom Work</h2>
-          <p className="text-gray-600 mb-6">Enter the private token you received to see your workspace and progress.</p>
-          <form onSubmit={handleTokenSubmit} className="max-w-md mx-auto flex gap-3">
+          <h2 className="text-2xl md:text-3xl font-bold text-amber-800 mb-3 md:mb-4">Track Your Custom Work</h2>
+          <p className="text-gray-600 mb-5 md:mb-6 text-sm md:text-base">Enter the private token you received to see your workspace and progress.</p>
+          <form onSubmit={handleTokenSubmit} className="max-w-md mx-auto flex flex-col sm:flex-row gap-2 sm:gap-3">
             <input
               type="text"
               value={token}
               onChange={(e) => setToken(e.target.value)}
               placeholder="Your token (e.g., ABC-123)"
-              className="flex-1 p-3 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="flex-1 p-3 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm md:text-base"
               required
             />
             <button
               type="submit"
-              className="bg-amber-600 text-white px-6 py-3 rounded-lg hover:bg-amber-700 transition"
+              className="bg-amber-600 text-white px-4 py-3 rounded-lg hover:bg-amber-700 transition whitespace-nowrap text-sm md:text-base"
             >
               Track Work →
             </button>
           </form>
-          <p className="text-sm text-gray-500 mt-4">Example tokens: ABC123, XYZ789 (check your email or SMS).</p>
+          <p className="text-xs md:text-sm text-gray-500 mt-3 md:mt-4">Example tokens: ABC123, XYZ789 (check your email or SMS).</p>
         </div>
       </section>
 
@@ -394,19 +394,11 @@ export default function Home() {
                       </div>
                       <div className="flex justify-between items-center mt-2">
                         <span className="text-xl font-bold text-green-700">₦{product.price}</span>
-                        <a
-                          href={getWhatsAppLink(product)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-green-500 hover:text-green-600"
-                        >
+                        <a href={getWhatsAppLink(product)} target="_blank" rel="noopener noreferrer" className="text-green-500 hover:text-green-600">
                           <WhatsAppIcon className="w-5 h-5" />
                         </a>
                       </div>
-                      <button
-                        onClick={() => router.push(`/product/${product.id}`)}
-                        className="mt-3 w-full bg-amber-600 hover:bg-amber-700 text-white font-medium py-2 rounded-full transition"
-                      >
+                      <button onClick={() => router.push(`/product/${product.id}`)} className="mt-3 w-full bg-amber-600 hover:bg-amber-700 text-white font-medium py-2 rounded-full transition">
                         View Details
                       </button>
                     </div>
@@ -463,27 +455,27 @@ export default function Home() {
         </div>
       </section>
 
-      {/* About Section */}
-      <section id="about" className="relative h-[600px] md:h-[700px] flex items-center overflow-hidden">
+      {/* About Section – Mobile Fix */}
+      <section id="about" className="relative min-h-[600px] md:min-h-[700px] flex items-center overflow-hidden py-16 md:py-24">
         <div className="absolute inset-0 transition-opacity duration-1000 bg-cover bg-center" style={{ backgroundImage: `url(${aboutImages[aboutImageIndex]})` }} />
         <div className="absolute inset-0 bg-black/40"></div>
-        <div className="relative z-10 container mx-auto px-6 text-center text-white">
-          <h2 className="text-4xl md:text-5xl font-bold mb-6 font-['Dancing_Script',_cursive] text-amber-200 drop-shadow-lg">Crafting Interiors, Building Dreams</h2>
-          <div className="max-w-3xl mx-auto bg-black/30 backdrop-blur-sm p-6 rounded-2xl border border-white/10">
-            <p className="text-lg md:text-xl leading-relaxed">
+        <div className="relative z-10 container mx-auto px-4 md:px-6 text-center text-white">
+          <h2 className="text-3xl md:text-5xl font-bold mb-6 font-['Dancing_Script',_cursive] text-amber-200 drop-shadow-lg">Crafting Interiors, Building Dreams</h2>
+          <div className="max-w-3xl mx-auto bg-black/30 backdrop-blur-sm p-5 md:p-6 rounded-2xl border border-white/10">
+            <p className="text-base md:text-xl leading-relaxed">
               At OKMADE, we don't just build furniture – we shape spaces, create atmospheres, and bring visions to life. From the warmth of a wooden dining table to the grandeur of a hotel lobby, our work is defined by precision, passion, and a deep respect for the craft of woodworking.
             </p>
-            <p className="mt-4 text-base md:text-lg leading-relaxed">
+            <p className="mt-4 text-sm md:text-lg leading-relaxed">
               We specialize in <span className="text-amber-200 font-semibold">full interior fit-outs</span>: hotels, churches, government houses, corporate offices, and luxury residences. Every project is a collaboration – we listen, design, build, and install with meticulous attention to detail. Our team handles everything from custom cabinetry and bespoke joinery to complete renovations and restoration of antique pieces.
             </p>
-            <p className="mt-4 text-base md:text-lg leading-relaxed">
+            <p className="mt-4 text-sm md:text-lg leading-relaxed">
               <span className="text-amber-200 font-semibold">Beyond new creations</span>, we breathe new life into old treasures with expert repairs and restoration. Whether it's a cherished family heirloom or a damaged commercial installation, we restore its beauty and functionality.
             </p>
             <p className="mt-4 text-sm italic text-amber-200/80">
               "Furniture that tells your story – built to last, designed to inspire."
             </p>
           </div>
-          <div className="mt-6 text-sm text-amber-200/70 italic">
+          <div className="mt-6 text-xs md:text-sm text-amber-200/70 italic">
             <span className="inline-block mx-2">✦</span>
             Featured: Hotels &bull; Churches &bull; Government Houses &bull; Corporate Offices &bull; Private Homes
             <span className="inline-block mx-2">✦</span>
@@ -497,34 +489,19 @@ export default function Home() {
           <h2 className="text-4xl font-bold text-center mb-10 font-['Dancing_Script',_cursive] text-amber-300">Get in Touch</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10 text-left">
             <div>
-              <p className="font-semibold text-amber-200 flex items-center gap-2">
-                <EmailIcon />
-                Email
-              </p>
+              <p className="font-semibold text-amber-200 flex items-center gap-2"><EmailIcon /> Email</p>
               <p className="text-gray-300">okeywoodwork@gmail.com</p>
-              <p className="font-semibold text-amber-200 mt-4 flex items-center gap-2">
-                <WhatsAppIcon className="w-5 h-5" />
-                WhatsApp
-              </p>
+              <p className="font-semibold text-amber-200 mt-4 flex items-center gap-2"><WhatsAppIcon className="w-5 h-5" /> WhatsApp</p>
               <p className="text-gray-300">09161919164</p>
-              <p className="font-semibold text-amber-200 mt-4 flex items-center gap-2">
-                <PhoneIcon />
-                Call
-              </p>
+              <p className="font-semibold text-amber-200 mt-4 flex items-center gap-2"><PhoneIcon /> Call</p>
               <p className="text-gray-300">09166300206</p>
               <p className="text-gray-300">07049264672</p>
             </div>
             <div>
-              <p className="font-semibold text-amber-200 flex items-center gap-2">
-                <LocationIcon />
-                Location
-              </p>
+              <p className="font-semibold text-amber-200 flex items-center gap-2"><LocationIcon /> Location</p>
               <p className="text-gray-300">Aba, Abia State, Nigeria</p>
               <p className="text-gray-300 text-sm italic">Working worldwide</p>
-              <p className="font-semibold text-amber-200 mt-4 flex items-center gap-2">
-                <ClockIcon />
-                Availability
-              </p>
+              <p className="font-semibold text-amber-200 mt-4 flex items-center gap-2"><ClockIcon /> Availability</p>
               <p className="text-gray-300">Always at your service</p>
             </div>
           </div>
@@ -550,10 +527,7 @@ export default function Home() {
                   </div>
                   {review.comment && <p className="text-gray-600 mt-2">{review.comment}</p>}
                   {review.showroom && (
-                    <button
-                      onClick={() => router.push(`/product/${review.showroom.id}`)}
-                      className="text-amber-600 text-sm hover:underline mt-2 inline-block"
-                    >
+                    <button onClick={() => router.push(`/product/${review.showroom.id}`)} className="text-amber-600 text-sm hover:underline mt-2 inline-block">
                       View product →
                     </button>
                   )}
@@ -583,7 +557,7 @@ export default function Home() {
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4 transition-opacity duration-700">
                   {catalogGroups[catalogGroupIndex]?.map((img, idx) => (
                     <div key={idx} className="aspect-square overflow-hidden rounded-lg shadow-md">
-                      <img src={img.image_url} className="w-full h-full object-cover transition hover:scale-105 duration-300" />
+                      <img src={img.image_url} loading="lazy" className="w-full h-full object-cover transition hover:scale-105 duration-300" />
                     </div>
                   ))}
                 </div>
@@ -611,9 +585,7 @@ export default function Home() {
       <footer className="bg-gray-900 text-white text-center py-6 text-sm">
         <p>© 2026 OKMADE Furniture. All rights reserved.</p>
         <p className="mt-2">
-          <a href="/admin/login" className="text-gray-400 hover:text-white transition">
-            Admin Login
-          </a>
+          <a href="/admin/login" className="text-gray-400 hover:text-white transition">Admin Login</a>
         </p>
       </footer>
     </div>
