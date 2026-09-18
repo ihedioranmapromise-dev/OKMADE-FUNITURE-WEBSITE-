@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { CloseIcon } from "@/lib/icons";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -136,9 +137,9 @@ export default function AddShowroomTab() {
                   <button
                     type="button"
                     onClick={() => removeImage(idx)}
-                    className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
+                    className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center hover:bg-red-700"
                   >
-                    ✕
+                    <CloseIcon className="w-3 h-3" />
                   </button>
                 </div>
               ))}
@@ -159,9 +160,7 @@ export default function AddShowroomTab() {
         </div>
 
         <div>
-          <label className="block font-medium mb-1 text-sm">
-            Price (₦)
-          </label>
+          <label className="block font-medium mb-1 text-sm">Price (₦)</label>
           <input
             type="number"
             step="0.01"
