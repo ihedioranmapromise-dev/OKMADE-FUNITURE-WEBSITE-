@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { useRouter } from "next/navigation";
+import { CloseIcon } from "@/lib/icons";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -26,7 +26,6 @@ export default function GenerateProjectTab() {
   const [isStandalone, setIsStandalone] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
-  const router = useRouter();
 
   useEffect(() => {
     fetchWorkers();
@@ -40,18 +39,15 @@ export default function GenerateProjectTab() {
           process.env.NEXT_PUBLIC_ADMIN_API_KEY || "okmade_super_secret_2026",
       },
     });
-    if (res.ok) {
-      const data = await res.json();
-      setWorkers(data || []);
-    }
+    if (res.ok) setWorkers((await res.json()) || []);
   }
 
   async function fetchCategories() {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("categories")
       .select("*")
       .order("name", { ascending: true });
-    if (!error) setCategories(data || []);
+    setCategories(data || []);
   }
 
   const handleWorkerChange = (e) => {
@@ -80,8 +76,10 @@ export default function GenerateProjectTab() {
       setMessage("You can upload up to 6 request images total.");
       return;
     }
-    const newImages = files.map((file) => ({ file, description: "" }));
-    setImageData([...imageData, ...newImages]);
+    setImageData([
+      ...imageData,
+      ...files.map((file) => ({ file, description: "" })),
+    ]);
   };
 
   const handleDescriptionChange = (index, value) => {
@@ -418,9 +416,9 @@ export default function GenerateProjectTab() {
                   <button
                     type="button"
                     onClick={() => removeImage(idx)}
-                    className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
+                    className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center hover:bg-red-700"
                   >
-                    ✕
+                    <CloseIcon className="w-3 h-3" />
                   </button>
                 </div>
               ))}
