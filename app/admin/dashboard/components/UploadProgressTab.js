@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { CloseIcon } from "@/lib/icons";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -293,9 +294,9 @@ export default function UploadProgressTab() {
                     <button
                       type="button"
                       onClick={() => removeImage(idx)}
-                      className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
+                      className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center hover:bg-red-700"
                     >
-                      ✕
+                      <CloseIcon className="w-3 h-3" />
                     </button>
                   </div>
                 ))}
