@@ -1,366 +1,455 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { useParams } from "next/navigation";
-import { EyeIcon, CommentIcon, LocationIcon, PhoneIcon } from "@/lib/icons";
+import { useRouter } from "next/navigation";
+import { CameraIcon, CloseIcon, UserIcon, EditIcon, TrashIcon } from "@/lib/icons";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-const UserIcon = () => (
-  <svg className="w-10 h-10" fill="currentColor" viewBox="0 0 24 24">
-    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+const BellIcon = ({ unread }) => (
+  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+    {unread > 0 && <circle cx="20" cy="4" r="3" fill="#ef4444" stroke="#fff" strokeWidth="2" />}
   </svg>
 );
 
-const SocialIcon = ({ href, children }) => {
-  if (!href) return null;
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-block w-10 h-10 p-2 bg-gray-200 rounded-full hover:bg-gray-300 transition"
-    >
-      {children}
-    </a>
-  );
-};
-
-const REACTIONS = [
-  { type: "like", emoji: "❤️" },
-  { type: "love", emoji: "😍" },
-  { type: "haha", emoji: "😂" },
-  { type: "wow", emoji: "😮" },
-  { type: "sad", emoji: "😢" },
-  { type: "pray", emoji: "🙏" },
+const FONT_OPTIONS = [
+  { label: "Sans-serif", value: "sans-serif" },
+  { label: "Serif", value: "serif" },
+  { label: "Cursive", value: "cursive" },
+  { label: "Monospace", value: "monospace" },
+  { label: "Dancing Script", value: "'Dancing Script', cursive" },
+  { label: "Playfair Display", value: "'Playfair Display', serif" },
+  { label: "Lobster", value: "'Lobster', cursive" },
+  { label: "Montserrat", value: "'Montserrat', sans-serif" },
+  { label: "Open Sans", value: "'Open Sans', sans-serif" },
+  { label: "Roboto", value: "'Roboto', sans-serif" },
+  { label: "Oswald", value: "'Oswald', sans-serif" },
+  { label: "Raleway", value: "'Raleway', sans-serif" },
+  { label: "Merriweather", value: "'Merriweather', serif" },
+  { label: "Pacifico", value: "'Pacifico', cursive" },
+  { label: "Cormorant Garamond", value: "'Cormorant Garamond', serif" },
 ];
 
-const getViewerId = () => {
-  if (typeof window === "undefined") return "anonymous";
-  let id = localStorage.getItem("viewer_id");
-  if (!id) {
-    id = crypto.randomUUID
-      ? crypto.randomUUID()
-      : Math.random().toString(36).substring(2, 15);
-    localStorage.setItem("viewer_id", id);
-  }
-  return id;
-};
-
-export default function ClientPortfolio() {
-  const { username } = useParams();
+export default function ClientDashboard() {
   const [client, setClient] = useState(null);
-  const [projects, setProjects] = useState([]);
-  const [clientPosts, setClientPosts] = useState([]);
+  const [activeProjects, setActiveProjects] = useState([]);
+  const [killedProjects, setKilledProjects] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [commentName, setCommentName] = useState("");
-  const [commentEmail, setCommentEmail] = useState("");
-  const [commentContent, setCommentContent] = useState("");
-  const [replyingTo, setReplyingTo] = useState(null);
-  const viewerId = getViewerId();
+  const [storyContent, setStoryContent] = useState("");
+  const [storyImage, setStoryImage] = useState(null);
+  const [storyImagePreview, setStoryImagePreview] = useState("");
+  const [storyFont, setStoryFont] = useState("'Dancing Script', cursive");
+  const [posting, setPosting] = useState(false);
+  const [postMessage, setPostMessage] = useState("");
+  const [myStories, setMyStories] = useState([]);
+  const [editingStory, setEditingStory] = useState(null);
+  const [editContent, setEditContent] = useState("");
+  const [editFont, setEditFont] = useState("");
+  const [editImage, setEditImage] = useState(null);
+  const [editImagePreview, setEditImagePreview] = useState("");
+  const [editImageRemoved, setEditImageRemoved] = useState(false);
+  const fileInputRef = useRef(null);
+  const editFileInputRef = useRef(null);
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const router = useRouter();
 
   useEffect(() => {
-    async function fetchData() {
-      // Fetch client via public API route
-      const res = await fetch(`/api/public/worker/${username}/full`);
-      if (!res.ok) {
-        setLoading(false);
-        return;
-      }
-      const data = await res.json();
-      setClient(data.client);
-      setProjects(data.projects || []);
-      setClientPosts(data.stories || []);
-      setLoading(false);
-    }
-    fetchData();
-  }, [username]);
-
-  // Track story views
-  useEffect(() => {
-    if (clientPosts.length === 0) return;
-    clientPosts.forEach(async (post) => {
-      const { data: existing } = await supabase
-        .from("story_views")
-        .select("id")
-        .eq("story_id", post.id)
-        .eq("viewer_id", viewerId)
-        .single();
-      if (!existing) {
-        await supabase.from("story_views").insert({
-          story_id: post.id,
-          viewer_id: viewerId,
-        });
-      }
-    });
-  }, [clientPosts]);
-
-  const handleReaction = async (storyId, type) => {
-    const { data: existing } = await supabase
-      .from("story_reactions")
-      .select("id")
-      .eq("story_id", storyId)
-      .eq("user_id", viewerId)
-      .eq("reaction_type", type)
-      .single();
-    if (existing) {
-      await supabase.from("story_reactions").delete().eq("id", existing.id);
-    } else {
-      await supabase.from("story_reactions").insert({
-        story_id: storyId,
-        user_id: viewerId,
-        reaction_type: type,
-      });
-    }
-    window.location.reload();
-  };
-
-  const handleComment = async (storyId, parentId = null) => {
-    if (!commentContent.trim() || !commentName.trim()) {
-      alert("Please enter your name and comment.");
+    const clientId = sessionStorage.getItem("clientId");
+    if (!clientId) {
+      router.push("/client/login");
       return;
     }
-    await supabase.from("story_comments").insert({
-      story_id: storyId,
-      parent_id: parentId,
-      author_name: commentName,
-      author_email: commentEmail || null,
-      content: commentContent,
+    fetchClientData(clientId);
+  }, []);
+
+  async function fetchClientData(clientId) {
+    setLoading(true);
+    const profileRes = await fetch("/api/client/profile", {
+      headers: { "x-client-id": clientId },
     });
-    setCommentContent("");
-    setCommentName("");
-    setCommentEmail("");
-    setReplyingTo(null);
-    window.location.reload();
+    if (!profileRes.ok) {
+      router.push("/client/login");
+      return;
+    }
+    const clientData = await profileRes.json();
+    setClient(clientData);
+
+    const { data: projects } = await supabase
+      .from("projects")
+      .select("id, token_string, status, created_at, work_description, city, duration_weeks, is_standalone")
+      .eq("client_id", clientId)
+      .order("created_at", { ascending: false });
+
+    setActiveProjects(projects?.filter((p) => p.status === "active") || []);
+    setKilledProjects(projects?.filter((p) => p.status === "killed") || []);
+
+    const { data: stories } = await supabase
+      .from("client_posts")
+      .select("*")
+      .eq("client_id", clientId)
+      .gt("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+      .order("created_at", { ascending: false });
+    setMyStories(stories || []);
+
+    const { data: notifs } = await supabase
+      .from("notifications")
+      .select("*")
+      .eq("client_id", clientId)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    setNotifications(notifs || []);
+    setUnreadCount(notifs?.filter((n) => !n.is_read).length || 0);
+    setLoading(false);
+  }
+
+  const markAsRead = async (id) => {
+    await supabase.from("notifications").update({ is_read: true }).eq("id", id);
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)));
+    setUnreadCount((prev) => Math.max(0, prev - 1));
   };
 
-  if (loading)
-    return <div className="p-8 text-center">Loading portfolio...</div>;
-  if (!client)
-    return <div className="p-8 text-center text-red-600">Client not found.</div>;
+  const handleNotificationClick = (notif) => {
+    markAsRead(notif.id);
+    if (notif.target_url) router.push(notif.target_url);
+    setShowNotifications(false);
+  };
+
+  const handleStoryImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setStoryImage(file);
+      setStoryImagePreview(URL.createObjectURL(file));
+    }
+  };
+
+  const cancelImage = () => {
+    setStoryImage(null);
+    setStoryImagePreview("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handlePostSubmit = async (e) => {
+    e.preventDefault();
+    const hasContent = storyContent.trim().length > 0;
+    const hasImage = !!storyImage;
+    if (!hasContent && !hasImage) {
+      setPostMessage("Please write something or upload an image.");
+      return;
+    }
+    setPosting(true);
+    setPostMessage("");
+    try {
+      const clientId = sessionStorage.getItem("clientId");
+      let imageUrl = null;
+      if (storyImage) {
+        const ext = storyImage.name.split(".").pop();
+        const fileName = `stories/${clientId}_${Date.now()}.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from("story-images")
+          .upload(fileName, storyImage);
+        if (uploadError) throw uploadError;
+        const { data: urlData } = supabase.storage
+          .from("story-images")
+          .getPublicUrl(fileName);
+        imageUrl = urlData.publicUrl;
+      }
+      const { error } = await supabase.from("client_posts").insert({
+        client_id: clientId,
+        content: storyContent.trim() || null,
+        image_url: imageUrl,
+        font_family: storyFont,
+      });
+      if (error) throw error;
+      setPostMessage("Story posted!");
+      setStoryContent("");
+      setStoryImage(null);
+      setStoryImagePreview("");
+      setStoryFont("'Dancing Script', cursive");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      const { data: stories } = await supabase
+        .from("client_posts")
+        .select("*")
+        .eq("client_id", clientId)
+        .gt("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+        .order("created_at", { ascending: false });
+      setMyStories(stories || []);
+    } catch (err) {
+      setPostMessage("Error: " + err.message);
+    } finally {
+      setPosting(false);
+    }
+  };
+
+  const startEdit = (story) => {
+    setEditingStory(story.id);
+    setEditContent(story.content || "");
+    setEditFont(story.font_family || "'Dancing Script', cursive");
+    setEditImage(null);
+    setEditImagePreview(story.image_url || "");
+    setEditImageRemoved(false);
+  };
+
+  const cancelEdit = () => {
+    setEditingStory(null);
+    setEditContent("");
+    setEditFont("");
+    setEditImage(null);
+    setEditImagePreview("");
+    setEditImageRemoved(false);
+    if (editFileInputRef.current) editFileInputRef.current.value = "";
+  };
+
+  const handleEditImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setEditImage(file);
+      setEditImagePreview(URL.createObjectURL(file));
+      setEditImageRemoved(false);
+    }
+  };
+
+  const removeEditImage = () => {
+    setEditImage(null);
+    setEditImagePreview("");
+    setEditImageRemoved(true);
+    if (editFileInputRef.current) editFileInputRef.current.value = "";
+  };
+
+  const saveEdit = async (storyId) => {
+    const hasContent = editContent.trim().length > 0;
+    const hasImage = !!editImage || (editImagePreview && !editImageRemoved);
+    if (!hasContent && !hasImage) {
+      alert("Story must have content or image.");
+      return;
+    }
+    try {
+      let imageUrl = null;
+      if (editImage) {
+        const ext = editImage.name.split(".").pop();
+        const fileName = `stories/${client.id}_${Date.now()}.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from("story-images")
+          .upload(fileName, editImage);
+        if (uploadError) throw uploadError;
+        const { data: urlData } = supabase.storage
+          .from("story-images")
+          .getPublicUrl(fileName);
+        imageUrl = urlData.publicUrl;
+      } else if (editImageRemoved) {
+        imageUrl = null;
+      } else {
+        const story = myStories.find((s) => s.id === storyId);
+        imageUrl = story?.image_url || null;
+      }
+      if (editImageRemoved) {
+        const story = myStories.find((s) => s.id === storyId);
+        if (story?.image_url) {
+          const path = story.image_url.split("/public/")[1];
+          if (path) {
+            await supabase.storage.from("story-images").remove([path]);
+          }
+        }
+      }
+      const { error } = await supabase
+        .from("client_posts")
+        .update({
+          content: editContent.trim() || null,
+          font_family: editFont,
+          image_url: imageUrl,
+        })
+        .eq("id", storyId);
+      if (error) throw error;
+      const { data: stories } = await supabase
+        .from("client_posts")
+        .select("*")
+        .eq("client_id", client.id)
+        .gt("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+        .order("created_at", { ascending: false });
+      setMyStories(stories || []);
+      cancelEdit();
+    } catch (err) {
+      alert("Error updating story: " + err.message);
+    }
+  };
+
+  const deleteStory = async (storyId) => {
+    if (!confirm("Delete this story? All likes, comments, and views will be removed.")) return;
+    try {
+      const story = myStories.find((s) => s.id === storyId);
+      if (story?.image_url) {
+        const path = story.image_url.split("/public/")[1];
+        if (path) {
+          await supabase.storage.from("story-images").remove([path]);
+        }
+      }
+      await supabase.from("client_posts").delete().eq("id", storyId);
+      const { data: stories } = await supabase
+        .from("client_posts")
+        .select("*")
+        .eq("client_id", client.id)
+        .gt("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+        .order("created_at", { ascending: false });
+      setMyStories(stories || []);
+    } catch (err) {
+      alert("Error deleting story: " + err.message);
+    }
+  };
+
+  const logout = () => {
+    sessionStorage.removeItem("clientId");
+    sessionStorage.removeItem("clientUsername");
+    router.push("/");
+  };
+
+  if (loading) return <div className="p-8 text-center">Loading...</div>;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-amber-50 to-white py-12 px-4">
+    <div className="min-h-screen bg-gradient-to-b from-amber-50 to-white py-8 px-4">
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-12">
-          {client.profile_pic ? (
-            <img
-              src={client.profile_pic}
-              className="w-24 h-24 rounded-full object-cover border-4 border-amber-200 mx-auto mb-4"
-              alt="Profile"
-            />
+        {/* Profile Card */}
+        <div className="bg-white rounded-xl shadow-md p-6 mb-8 flex items-center gap-6 border border-amber-100 flex-wrap">
+          {client?.profile_pic ? (
+            <img src={client.profile_pic} className="w-20 h-20 rounded-full object-cover border-4 border-amber-200" alt="Profile" />
           ) : (
-            <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center text-gray-400 mx-auto mb-4 border-4 border-amber-200">
+            <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center text-gray-400">
               <UserIcon />
             </div>
           )}
-          <h1 className="text-4xl font-bold text-amber-800 font-['Dancing_Script',_cursive]">
-            {client.display_name || client.username}
-          </h1>
-          <p className="text-sm text-gray-500">@{client.username}</p>
-          {client.bio && (
-            <p className="text-gray-600 mt-2 max-w-2xl mx-auto">{client.bio}</p>
-          )}
-          {client.work_address && (
-            <p className="text-gray-500 text-sm mt-1 flex items-center justify-center gap-1">
-              <LocationIcon className="w-4 h-4" /> {client.work_address}
-            </p>
-          )}
-          {client.calling_phone && (
-            <p className="text-gray-500 text-sm mt-1 flex items-center justify-center gap-1">
-              <PhoneIcon className="w-4 h-4" /> {client.calling_phone}
-            </p>
-          )}
-          {client.age && (
-            <p className="text-gray-500 text-sm mt-1">Age: {client.age}</p>
-          )}
-          {client.skill && (
-            <p className="text-gray-500 text-sm mt-1">Skill: {client.skill}</p>
-          )}
-
-          <div className="flex justify-center gap-3 mt-4">
-            {client.whatsapp_url && (
-              <SocialIcon href={client.whatsapp_url}>
-                <svg viewBox="0 0 24 24" fill="currentColor" className="text-green-600">
-                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-                </svg>
-              </SocialIcon>
-            )}
-            {client.facebook_url && (
-              <SocialIcon href={client.facebook_url}>
-                <svg viewBox="0 0 24 24" fill="currentColor" className="text-blue-700">
-                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                </svg>
-              </SocialIcon>
-            )}
-            {client.tiktok_url && (
-              <SocialIcon href={client.tiktok_url}>
-                <svg viewBox="0 0 24 24" fill="currentColor" className="text-black">
-                  <path d="M16.6 5.82s.51.5 0 0A4.278 4.278 0 0115.54 3h-3.09v12.4a2.592 2.592 0 01-2.59 2.5c-1.42 0-2.6-1.16-2.6-2.6 0-1.72 1.66-2.84 3.37-2.22V9.66c-3.45-.46-6.47 2.22-6.47 5.64 0 3.33 2.76 5.7 5.69 5.7 3.14 0 5.69-2.55 5.69-5.7V9.89a7.35 7.35 0 002.05.52V7.62c-.75-.05-1.35-.5-1.65-1.2z"/>
-                </svg>
-              </SocialIcon>
-            )}
-            {client.instagram_url && (
-              <SocialIcon href={client.instagram_url}>
-                <svg viewBox="0 0 24 24" fill="currentColor" className="text-pink-600">
-                  <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/>
-                </svg>
-              </SocialIcon>
-            )}
+          <div>
+            <h1 className="text-2xl font-bold text-amber-800">{client?.display_name || client?.username}</h1>
+            <p className="text-sm text-gray-500">@{client?.username}</p>
+            {client?.age && <p className="text-sm text-gray-600">Age: {client.age}</p>}
+            {client?.skill && <p className="text-sm text-gray-600">Skill: {client.skill}</p>}
+            <a href="/client/profile" className="text-sm text-amber-600 hover:underline">Edit Profile</a>
+          </div>
+          <div className="ml-auto flex items-center gap-4">
+            <button onClick={logout} className="text-red-600 hover:underline text-sm">Logout</button>
+            <div className="relative">
+              <button onClick={() => setShowNotifications(!showNotifications)} className="relative p-2 hover:bg-gray-100 rounded-full transition">
+                <BellIcon unread={unreadCount} />
+              </button>
+              {showNotifications && (
+                <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-100 z-10 max-h-96 overflow-y-auto">
+                  <div className="p-3 border-b font-semibold">Notifications</div>
+                  {notifications.length === 0 ? (
+                    <div className="p-4 text-center text-gray-500 text-sm">No notifications.</div>
+                  ) : (
+                    notifications.map((n) => (
+                      <div
+                        key={n.id}
+                        onClick={() => handleNotificationClick(n)}
+                        className={`p-3 border-b hover:bg-gray-50 cursor-pointer transition ${!n.is_read ? "bg-amber-50" : ""}`}
+                      >
+                        <p className="text-sm">{n.message}</p>
+                        <p className="text-xs text-gray-400 mt-1">{new Date(n.created_at).toLocaleString()}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Stories */}
-        <div className="mb-12">
-          <h2 className="text-2xl font-semibold text-amber-800 mb-4">Stories</h2>
-          {clientPosts.length === 0 ? (
-            <p className="text-gray-500">No recent stories.</p>
+        {/* Post a Story */}
+        <div className="bg-white rounded-xl shadow-md p-6 mb-8 border border-amber-100">
+          <h3 className="text-lg font-semibold text-gray-800 mb-3">Post a Story</h3>
+          <form onSubmit={handlePostSubmit} className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Choose Font</label>
+              <select value={storyFont} onChange={(e) => setStoryFont(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-amber-500" style={{ fontFamily: storyFont }}>
+                {FONT_OPTIONS.map((font) => (
+                  <option key={font.value} value={font.value} style={{ fontFamily: font.value }}>{font.label}</option>
+                ))}
+              </select>
+            </div>
+            <textarea value={storyContent} onChange={(e) => setStoryContent(e.target.value)} placeholder="What's on your mind? Share a project update, a thought, or a story..." rows="3" className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500" style={{ fontFamily: storyFont }} />
+            <div className="flex items-center gap-4">
+              <label className="cursor-pointer bg-gray-100 hover:bg-gray-200 p-2 rounded-lg transition flex items-center gap-2">
+                <CameraIcon className="w-5 h-5" />
+                <span>Add Image</span>
+                <input type="file" accept="image/*" onChange={handleStoryImageChange} className="hidden" ref={fileInputRef} />
+              </label>
+              {storyImagePreview && (
+                <div className="relative inline-block">
+                  <img src={storyImagePreview} className="h-16 w-16 object-cover rounded-lg border" alt="Preview" />
+                  <button type="button" onClick={cancelImage} className="absolute -top-1 -right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-700">
+                    <CloseIcon className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+            </div>
+            <button type="submit" disabled={posting} className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg transition disabled:opacity-50">
+              {posting ? "Posting..." : "Post Update"}
+            </button>
+            {postMessage && <p className={`text-sm ${postMessage.includes("Error") ? "text-red-500" : "text-green-600"}`}>{postMessage}</p>}
+          </form>
+        </div>
+
+        {/* My Stories */}
+        <div className="bg-white rounded-xl shadow-md p-6 mb-8 border border-amber-100">
+          <h3 className="text-lg font-semibold text-gray-800 mb-3">My Stories</h3>
+          {myStories.length === 0 ? (
+            <p className="text-gray-500">You haven't posted any stories yet.</p>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {clientPosts.map((post) => {
-                const reactionCounts = post.reactions.reduce((acc, r) => {
-                  acc[r.reaction_type] = (acc[r.reaction_type] || 0) + 1;
-                  return acc;
-                }, {});
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {myStories.map((story) => {
+                const isEditing = editingStory === story.id;
                 return (
-                  <div
-                    key={post.id}
-                    className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-100"
-                  >
-                    {post.image_url && (
-                      <img
-                        src={post.image_url}
-                        className="w-full h-64 object-cover"
-                        alt="Story"
-                      />
-                    )}
-                    <div className="p-4">
-                      {post.content && (
-                        <p
-                          className="text-gray-800"
-                          style={{
-                            fontFamily: post.font_family || "sans-serif",
-                          }}
-                        >
-                          {post.content}
-                        </p>
-                      )}
-                      <div className="flex items-center gap-4 mt-3 text-sm text-gray-500">
-                        <span className="flex items-center gap-1">
-                          <EyeIcon className="w-4 h-4" />{" "}
-                          {post.viewCount || 0} views
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <CommentIcon className="w-4 h-4" />{" "}
-                          {post.comments?.length || 0}
-                        </span>
+                  <div key={story.id} className="border rounded-lg p-3 bg-gray-50 relative">
+                    {isEditing ? (
+                      <div className="space-y-2">
+                        <select value={editFont} onChange={(e) => setEditFont(e.target.value)} className="w-full p-1 border rounded text-sm" style={{ fontFamily: editFont }}>
+                          {FONT_OPTIONS.map((font) => (
+                            <option key={font.value} value={font.value} style={{ fontFamily: font.value }}>{font.label}</option>
+                          ))}
+                        </select>
+                        <textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} rows="2" className="w-full p-1 border rounded text-sm" style={{ fontFamily: editFont }} />
+                        <div className="flex items-center gap-2">
+                          <label className="cursor-pointer bg-gray-200 p-1 rounded text-xs">
+                            Change Image
+                            <input type="file" accept="image/*" onChange={handleEditImageChange} className="hidden" ref={editFileInputRef} />
+                          </label>
+                          {editImagePreview && (
+                            <div className="relative inline-block">
+                              <img src={editImagePreview} className="h-12 w-12 object-cover rounded border" alt="Edit" />
+                              <button type="button" onClick={removeEditImage} className="absolute -top-1 -right-1 bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-xs">
+                                <CloseIcon className="w-2.5 h-2.5" />
+                              </button>
+                            </div>
+                          )}
+                          {!editImagePreview && story.image_url && !editImageRemoved && (
+                            <span className="text-xs text-gray-500">Current image (click Change Image to replace)</span>
+                          )}
+                        </div>
+                        <div className="flex gap-2 mt-2">
+                          <button onClick={() => saveEdit(story.id)} className="bg-green-600 text-white px-3 py-1 rounded text-sm">Save</button>
+                          <button onClick={cancelEdit} className="bg-gray-300 px-3 py-1 rounded text-sm">Cancel</button>
+                        </div>
                       </div>
-
-                      <div className="flex flex-wrap gap-1 mt-3">
-                        {REACTIONS.map(({ type, emoji }) => {
-                          const count = reactionCounts[type] || 0;
-                          const hasReacted = post.reactions.some(
-                            (r) =>
-                              r.reaction_type === type &&
-                              r.user_id === viewerId
-                          );
-                          return (
-                            <button
-                              key={type}
-                              onClick={() => handleReaction(post.id, type)}
-                              className={`px-2 py-1 rounded-full border text-sm transition ${
-                                hasReacted
-                                  ? "bg-amber-100 border-amber-300"
-                                  : "bg-gray-50 border-gray-200 hover:bg-gray-100"
-                              }`}
-                            >
-                              {emoji} {count > 0 && count}
+                    ) : (
+                      <>
+                        {story.image_url && <img src={story.image_url} className="w-full h-32 object-cover rounded mb-2" alt="Story" />}
+                        {story.content && <p className="text-sm" style={{ fontFamily: story.font_family || "sans-serif" }}>{story.content}</p>}
+                        <div className="flex justify-between items-center mt-2">
+                          <span className="text-xs text-gray-400">{new Date(story.created_at).toLocaleString()}</span>
+                          <div className="flex gap-2">
+                            <button onClick={() => startEdit(story)} className="text-blue-600 hover:underline text-xs flex items-center gap-1">
+                              <EditIcon className="w-3 h-3" /> Edit
                             </button>
-                          );
-                        })}
-                      </div>
-
-                      <div className="mt-4 border-t pt-4">
-                        <div className="flex gap-2 mb-2">
-                          <input
-                            type="text"
-                            placeholder="Your name"
-                            value={commentName}
-                            onChange={(e) => setCommentName(e.target.value)}
-                            className="flex-1 p-1 border rounded text-sm"
-                          />
-                          <input
-                            type="email"
-                            placeholder="Email (optional)"
-                            value={commentEmail}
-                            onChange={(e) => setCommentEmail(e.target.value)}
-                            className="flex-1 p-1 border rounded text-sm"
-                          />
-                        </div>
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            placeholder="Write a comment..."
-                            value={commentContent}
-                            onChange={(e) => setCommentContent(e.target.value)}
-                            className="flex-1 p-2 border rounded-lg text-sm"
-                          />
-                          <button
-                            onClick={() => handleComment(post.id)}
-                            className="bg-amber-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-amber-700 transition"
-                          >
-                            Comment
-                          </button>
-                        </div>
-                        {post.comments && post.comments.length > 0 && (
-                          <div className="mt-3 space-y-2">
-                            {post.comments.map((c) => (
-                              <div
-                                key={c.id}
-                                className="bg-gray-50 p-2 rounded-lg text-sm"
-                              >
-                                <p>
-                                  <strong>{c.author_name}</strong> {c.content}
-                                </p>
-                                {!c.parent_id && (
-                                  <button
-                                    onClick={() => setReplyingTo(c.id)}
-                                    className="text-xs text-amber-600 hover:underline mt-1"
-                                  >
-                                    Reply
-                                  </button>
-                                )}
-                                {replyingTo === c.id && (
-                                  <div className="flex gap-2 mt-2">
-                                    <input
-                                      type="text"
-                                      placeholder="Reply..."
-                                      value={commentContent}
-                                      onChange={(e) =>
-                                        setCommentContent(e.target.value)
-                                      }
-                                      className="flex-1 p-1 border rounded text-sm"
-                                    />
-                                    <button
-                                      onClick={() =>
-                                        handleComment(post.id, c.id)
-                                      }
-                                      className="bg-gray-600 text-white px-3 py-1 rounded text-sm"
-                                    >
-                                      Reply
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            ))}
+                            <button onClick={() => deleteStory(story.id)} className="text-red-600 hover:underline text-xs flex items-center gap-1">
+                              <TrashIcon className="w-3 h-3" /> Delete
+                            </button>
                           </div>
-                        )}
-                      </div>
-                    </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 );
               })}
@@ -368,40 +457,47 @@ export default function ClientPortfolio() {
           )}
         </div>
 
-        {/* Completed Projects */}
-        {projects.length === 0 ? (
-          <p className="text-center text-gray-500">
-            No completed projects yet.
-          </p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {projects.map((project) => (
-              <a
-                key={project.id}
-                href={`/workspace/${project.token_string || project.id}`}
-                className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition block"
-              >
-                <div className="p-4">
-                  <p className="font-semibold text-gray-800">
-                    {project.work_description || "Completed Project"}
-                  </p>
-                  {project.city && (
-                    <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                      <LocationIcon className="w-3 h-3" /> {project.city}
-                    </p>
-                  )}
-                  <p className="text-sm text-gray-500 mt-1">
-                    Completed:{" "}
-                    {new Date(project.created_at).toLocaleDateString()}
-                  </p>
-                  <p className="text-amber-600 text-sm mt-2">
-                    View Project →
-                  </p>
+        {/* Active Projects */}
+        <div className="mb-12">
+          <h2 className="text-2xl font-semibold mb-4">Active Projects</h2>
+          {activeProjects.length === 0 ? (
+            <p className="text-gray-500">No active projects right now.</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {activeProjects.map((project) => (
+                <div key={project.id} className="bg-white rounded-xl shadow-md p-6 border border-amber-100">
+                  <p className="text-sm text-gray-500">Token: <span className="font-mono">{project.token_string || "Standalone"}</span></p>
+                  <p className="text-gray-700 mt-2 font-medium">{project.work_description || "Project in progress"}</p>
+                  {project.city && <p className="text-xs text-gray-500 mt-1">📍 {project.city}</p>}
+                  {project.duration_weeks && <p className="text-xs text-gray-500">⏱️ {project.duration_weeks} weeks</p>}
+                  <div className="flex gap-3 mt-4 flex-wrap">
+                    <a href={`/workspace/${project.token_string || project.id}`} className="text-amber-600 hover:underline text-sm">View Workspace</a>
+                    <a href={`/client/upload/${project.id}`} className="bg-amber-600 text-white px-4 py-1 rounded-full text-sm hover:bg-amber-700 transition">Share Update</a>
+                  </div>
                 </div>
-              </a>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Completed Projects */}
+        <div>
+          <h2 className="text-2xl font-semibold mb-4">Completed Projects</h2>
+          {killedProjects.length === 0 ? (
+            <p className="text-gray-500">No completed projects yet.</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {killedProjects.map((project) => (
+                <div key={project.id} className="bg-white rounded-xl shadow-md p-6 border border-gray-200">
+                  <p className="text-sm text-gray-500">Token: <span className="font-mono">{project.token_string || "Standalone"}</span> <span className="ml-2 text-green-600">✅ Completed</span></p>
+                  <p className="text-gray-700 mt-2 font-medium">{project.work_description || "Completed project"}</p>
+                  {project.city && <p className="text-xs text-gray-500 mt-1">📍 {project.city}</p>}
+                  <a href={`/workspace/${project.token_string || project.id}`} className="text-amber-600 hover:underline text-sm mt-2 inline-block">View Public Page</a>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
