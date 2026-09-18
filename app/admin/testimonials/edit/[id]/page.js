@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter, useParams } from "next/navigation";
+import { CloseIcon } from "@/lib/icons";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -63,7 +64,6 @@ export default function EditKilledProject() {
     setCategoryId(data.category_id || "");
     setPrice(data.price || "");
 
-    // Fetch request images
     const { data: reqImgs } = await supabase
       .from("project_request_images")
       .select("id, image_url, display_order, description")
@@ -71,7 +71,6 @@ export default function EditKilledProject() {
       .order("display_order");
     setRequestImages(reqImgs || []);
 
-    // Fetch progress images
     const { data: progImgs } = await supabase
       .from("progress_images")
       .select("id, image_url, description, explanation, created_at")
@@ -82,7 +81,6 @@ export default function EditKilledProject() {
     setLoading(false);
   }
 
-  // ----- Request Images -----
   const handleRequestImageChange = (e) => {
     const files = Array.from(e.target.files);
     if (requestImages.length + newRequestImages.length + files.length > 6) {
@@ -101,14 +99,11 @@ export default function EditKilledProject() {
   const deleteRequestImage = async (imageId, imageUrl) => {
     if (!confirm("Delete this request image?")) return;
     const path = imageUrl.split("/public/")[1];
-    if (path) {
-      await supabase.storage.from("workspace-requests").remove([path]);
-    }
+    if (path) await supabase.storage.from("workspace-requests").remove([path]);
     await supabase.from("project_request_images").delete().eq("id", imageId);
     setRequestImages(requestImages.filter((img) => img.id !== imageId));
   };
 
-  // ----- Progress Images -----
   const handleProgressImageChange = (e) => {
     const files = Array.from(e.target.files);
     setNewProgressImages([...newProgressImages, ...files]);
@@ -123,9 +118,7 @@ export default function EditKilledProject() {
   const deleteProgressImage = async (imageId, imageUrl) => {
     if (!confirm("Delete this progress image?")) return;
     const path = imageUrl.split("/public/")[1];
-    if (path) {
-      await supabase.storage.from("workspace-progress").remove([path]);
-    }
+    if (path) await supabase.storage.from("workspace-progress").remove([path]);
     await supabase.from("progress_images").delete().eq("id", imageId);
     setProgressImages(progressImages.filter((img) => img.id !== imageId));
   };
@@ -163,7 +156,6 @@ export default function EditKilledProject() {
     }
   };
 
-  // ----- Submit -----
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
@@ -182,7 +174,6 @@ export default function EditKilledProject() {
         .eq("id", id);
       if (updateError) throw updateError;
 
-      // Upload new request images
       for (let i = 0; i < newRequestImages.length; i++) {
         const file = newRequestImages[i];
         const ext = file.name.split(".").pop();
@@ -201,7 +192,6 @@ export default function EditKilledProject() {
         });
       }
 
-      // Upload new progress images
       for (let i = 0; i < newProgressImages.length; i++) {
         const file = newProgressImages[i];
         const ext = file.name.split(".").pop();
@@ -241,7 +231,6 @@ export default function EditKilledProject() {
     <div className="p-8 max-w-3xl mx-auto">
       <h1 className="text-2xl font-bold mb-6">Edit Killed Project</h1>
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Project details */}
         <div className="bg-white p-5 rounded-xl shadow-sm border">
           <h2 className="font-semibold text-lg mb-4">Project Details</h2>
           <div className="space-y-4">
@@ -312,7 +301,6 @@ export default function EditKilledProject() {
           </div>
         </div>
 
-        {/* Request Images */}
         <div className="bg-white p-5 rounded-xl shadow-sm border">
           <h2 className="font-semibold text-lg mb-1">Request / Concept Images</h2>
           <p className="text-sm text-gray-500 mb-4">
@@ -332,9 +320,9 @@ export default function EditKilledProject() {
                   <button
                     type="button"
                     onClick={() => deleteRequestImage(img.id, img.image_url)}
-                    className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-700"
+                    className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center hover:bg-red-700"
                   >
-                    ✕
+                    <CloseIcon className="w-3 h-3" />
                   </button>
                   {img.description && (
                     <p className="text-xs text-gray-500 mt-1 truncate">
@@ -366,9 +354,9 @@ export default function EditKilledProject() {
                   <button
                     type="button"
                     onClick={() => removeNewRequestImage(idx)}
-                    className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
+                    className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center hover:bg-red-700"
                   >
-                    ✕
+                    <CloseIcon className="w-3 h-3" />
                   </button>
                 </div>
               ))}
@@ -376,7 +364,6 @@ export default function EditKilledProject() {
           )}
         </div>
 
-        {/* Progress Images */}
         <div className="bg-white p-5 rounded-xl shadow-sm border">
           <h2 className="font-semibold text-lg mb-1">Progress / Final Images</h2>
           <p className="text-sm text-gray-500 mb-4">
@@ -493,9 +480,9 @@ export default function EditKilledProject() {
                     <button
                       type="button"
                       onClick={() => removeNewProgressImage(idx)}
-                      className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
+                      className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center hover:bg-red-700"
                     >
-                      ✕
+                      <CloseIcon className="w-3 h-3" />
                     </button>
                   </div>
                 ))}
@@ -524,7 +511,7 @@ export default function EditKilledProject() {
       </form>
 
       <div className="mt-6 text-center">
-        <a href="/admin/testimonials" className="text-amber-600 hover:underline text-sm">
+        <a href="/admin/dashboard?tab=portfolio" className="text-amber-600 hover:underline text-sm">
           ← Back to Manage Portfolio
         </a>
       </div>
