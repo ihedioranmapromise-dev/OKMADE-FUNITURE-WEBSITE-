@@ -1,28 +1,29 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { createSupabaseBrowser } from "@/lib/supabase-browser";
 
 export default function ClientSignup() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [username, setUsername] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState("");
   const [email, setEmail] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [skill, setSkill] = useState("");
   const [workAddress, setWorkAddress] = useState("");
   const [age, setAge] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const router = useRouter();
+  const supabase = createSupabaseBrowser();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!firstName || !lastName || !username || !phoneNumber || !password || !confirmPassword) {
-      setMessage("Please fill in all required fields.");
+    if (!firstName || !lastName || !username || !email || !phoneNumber || !password) {
+      setMessage("Please fill all required fields.");
       return;
     }
     if (password !== confirmPassword) {
@@ -36,25 +37,37 @@ export default function ClientSignup() {
     setLoading(true);
     setMessage("");
     try {
-      const res = await fetch("/api/client/signup", {
+      // 1. Create auth user
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${process.env.NEXT_PUBLIC_BASE_URL}/client/verify-email`,
+        },
+      });
+      if (authError) throw authError;
+      if (!authData.user) throw new Error("Signup failed");
+
+      // 2. Create client profile row
+      const res = await fetch("/api/client/create-profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          firstName,
-          lastName,
+          auth_id: authData.user.id,
+          first_name: firstName,
+          last_name: lastName,
           username,
-          phoneNumber,
           email,
+          phone_number: phoneNumber,
           skill,
-          workAddress,
+          work_address: workAddress,
           age,
-          password,
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setMessage("Account created! Please log in.");
-      setTimeout(() => router.push("/client/login"), 2000);
+      if (!res.ok) throw new Error(data.error || "Failed to create profile");
+
+      router.push(`/client/verify-email?email=${encodeURIComponent(email)}`);
     } catch (err) {
       setMessage("Error: " + err.message);
     } finally {
@@ -65,7 +78,9 @@ export default function ClientSignup() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-amber-50 to-white py-12 px-4">
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
-        <h1 className="text-3xl font-bold text-center text-amber-800 mb-6 font-['Dancing_Script',_cursive]">Join OKMADE</h1>
+        <h1 className="text-3xl font-bold text-center text-amber-800 mb-6 font-['Dancing_Script',_cursive]">
+          Join OKMADE
+        </h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -82,42 +97,37 @@ export default function ClientSignup() {
             <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-amber-500" required />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Phone Number *</label>
+            <label className="block text-sm font-medium text-gray-700">Email *</label>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-amber-500" required />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Phone *</label>
             <input type="text" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="e.g., 2348123456789" className="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-amber-500" required />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Email (optional)</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-amber-500" />
+            <label className="block text-sm font-medium text-gray-700">Skill / Trade</label>
+            <input type="text" value={skill} onChange={(e) => setSkill(e.target.value)} placeholder="Carpenter, Painter, Upholsterer..." className="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-amber-500" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Skill / Trade (optional)</label>
-            <input type="text" value={skill} onChange={(e) => setSkill(e.target.value)} placeholder="e.g., Carpenter, Painter, Upholsterer" className="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-amber-500" />
+            <label className="block text-sm font-medium text-gray-700">Work Address</label>
+            <input type="text" value={workAddress} onChange={(e) => setWorkAddress(e.target.value)} className="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-amber-500" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Work Address (optional)</label>
-            <input type="text" value={workAddress} onChange={(e) => setWorkAddress(e.target.value)} placeholder="Your workshop or business address" className="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-amber-500" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Age (optional)</label>
+            <label className="block text-sm font-medium text-gray-700">Age</label>
             <input type="number" value={age} onChange={(e) => setAge(e.target.value)} className="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-amber-500" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Create Password *</label>
+            <label className="block text-sm font-medium text-gray-700">Password *</label>
             <div className="relative">
-              <input type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} className="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-amber-500 pr-10" required />
-              <button type="button" className="absolute inset-y-0 right-3 flex items-center text-gray-500 hover:text-gray-700" onClick={() => setShowPassword(!showPassword)}>
-                {showPassword ? "👁️" : "👁️‍🗨️"}
+              <input type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} className="w-full mt-1 p-3 border rounded-lg pr-10" required />
+              <button type="button" className="absolute inset-y-0 right-3 flex items-center text-gray-500" onClick={() => setShowPassword(!showPassword)}>
+                {showPassword ? "Hide" : "Show"}
               </button>
             </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">Confirm Password *</label>
-            <div className="relative">
-              <input type={showConfirmPassword ? "text" : "password"} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-amber-500 pr-10" required />
-              <button type="button" className="absolute inset-y-0 right-3 flex items-center text-gray-500 hover:text-gray-700" onClick={() => setShowConfirmPassword(!showConfirmPassword)}>
-                {showConfirmPassword ? "👁️" : "👁️‍🗨️"}
-              </button>
-            </div>
+            <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full mt-1 p-3 border rounded-lg" required />
           </div>
           <button type="submit" disabled={loading} className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 rounded-lg transition disabled:opacity-50">
             {loading ? "Creating..." : "Create Account"}
