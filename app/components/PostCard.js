@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { getOptimizedImage, thumbImage } from "@/lib/utils";
 
 const REACTIONS = [
   { type: "like", emoji: "👍", label: "Like" },
@@ -37,7 +37,6 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
   const [commentText, setCommentText] = useState("");
   const [replyingTo, setReplyingTo] = useState(null);
   const [loadingComments, setLoadingComments] = useState(false);
-  const router = useRouter();
 
   const author = post.clients || {};
   const fullName = author.display_name || author.username || "User";
@@ -60,7 +59,6 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
     });
     if (!res.ok) return;
 
-    // Optimistic update
     const filtered = localReactions.filter((r) => r.user_id !== currentUserId);
     if (myReaction?.reaction_type === type) {
       setLocalReactions(filtered);
@@ -116,7 +114,7 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
       {/* Header */}
       <div className="p-4 flex items-start gap-3">
         {author.profile_pic ? (
-          <img src={author.profile_pic} className="w-10 h-10 rounded-full object-cover" alt="" />
+          <img src={thumbImage(author.profile_pic)} loading="lazy" className="w-10 h-10 rounded-full object-cover" alt="" />
         ) : (
           <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
             {fullName.charAt(0).toUpperCase()}
@@ -160,7 +158,7 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
           {post.image_urls.map((url, i) => (
             <img
               key={i}
-              src={url}
+              src={getOptimizedImage(url, post.image_urls.length === 1 ? 700 : 400, 70)}
               loading="lazy"
               className={`w-full object-cover ${post.image_urls.length === 1 ? "max-h-96" : "h-48"}`}
               alt=""
@@ -187,11 +185,7 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
 
       {/* Action Bar */}
       <div className="border-t border-gray-100 px-2 flex">
-        <div
-          className="relative flex-1"
-          onMouseEnter={() => setShowReactions(true)}
-          onMouseLeave={() => setShowReactions(false)}
-        >
+        <div className="relative flex-1" onMouseEnter={() => setShowReactions(true)} onMouseLeave={() => setShowReactions(false)}>
           <button
             onClick={() => handleReact("like")}
             className={`w-full py-2 text-sm font-medium flex items-center justify-center gap-2 transition ${
@@ -249,10 +243,7 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
                     <span className="text-xs text-gray-400">{timeAgo(c.created_at)}</span>
                   </div>
                   <p className="text-sm text-gray-700">{c.content}</p>
-                  <button
-                    onClick={() => setReplyingTo(c.id)}
-                    className="text-xs text-amber-600 hover:underline mt-1"
-                  >
+                  <button onClick={() => setReplyingTo(c.id)} className="text-xs text-amber-600 hover:underline mt-1">
                     Reply
                   </button>
                 </div>
@@ -278,10 +269,7 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
                       placeholder="Write a reply..."
                       className="flex-1 p-2 border rounded-lg text-sm"
                     />
-                    <button
-                      onClick={() => handleComment(c.id)}
-                      className="bg-amber-600 text-white px-3 py-2 rounded-lg text-sm"
-                    >
+                    <button onClick={() => handleComment(c.id)} className="bg-amber-600 text-white px-3 py-2 rounded-lg text-sm">
                       Reply
                     </button>
                   </div>
@@ -290,39 +278,17 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
             );
           })}
 
-          {/* New comment form */}
           {!replyingTo && (
             <div className="space-y-2 pt-2 border-t border-gray-200">
               {!currentUserId && (
                 <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Your name *"
-                    value={commentName}
-                    onChange={(e) => setCommentName(e.target.value)}
-                    className="flex-1 p-2 border rounded-lg text-sm"
-                  />
-                  <input
-                    type="email"
-                    placeholder="Email (optional)"
-                    value={commentEmail}
-                    onChange={(e) => setCommentEmail(e.target.value)}
-                    className="flex-1 p-2 border rounded-lg text-sm"
-                  />
+                  <input type="text" placeholder="Your name *" value={commentName} onChange={(e) => setCommentName(e.target.value)} className="flex-1 p-2 border rounded-lg text-sm" />
+                  <input type="email" placeholder="Email (optional)" value={commentEmail} onChange={(e) => setCommentEmail(e.target.value)} className="flex-1 p-2 border rounded-lg text-sm" />
                 </div>
               )}
               <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Write a comment..."
-                  value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
-                  className="flex-1 p-2 border rounded-lg text-sm"
-                />
-                <button
-                  onClick={() => handleComment(null)}
-                  className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
-                >
+                <input type="text" placeholder="Write a comment..." value={commentText} onChange={(e) => setCommentText(e.target.value)} className="flex-1 p-2 border rounded-lg text-sm" />
+                <button onClick={() => handleComment(null)} className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
                   Comment
                 </button>
               </div>
