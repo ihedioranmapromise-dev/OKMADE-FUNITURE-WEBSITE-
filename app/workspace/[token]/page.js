@@ -17,12 +17,12 @@ const HeartIcon = ({ filled }) => (
 );
 
 const REACTIONS = [
-  { type: "like", emoji: "❤️" },
-  { type: "love", emoji: "😍" },
+  { type: "like", emoji: "👍" },
+  { type: "love", emoji: "❤️" },
   { type: "haha", emoji: "😂" },
   { type: "wow", emoji: "😮" },
   { type: "sad", emoji: "😢" },
-  { type: "pray", emoji: "🙏" },
+  { type: "angry", emoji: "😡" },
 ];
 
 const getViewerId = () => {
