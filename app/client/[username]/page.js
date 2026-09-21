@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { LocationIcon, PhoneIcon } from "@/lib/icons";
 import PostCard from "@/app/components/PostCard";
 
@@ -27,6 +27,7 @@ const SocialIcon = ({ href, children }) => {
 
 export default function ClientPortfolio() {
   const { username } = useParams();
+  const router = useRouter();
   const [client, setClient] = useState(null);
   const [projects, setProjects] = useState([]);
   const [feed, setFeed] = useState([]);
@@ -94,6 +95,23 @@ export default function ClientPortfolio() {
     setBusy(false);
   };
 
+  const handleMessage = async () => {
+    if (!status?.isLoggedIn) { window.location.href = "/client/login"; return; }
+    setBusy(true);
+    const res = await fetch("/api/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username }),
+    });
+    const data = await res.json();
+    setBusy(false);
+    if (data.thread_id) {
+      router.push(`/client/messages/${data.thread_id}`);
+    } else if (data.error) {
+      alert(data.error);
+    }
+  };
+
   if (loading) return <div className="p-8 text-center">Loading portfolio...</div>;
   if (!client) return <div className="p-8 text-center text-red-600">Client not found.</div>;
 
@@ -149,6 +167,11 @@ export default function ClientPortfolio() {
                     <button onClick={handleFollow} disabled={busy} className={`px-4 py-2 rounded-lg text-sm font-semibold transition border ${st.isFollowing ? "bg-gray-100 border-gray-200 text-gray-700 hover:bg-gray-200" : "bg-white border-amber-500 text-amber-700 hover:bg-amber-50"}`}>
                       {st.isFollowing ? "Following" : "+ Follow"}
                     </button>
+                    {st.friendStatus === "friends" && (
+                      <button onClick={handleMessage} disabled={busy} className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold transition disabled:opacity-50">
+                        💬 Message
+                      </button>
+                    )}
                   </>
                 )}
                 {st.isSelf && (
