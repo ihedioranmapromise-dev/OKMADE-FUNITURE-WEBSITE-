@@ -46,6 +46,11 @@ const IconLogout = ({ className = "w-5 h-5" }) => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
   </svg>
 );
+const IconBell = ({ className = "w-6 h-6" }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+  </svg>
+);
 
 export default function ClientDashboard() {
   const [client, setClient] = useState(null);
@@ -56,6 +61,8 @@ export default function ClientDashboard() {
   const [feed, setFeed] = useState([]);
   const [loadingFeed, setLoadingFeed] = useState(true);
   const [friendRequests, setFriendRequests] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [showBell, setShowBell] = useState(false);
   const router = useRouter();
   const supabase = createSupabaseBrowser();
 
@@ -82,6 +89,7 @@ export default function ClientDashboard() {
     if (client) {
       loadFeed();
       loadFriendRequests();
+      loadNotifications();
     }
   }, [client]);
 
@@ -97,6 +105,14 @@ export default function ClientDashboard() {
     if (res.ok) setFriendRequests(await res.json());
   }
 
+  async function loadNotifications() {
+    const res = await fetch("/api/notifications");
+    if (res.ok) {
+      const data = await res.json();
+      setNotifications(Array.isArray(data) ? data : []);
+    }
+  }
+
   const respondToRequest = async (requestId, action) => {
     await fetch("/api/friends", {
       method: "POST",
@@ -104,6 +120,17 @@ export default function ClientDashboard() {
       body: JSON.stringify({ action, request_id: requestId }),
     });
     setFriendRequests(friendRequests.filter((r) => r.id !== requestId));
+  };
+
+  const handleNotificationClick = async (n) => {
+    await fetch("/api/notifications", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: n.id }),
+    });
+    setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, is_read: true } : x)));
+    setShowBell(false);
+    if (n.target_url) router.push(n.target_url);
   };
 
   const handleLogout = async () => {
@@ -129,6 +156,7 @@ export default function ClientDashboard() {
   }
 
   const fullName = client.display_name || `${client.first_name || ""} ${client.last_name || ""}`.trim() || client.username;
+  const unreadCount = notifications.filter((n) => !n.is_read).length;
 
   return (
     <div className="min-h-screen bg-gray-100 pb-20">
@@ -139,40 +167,84 @@ export default function ClientDashboard() {
             <img src="/favicon.ico" alt="OKMADE" className="w-8 h-8 object-contain" />
             <span className="text-xl font-bold text-amber-800 font-['Dancing_Script',_cursive]">OKMADE</span>
           </a>
-          <div className="relative">
-            <button onClick={() => setMenuOpen(!menuOpen)} className="p-2 hover:bg-gray-100 rounded-full transition">
-              <IconMenu />
-            </button>
-            {menuOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-                <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden">
-                  <a href="/" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 text-gray-700 text-sm">
-                    <IconHome /> Home
-                  </a>
-                  <button onClick={() => { setActiveTab("projects"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-amber-50 text-gray-700 text-sm text-left">
-                    <IconFolder /> Active Projects
-                  </button>
-                  <button onClick={() => { setActiveTab("projects"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-amber-50 text-gray-700 text-sm text-left">
-                    <IconCheck /> Completed
-                  </button>
-                  <div className="border-t" />
-                  <a href={`/client/${client.username}`} onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 text-gray-700 text-sm">
-                    <IconUser /> View Public Profile
-                  </a>
-                  <a href="/client/profile" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 text-gray-700 text-sm">
-                    <IconEdit /> Edit Profile
-                  </a>
-                  <a href="/client/settings" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 text-gray-700 text-sm">
-                    Settings
-                  </a>
-                  <div className="border-t" />
-                  <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-red-50 text-red-600 text-sm text-left">
-                    <IconLogout /> Logout
-                  </button>
-                </div>
-              </>
-            )}
+
+          <div className="flex items-center gap-1">
+            {/* Bell */}
+            <div className="relative">
+              <button onClick={() => setShowBell(!showBell)} className="relative p-2 hover:bg-gray-100 rounded-full transition">
+                <IconBell />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 bg-red-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </button>
+              {showBell && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowBell(false)} />
+                  <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-100 z-50 max-h-96 overflow-y-auto">
+                    <div className="p-3 border-b flex justify-between items-center">
+                      <span className="font-semibold text-sm">Notifications</span>
+                      <a href="/client/notifications" className="text-xs text-amber-600 hover:underline">View all</a>
+                    </div>
+                    {notifications.length === 0 ? (
+                      <div className="p-4 text-center text-gray-500 text-sm">No notifications.</div>
+                    ) : (
+                      notifications.slice(0, 8).map((n) => (
+                        <button
+                          key={n.id}
+                          onClick={() => handleNotificationClick(n)}
+                          className={`w-full text-left block p-3 border-b hover:bg-gray-50 ${!n.is_read ? "bg-amber-50" : ""}`}
+                        >
+                          <p className="text-sm">{n.message}</p>
+                          <p className="text-xs text-gray-400 mt-1">{new Date(n.created_at).toLocaleString()}</p>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Menu */}
+            <div className="relative">
+              <button onClick={() => setMenuOpen(!menuOpen)} className="p-2 hover:bg-gray-100 rounded-full transition">
+                <IconMenu />
+              </button>
+              {menuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden">
+                    <a href="/" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 text-gray-700 text-sm">
+                      <IconHome /> Home
+                    </a>
+                    <button onClick={() => { setActiveTab("projects"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-amber-50 text-gray-700 text-sm text-left">
+                      <IconFolder /> Active Projects
+                    </button>
+                    <button onClick={() => { setActiveTab("projects"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-amber-50 text-gray-700 text-sm text-left">
+                      <IconCheck /> Completed
+                    </button>
+                    <div className="border-t" />
+                    <a href="/client/notifications" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 text-gray-700 text-sm">
+                      <IconBell /> Notifications
+                    </a>
+                    <a href={`/client/${client.username}`} onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 text-gray-700 text-sm">
+                      <IconUser /> View Public Profile
+                    </a>
+                    <a href="/client/profile" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 text-gray-700 text-sm">
+                      <IconEdit /> Edit Profile
+                    </a>
+                    <a href="/client/settings" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 text-gray-700 text-sm">
+                      Settings
+                    </a>
+                    <div className="border-t" />
+                    <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-red-50 text-red-600 text-sm text-left">
+                      <IconLogout /> Logout
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </nav>
