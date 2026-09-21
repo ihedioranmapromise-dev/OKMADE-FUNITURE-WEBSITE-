@@ -55,6 +55,7 @@ export default function ClientDashboard() {
   const [error, setError] = useState("");
   const [feed, setFeed] = useState([]);
   const [loadingFeed, setLoadingFeed] = useState(true);
+  const [friendRequests, setFriendRequests] = useState([]);
   const router = useRouter();
   const supabase = createSupabaseBrowser();
 
@@ -78,7 +79,10 @@ export default function ClientDashboard() {
   }, [router]);
 
   useEffect(() => {
-    if (client) loadFeed();
+    if (client) {
+      loadFeed();
+      loadFriendRequests();
+    }
   }, [client]);
 
   async function loadFeed() {
@@ -87,6 +91,20 @@ export default function ClientDashboard() {
     if (res.ok) setFeed(await res.json());
     setLoadingFeed(false);
   }
+
+  async function loadFriendRequests() {
+    const res = await fetch("/api/friends");
+    if (res.ok) setFriendRequests(await res.json());
+  }
+
+  const respondToRequest = async (requestId, action) => {
+    await fetch("/api/friends", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, request_id: requestId }),
+    });
+    setFriendRequests(friendRequests.filter((r) => r.id !== requestId));
+  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -256,6 +274,39 @@ export default function ClientDashboard() {
         </aside>
 
         <main className="lg:col-span-2 space-y-4">
+          {/* Friend Requests */}
+          {friendRequests.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-amber-200 p-4">
+              <h3 className="font-semibold text-gray-800 mb-3">
+                Friend Requests ({friendRequests.length})
+              </h3>
+              <div className="space-y-3">
+                {friendRequests.map((req) => (
+                  <div key={req.id} className="flex items-center gap-3">
+                    {req.clients?.profile_pic ? (
+                      <img src={req.clients.profile_pic} className="w-10 h-10 rounded-full object-cover" alt="" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold">
+                        {(req.clients?.display_name || "?").charAt(0)}
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      <a href={`/client/${req.clients?.username}`} className="text-sm font-semibold text-gray-800 hover:underline">
+                        {req.clients?.display_name || req.clients?.username}
+                      </a>
+                    </div>
+                    <button onClick={() => respondToRequest(req.id, "accept")} className="bg-amber-600 text-white px-3 py-1.5 rounded-lg text-sm">
+                      Accept
+                    </button>
+                    <button onClick={() => respondToRequest(req.id, "decline")} className="bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-sm">
+                      Decline
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {activeTab === "posts" && (
             <>
               <PostComposer onPosted={loadFeed} />
