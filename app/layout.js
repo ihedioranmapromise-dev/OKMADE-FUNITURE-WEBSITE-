@@ -1,14 +1,30 @@
 import "./globals.css";
 import Script from "next/script";
+import SplashScreen from "./components/SplashScreen";
+import InstallBanner from "./components/InstallBanner";
+import PWASetup from "./components/PWASetup";
 
 export const metadata = {
   title: "OKMADE Furniture",
   description: "Custom furniture and showroom – handcrafted pieces for modern living.",
+  manifest: "/manifest.json",
   icons: {
     icon: "/favicon.ico",
     shortcut: "/favicon.ico",
-    apple: "/apple-icon.png",
+    apple: "/icon-192.png",
   },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "OKMADE",
+  },
+};
+
+export const viewport = {
+  themeColor: "#D97706",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({ children }) {
@@ -32,7 +48,12 @@ export default function RootLayout({ children }) {
           rel="stylesheet"
         />
       </head>
-      <body className="bg-gray-50">{children}</body>
+      <body className="bg-gray-50">
+        <PWASetup />
+        <SplashScreen />
+        <InstallBanner />
+        {children}
+      </body>
     </html>
   );
 }
