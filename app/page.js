@@ -332,7 +332,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Token Workspace – mobile-friendly input */}
+      {/* Token Workspace */}
       <section id="token" className="bg-white/80 backdrop-blur-sm py-12 md:py-16 border-b border-amber-100/30">
         <div className="container mx-auto px-6 text-center">
           <h2 className="text-2xl md:text-3xl font-bold text-amber-800 mb-3 md:mb-4">Track Your Custom Work</h2>
@@ -357,6 +357,46 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Locked Feed Teaser */}
+      <section className="bg-gradient-to-br from-amber-900 via-amber-800 to-stone-800 text-white py-16">
+        <div className="container mx-auto px-6 max-w-4xl text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-white/10 backdrop-blur-sm rounded-full mb-4 border border-white/20">
+            <svg className="w-8 h-8 text-amber-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </div>
+          <h2 className="text-3xl md:text-4xl font-bold mb-4 font-['Dancing_Script',_cursive] text-amber-200">
+            Live Updates
+          </h2>
+          <p className="text-lg text-amber-100/80 max-w-2xl mx-auto mb-8">
+            Sign up to follow OKMADE and our artisans. See every project as it happens —
+            reactions, comments, and behind-the-scenes progress.
+          </p>
+
+          <div className="relative max-w-2xl mx-auto mb-8">
+            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/10 space-y-4 blur-sm select-none">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-amber-400/30"></div>
+                <div className="flex-1 text-left">
+                  <div className="h-3 w-32 bg-white/20 rounded"></div>
+                  <div className="h-2 w-20 bg-white/10 rounded mt-2"></div>
+                </div>
+              </div>
+              <div className="h-3 w-3/4 bg-white/20 rounded"></div>
+              <div className="h-3 w-1/2 bg-white/20 rounded"></div>
+              <div className="h-40 w-full bg-white/10 rounded"></div>
+            </div>
+          </div>
+
+          <a href="/client/signup" className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold px-8 py-3 rounded-full transition shadow-lg hover:shadow-xl">
+            Sign Up Free
+          </a>
+          <p className="text-xs text-amber-200/60 mt-4">
+            Already have an account? <a href="/client/login" className="text-amber-200 hover:underline">Log in</a>
+          </p>
+        </div>
+      </section>
+
       {/* Featured Pieces */}
       <section id="featured" className="relative py-16 overflow-hidden bg-gradient-to-br from-amber-50/80 via-orange-50/60 to-white border-y border-amber-100/20">
         <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full bg-amber-200/20 blur-3xl pointer-events-none"></div>
@@ -373,7 +413,7 @@ export default function Home() {
                   <div key={product.id} className="group bg-white rounded-xl shadow-md hover:shadow-2xl transition-all duration-300 overflow-hidden border border-amber-100/30 hover:-translate-y-1">
                     <div className="relative h-64 overflow-hidden bg-amber-50">
                       {product.images.length > 0 ? (
-                        <img src={product.images[idx]?.image_url} alt={product.description} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+                        <img src={product.images[idx]?.image_url} loading="lazy" alt={product.description} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-gray-300">No image</div>
                       )}
@@ -431,7 +471,7 @@ export default function Home() {
                 <a key={t.id} href={`/workspace/${t.token_string}`} className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition group">
                   <div className="h-64 overflow-hidden relative">
                     {t.image ? (
-                      <img src={getOptimizedImage(t.image, 500)} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" alt="Project" />
+                      <img src={getOptimizedImage(t.image, 500)} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition duration-500" alt="Project" />
                     ) : (
                       <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">No image</div>
                     )}
@@ -455,7 +495,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* About Section – Mobile Fix */}
+      {/* About Section */}
       <section id="about" className="relative min-h-[600px] md:min-h-[700px] flex items-center overflow-hidden py-16 md:py-24">
         <div className="absolute inset-0 transition-opacity duration-1000 bg-cover bg-center" style={{ backgroundImage: `url(${aboutImages[aboutImageIndex]})` }} />
         <div className="absolute inset-0 bg-black/40"></div>
