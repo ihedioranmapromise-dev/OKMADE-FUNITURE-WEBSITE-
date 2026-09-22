@@ -100,7 +100,9 @@ export default function GenerateProjectTab() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!workDescription || imageData.length === 0) {
-      setMessage("Please enter a work description and select at least one image.");
+      setMessage(
+        "Please enter a work description and select at least one image."
+      );
       return;
     }
     if (!isStandalone && (!clientName || !clientContact)) {
@@ -159,6 +161,7 @@ export default function GenerateProjectTab() {
         });
       }
 
+      // Notify assigned worker
       if (
         !isStandalone &&
         selectedWorkerId !== "manual" &&
@@ -170,6 +173,54 @@ export default function GenerateProjectTab() {
           message: `A new project "${tokenString}" has been assigned to you.`,
           target_url: `/workspace/${tokenString}`,
         });
+      }
+
+      // Auto-post + broadcast for new project
+      try {
+        const { data: okmade } = await supabase
+          .from("clients")
+          .select("id")
+          .eq("is_okmade", true)
+          .single();
+
+        if (okmade) {
+          const { data: firstImg } = await supabase
+            .from("project_request_images")
+            .select("image_url")
+            .eq("project_id", project.id)
+            .limit(1);
+
+          const cityPart = city ? ` in ${city}` : "";
+          await supabase.from("posts").insert([
+            {
+              author_id: okmade.id,
+              content: `🛠️ New project started: ${workDescription}${cityPart}`,
+              image_urls: (firstImg || []).map((i) => i.image_url),
+              is_auto: true,
+              auto_source: "project_created",
+              auto_source_id: project.id,
+            },
+          ]);
+
+          await fetch("/api/admin/broadcast", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-admin-key":
+                process.env.NEXT_PUBLIC_ADMIN_API_KEY ||
+                "okmade_super_secret_2026",
+            },
+            body: JSON.stringify({
+              title: `New project started: ${workDescription}`,
+              body: `We just started a new project: <strong>${workDescription}</strong>${cityPart}. Follow along to see the progress.`,
+              ctaUrl: tokenString
+                ? `${process.env.NEXT_PUBLIC_BASE_URL}/workspace/${tokenString}`
+                : `${process.env.NEXT_PUBLIC_BASE_URL}/portfolio`,
+            }),
+          });
+        }
+      } catch (broadcastErr) {
+        console.error("Broadcast failed:", broadcastErr);
       }
 
       if (isStandalone) {
@@ -211,7 +262,9 @@ export default function GenerateProjectTab() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6 text-gray-800">Generate Project</h1>
+      <h1 className="text-2xl font-bold mb-6 text-gray-800">
+        Generate Project
+      </h1>
 
       <div className="mb-6 bg-amber-50 p-4 rounded-lg border border-amber-200">
         <label className="flex items-center gap-2 cursor-pointer">
