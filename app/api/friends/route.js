@@ -1,12 +1,22 @@
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { createClient } from "@supabase/supabase-js";
+import { sendEmail } from "@/lib/send-email";
+import { friendRequestEmail, friendAcceptedEmail } from "@/lib/email-templates";
 
 const admin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// POST: send request or accept/decline
+async function userWantsEmails(clientId) {
+  const { data } = await admin
+    .from("user_settings")
+    .select("email_notifications")
+    .eq("user_id", clientId)
+    .single();
+  return data?.email_notifications ?? true;
+}
+
 export async function POST(request) {
   try {
     const supabase = await createSupabaseServer();
@@ -14,11 +24,19 @@ export async function POST(request) {
     if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
 
     const { action, target_username, request_id } = await request.json();
-    const { data: me } = await admin.from("clients").select("id, username").eq("auth_id", user.id).single();
+    const { data: me } = await admin
+      .from("clients")
+      .select("id, username, display_name, email")
+      .eq("auth_id", user.id)
+      .single();
     if (!me) return new Response(JSON.stringify({ error: "Profile not found" }), { status: 404 });
 
     if (action === "send") {
-      const { data: target } = await admin.from("clients").select("id").eq("username", target_username).single();
+      const { data: target } = await admin
+        .from("clients")
+        .select("id, username, display_name, email")
+        .eq("username", target_username)
+        .single();
       if (!target) return new Response(JSON.stringify({ error: "User not found" }), { status: 404 });
       if (target.id === me.id) return new Response(JSON.stringify({ error: "Cannot add yourself" }), { status: 400 });
 
@@ -26,7 +44,7 @@ export async function POST(request) {
         .from("friends")
         .select("id")
         .or(`and(user_a.eq.${me.id},user_b.eq.${target.id}),and(user_a.eq.${target.id},user_b.eq.${me.id})`)
-        .single();
+        .maybeSingle();
       if (alreadyFriends) return new Response(JSON.stringify({ error: "Already friends" }), { status: 400 });
 
       const { data: existingReq } = await admin
@@ -35,7 +53,7 @@ export async function POST(request) {
         .eq("sender_id", me.id)
         .eq("receiver_id", target.id)
         .eq("status", "pending")
-        .single();
+        .maybeSingle();
       if (existingReq) return new Response(JSON.stringify({ status: "pending" }), { status: 200 });
 
       await admin.from("friend_requests").insert([{
@@ -43,6 +61,16 @@ export async function POST(request) {
         receiver_id: target.id,
         status: "pending",
       }]);
+
+      // Email the receiver
+      if (target.email && (await userWantsEmails(target.id))) {
+        const tpl = friendRequestEmail({
+          senderName: me.display_name || me.username,
+          senderUsername: me.username,
+        });
+        await sendEmail({ to: target.email, subject: tpl.subject, html: tpl.html });
+      }
+
       return new Response(JSON.stringify({ status: "pending" }), { status: 201 });
     }
 
@@ -60,6 +88,21 @@ export async function POST(request) {
         await admin.from("friend_requests").update({ status: "accepted" }).eq("id", request_id);
         const [a, b] = [req.sender_id, req.receiver_id].sort();
         await admin.from("friends").insert([{ user_a: a, user_b: b }]);
+
+        // Email the original sender
+        const { data: sender } = await admin
+          .from("clients")
+          .select("email")
+          .eq("id", req.sender_id)
+          .single();
+        if (sender?.email && (await userWantsEmails(req.sender_id))) {
+          const tpl = friendAcceptedEmail({
+            accepterName: me.display_name || me.username,
+            accepterUsername: me.username,
+          });
+          await sendEmail({ to: sender.email, subject: tpl.subject, html: tpl.html });
+        }
+
         return new Response(JSON.stringify({ status: "friends" }), { status: 200 });
       } else {
         await admin.from("friend_requests").update({ status: "declined" }).eq("id", request_id);
@@ -73,7 +116,6 @@ export async function POST(request) {
   }
 }
 
-// GET: list friend requests or status with a specific user
 export async function GET(request) {
   try {
     const supabase = await createSupabaseServer();
@@ -81,7 +123,7 @@ export async function GET(request) {
     if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
 
     const { searchParams } = new URL(request.url);
-    const statusWith = searchParams.get("with"); // username
+    const statusWith = searchParams.get("with");
 
     const { data: me } = await admin.from("clients").select("id").eq("auth_id", user.id).single();
     if (!me) return new Response(JSON.stringify({ error: "Not found" }), { status: 404 });
@@ -94,7 +136,7 @@ export async function GET(request) {
         .from("friends")
         .select("id")
         .or(`and(user_a.eq.${me.id},user_b.eq.${target.id}),and(user_a.eq.${target.id},user_b.eq.${me.id})`)
-        .single();
+        .maybeSingle();
       if (friends) return new Response(JSON.stringify({ status: "friends" }), { status: 200 });
 
       const { data: req } = await admin
@@ -102,7 +144,7 @@ export async function GET(request) {
         .select("id, sender_id, receiver_id, status")
         .or(`and(sender_id.eq.${me.id},receiver_id.eq.${target.id}),and(sender_id.eq.${target.id},receiver_id.eq.${me.id})`)
         .eq("status", "pending")
-        .single();
+        .maybeSingle();
 
       if (req) {
         const direction = req.sender_id === me.id ? "sent" : "received";
@@ -112,7 +154,6 @@ export async function GET(request) {
       return new Response(JSON.stringify({ status: "none" }), { status: 200 });
     }
 
-    // List incoming pending requests
     const { data: incoming } = await admin
       .from("friend_requests")
       .select("id, created_at, clients:sender_id (username, display_name, profile_pic)")
