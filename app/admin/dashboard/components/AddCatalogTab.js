@@ -77,7 +77,54 @@ export default function AddCatalogTab() {
         });
       }
 
-      setMessage(`Catalog "${title}" added with ${imageData.length} image(s).`);
+      // Auto-post + broadcast
+      try {
+        const { data: okmade } = await supabase
+          .from("clients")
+          .select("id")
+          .eq("is_okmade", true)
+          .single();
+
+        if (okmade) {
+          const { data: firstImg } = await supabase
+            .from("catalog_images")
+            .select("image_url")
+            .eq("catalog_id", catalog.id)
+            .limit(1);
+
+          await supabase.from("posts").insert([
+            {
+              author_id: okmade.id,
+              content: `📖 New catalog: ${title}`,
+              image_urls: (firstImg || []).map((i) => i.image_url),
+              is_auto: true,
+              auto_source: "catalog_added",
+              auto_source_id: catalog.id,
+            },
+          ]);
+
+          await fetch("/api/admin/broadcast", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-admin-key":
+                process.env.NEXT_PUBLIC_ADMIN_API_KEY ||
+                "okmade_super_secret_2026",
+            },
+            body: JSON.stringify({
+              title: `New catalog: ${title}`,
+              body: `We just added a new catalog space: <strong>${title}</strong>. Take a look at the designs.`,
+              ctaUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/catalog`,
+            }),
+          });
+        }
+      } catch (broadcastErr) {
+        console.error("Broadcast failed:", broadcastErr);
+      }
+
+      setMessage(
+        `Catalog "${title}" added with ${imageData.length} image(s).`
+      );
       setTitle("");
       setImageData([]);
       document.getElementById("catalogImages").value = "";
