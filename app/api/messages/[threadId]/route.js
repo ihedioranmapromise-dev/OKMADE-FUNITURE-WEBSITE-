@@ -1,12 +1,22 @@
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { createClient } from "@supabase/supabase-js";
+import { sendEmail } from "@/lib/send-email";
+import { newMessageEmail } from "@/lib/email-templates";
 
 const admin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// GET: messages in a thread
+async function userWantsEmails(clientId) {
+  const { data } = await admin
+    .from("user_settings")
+    .select("email_notifications")
+    .eq("user_id", clientId)
+    .single();
+  return data?.email_notifications ?? true;
+}
+
 export async function GET(request, { params }) {
   try {
     const supabase = await createSupabaseServer();
@@ -17,11 +27,7 @@ export async function GET(request, { params }) {
     const { data: me } = await admin.from("clients").select("id").eq("auth_id", user.id).single();
     if (!me) return new Response(JSON.stringify({ error: "Not found" }), { status: 404 });
 
-    const { data: thread } = await admin
-      .from("message_threads")
-      .select("*")
-      .eq("id", threadId)
-      .single();
+    const { data: thread } = await admin.from("message_threads").select("*").eq("id", threadId).single();
     if (!thread) return new Response(JSON.stringify({ error: "Thread not found" }), { status: 404 });
     if (thread.user_a !== me.id && thread.user_b !== me.id) {
       return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403 });
@@ -33,7 +39,6 @@ export async function GET(request, { params }) {
       .eq("thread_id", threadId)
       .order("created_at", { ascending: true });
 
-    // Mark messages as read
     await admin
       .from("messages")
       .update({ read_at: new Date().toISOString() })
@@ -54,7 +59,6 @@ export async function GET(request, { params }) {
   }
 }
 
-// POST: send a message in a thread
 export async function POST(request, { params }) {
   try {
     const supabase = await createSupabaseServer();
@@ -65,14 +69,14 @@ export async function POST(request, { params }) {
     const { content } = await request.json();
     if (!content?.trim()) return new Response(JSON.stringify({ error: "Empty message" }), { status: 400 });
 
-    const { data: me } = await admin.from("clients").select("id").eq("auth_id", user.id).single();
+    const { data: me } = await admin
+      .from("clients")
+      .select("id, username, display_name")
+      .eq("auth_id", user.id)
+      .single();
     if (!me) return new Response(JSON.stringify({ error: "Not found" }), { status: 404 });
 
-    const { data: thread } = await admin
-      .from("message_threads")
-      .select("*")
-      .eq("id", threadId)
-      .single();
+    const { data: thread } = await admin.from("message_threads").select("*").eq("id", threadId).single();
     if (!thread) return new Response(JSON.stringify({ error: "Thread not found" }), { status: 404 });
     if (thread.user_a !== me.id && thread.user_b !== me.id) {
       return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403 });
@@ -102,13 +106,29 @@ export async function POST(request, { params }) {
       })
       .eq("id", threadId);
 
-    // Notification
     await admin.from("notifications").insert([{
       client_id: receiverId,
       type: "new_message",
-      message: `New message from someone.`,
+      message: `New message from ${me.display_name || me.username}.`,
       target_url: `/client/messages/${threadId}`,
     }]);
+
+    // Email the receiver
+    const { data: receiver } = await admin
+      .from("clients")
+      .select("email")
+      .eq("id", receiverId)
+      .single();
+
+    if (receiver?.email && (await userWantsEmails(receiverId))) {
+      const tpl = newMessageEmail({
+        senderName: me.display_name || me.username,
+        senderUsername: me.username,
+        preview: content.trim().slice(0, 200),
+        threadId,
+      });
+      await sendEmail({ to: receiver.email, subject: tpl.subject, html: tpl.html });
+    }
 
     return new Response(JSON.stringify(msg), { status: 201 });
   } catch (err) {
