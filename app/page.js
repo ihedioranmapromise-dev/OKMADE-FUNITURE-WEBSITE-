@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 import { getOptimizedImage } from "@/lib/utils";
+import Navbar from "./components/Navbar";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -23,16 +24,6 @@ function StarRating({ rating }) {
     </div>
   );
 }
-
-const MenuIcon = ({ isOpen }) => (
-  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    {isOpen ? (
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-    ) : (
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
-    )}
-  </svg>
-);
 
 const WhatsAppIcon = ({ className = "w-5 h-5" }) => (
   <svg className={className} fill="currentColor" viewBox="0 0 24 24">
@@ -77,8 +68,6 @@ export default function Home() {
   const [recentReviews, setRecentReviews] = useState([]);
   const [token, setToken] = useState("");
   const [imageIndices, setImageIndices] = useState({});
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [clientId, setClientId] = useState(null);
   const router = useRouter();
 
   const aboutImages = [
@@ -109,12 +98,6 @@ export default function Home() {
     }, 4000);
     return () => clearInterval(interval);
   }, [catalogGroups]);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      setClientId(sessionStorage.getItem("clientId"));
-    }
-  }, []);
 
   useEffect(() => {
     async function fetchProducts() {
@@ -253,59 +236,6 @@ export default function Home() {
     const message = `I'm interested in this product: ${product.description} for ₦${product.price}.`;
     return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
   };
-
-  const logout = () => {
-    sessionStorage.removeItem("clientId");
-    window.location.href = "/";
-  };
-
-  const Navbar = () => (
-    <nav className="fixed top-0 left-0 w-full z-50 bg-white/90 backdrop-blur-md shadow-sm border-b border-amber-100/20">
-      <div className="container mx-auto px-4 md:px-6 flex items-center justify-between h-16">
-        <a href="#home" className="flex items-center gap-2 text-2xl font-bold text-amber-800 font-['Dancing_Script',_cursive]">
-          <img src="/favicon.ico" alt="OKMADE" className="w-8 h-8 object-contain" />
-          <span>OKMADE</span>
-        </a>
-        <div className="hidden md:flex gap-8 text-gray-700 font-medium items-center">
-          <a href="#home" className="hover:text-amber-700 transition">Home</a>
-          <a href="#about" className="hover:text-amber-700 transition">About</a>
-          <a href="#contact" className="hover:text-amber-700 transition">Contact</a>
-          <a href="#reviews" className="hover:text-amber-700 transition">Reviews</a>
-          <a href="/portfolio" className="hover:text-amber-700 transition">Portfolio</a>
-          <a href="/workers" className="hover:text-amber-700 transition">Artisans</a>
-          {clientId ? (
-            <>
-              <a href="/client/dashboard" className="hover:text-amber-700 transition">Dashboard</a>
-              <button onClick={logout} className="text-red-600 hover:text-red-800 transition">Logout</button>
-            </>
-          ) : (
-            <a href="/client/login" className="hover:text-amber-700 transition">Artisan Login</a>
-          )}
-        </div>
-        <button className="md:hidden text-2xl" onClick={() => setIsMenuOpen(!isMenuOpen)}>
-          <MenuIcon isOpen={isMenuOpen} />
-        </button>
-      </div>
-      {isMenuOpen && (
-        <div className="md:hidden bg-white/95 backdrop-blur-md border-t border-amber-100/20 py-4 px-6 flex flex-col gap-4 text-gray-700 font-medium">
-          <a href="#home" onClick={() => setIsMenuOpen(false)} className="hover:text-amber-700">Home</a>
-          <a href="#about" onClick={() => setIsMenuOpen(false)} className="hover:text-amber-700">About</a>
-          <a href="#contact" onClick={() => setIsMenuOpen(false)} className="hover:text-amber-700">Contact</a>
-          <a href="#reviews" onClick={() => setIsMenuOpen(false)} className="hover:text-amber-700">Reviews</a>
-          <a href="/portfolio" onClick={() => setIsMenuOpen(false)} className="hover:text-amber-700">Portfolio</a>
-          <a href="/workers" onClick={() => setIsMenuOpen(false)} className="hover:text-amber-700">Artisans</a>
-          {clientId ? (
-            <>
-              <a href="/client/dashboard" onClick={() => setIsMenuOpen(false)} className="hover:text-amber-700">Dashboard</a>
-              <button onClick={logout} className="text-red-600 hover:text-red-800">Logout</button>
-            </>
-          ) : (
-            <a href="/client/login" onClick={() => setIsMenuOpen(false)} className="hover:text-amber-700">Artisan Login</a>
-          )}
-        </div>
-      )}
-    </nav>
-  );
 
   return (
     <div>
