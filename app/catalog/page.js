@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
+import Navbar from "@/app/components/Navbar";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -16,7 +17,6 @@ export default function CatalogPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [visibleCount, setVisibleCount] = useState(9);
 
-  // Lightbox state
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [currentImages, setCurrentImages] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -66,13 +66,12 @@ export default function CatalogPage() {
 
   const loadMore = () => setVisibleCount(prev => prev + 9);
 
-  // Lightbox functions
   const openLightbox = (images, index) => {
     if (!images || images.length === 0) return;
     setCurrentImages(images);
     setCurrentIndex(index);
     setLightboxOpen(true);
-    setIsPlaying(false); // stop auto-play on open
+    setIsPlaying(false);
     setZoom(false);
   };
 
@@ -105,7 +104,6 @@ export default function CatalogPage() {
     setZoom(prev => !prev);
   };
 
-  // Auto-play effect
   useEffect(() => {
     if (isPlaying && lightboxOpen && currentImages.length > 1) {
       autoPlayRef.current = setInterval(() => {
@@ -118,9 +116,9 @@ export default function CatalogPage() {
   }, [isPlaying, lightboxOpen, currentImages.length]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-amber-50/50 to-white py-12">
-      <div className="container mx-auto px-4 md:px-6">
-        {/* Header */}
+    <div className="min-h-screen bg-gradient-to-b from-amber-50/50 to-white pt-16">
+      <Navbar />
+      <div className="container mx-auto px-4 md:px-6 py-12">
         <div className="text-center mb-12">
           <h1 className="text-4xl md:text-5xl font-bold text-gray-800 mb-3 tracking-tight">
             Our <span className="text-amber-700">Catalog</span> Spaces
@@ -128,7 +126,6 @@ export default function CatalogPage() {
           <p className="text-gray-500 max-w-xl mx-auto">Explore our curated collections of handcrafted furniture pieces.</p>
         </div>
 
-        {/* Search Bar */}
         <div className="max-w-md mx-auto mb-10">
           <div className="relative">
             <input
@@ -142,7 +139,6 @@ export default function CatalogPage() {
           </div>
         </div>
 
-        {/* Grid */}
         {loading ? (
           <div className="flex justify-center items-center h-64">
             <div className="animate-pulse text-amber-600">Loading beautiful pieces...</div>
@@ -157,7 +153,6 @@ export default function CatalogPage() {
                   key={catalog.id}
                   className="group bg-white rounded-2xl shadow-md hover:shadow-2xl transition-all duration-300 overflow-hidden border border-amber-100/30 hover:-translate-y-1"
                 >
-                  {/* Main Image – clickable to open lightbox */}
                   <div
                     className="relative h-64 overflow-hidden bg-amber-50 cursor-pointer"
                     onClick={() => openLightbox(catalog.images, 0)}
@@ -183,12 +178,10 @@ export default function CatalogPage() {
                     )}
                   </div>
 
-                  {/* Content */}
                   <div className="p-5">
                     <h2 className="text-xl font-bold text-gray-800 mb-1 line-clamp-1">{catalog.title}</h2>
                     <p className="text-gray-500 text-sm mb-3 line-clamp-2">{catalog.description}</p>
 
-                    {/* Thumbnails (if more than 1 image) */}
                     {catalog.images.length > 1 && (
                       <div className="flex gap-2 mb-4">
                         {catalog.images.slice(1, 4).map((img, idx) => (
@@ -211,7 +204,6 @@ export default function CatalogPage() {
                       </div>
                     )}
 
-                    {/* CTA Button */}
                     <a
                       href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(`I'm interested in the catalog: ${catalog.title}`)}`}
                       target="_blank"
@@ -239,14 +231,12 @@ export default function CatalogPage() {
         )}
       </div>
 
-      {/* Lightbox Modal */}
       {lightboxOpen && currentImages.length > 0 && (
         <div
           className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
           onClick={closeLightbox}
         >
           <div className="relative max-w-5xl w-full h-auto max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
-            {/* Close button */}
             <button
               className="absolute -top-12 right-0 text-white text-3xl hover:text-amber-300 transition"
               onClick={closeLightbox}
@@ -255,7 +245,6 @@ export default function CatalogPage() {
               ✕
             </button>
 
-            {/* Play/Pause and Zoom buttons */}
             <div className="absolute -top-12 left-0 flex gap-3 text-white">
               {currentImages.length > 1 && (
                 <button
@@ -273,7 +262,6 @@ export default function CatalogPage() {
               </button>
             </div>
 
-            {/* Main image with zoom */}
             <div className="overflow-hidden rounded-lg">
               <img
                 src={currentImages[currentIndex]?.image_url}
@@ -283,7 +271,6 @@ export default function CatalogPage() {
               />
             </div>
 
-            {/* Navigation arrows */}
             {currentImages.length > 1 && (
               <>
                 <button
@@ -300,7 +287,6 @@ export default function CatalogPage() {
                 >
                   ›
                 </button>
-                {/* Counter */}
                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 text-white text-sm px-4 py-1 rounded-full backdrop-blur-sm">
                   {currentIndex + 1} / {currentImages.length}
                 </div>
