@@ -1,12 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+import { createSupabaseBrowser } from "@/lib/supabase-browser";
 
 const MenuIcon = ({ isOpen }) => (
   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -25,6 +20,7 @@ export default function Navbar() {
   const isHome = pathname === "/";
 
   useEffect(() => {
+    const supabase = createSupabaseBrowser();
     let mounted = true;
 
     async function loadProfile() {
@@ -54,6 +50,7 @@ export default function Navbar() {
   }, []);
 
   const logout = async () => {
+    const supabase = createSupabaseBrowser();
     await supabase.auth.signOut();
     setProfile(null);
     setIsMenuOpen(false);
