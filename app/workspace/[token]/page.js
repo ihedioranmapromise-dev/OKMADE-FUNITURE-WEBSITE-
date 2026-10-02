@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import { useParams } from "next/navigation";
 import { getOptimizedImage } from "@/lib/utils";
 import { LocationIcon, ClockIcon } from "@/lib/icons";
+import Navbar from "@/app/components/Navbar";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -152,14 +153,31 @@ export default function WorkspacePage() {
     }
   };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-amber-900/90 via-amber-800/80 to-stone-800"><div className="text-amber-200 text-xl animate-pulse">Loading project...</div></div>;
-  if (error) return <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-amber-900/90 via-amber-800/80 to-stone-800"><div className="bg-white/10 backdrop-blur-sm text-white p-8 rounded-xl border border-white/10 text-center"><p className="text-red-400 text-xl">{error}</p></div></div>;
+  if (loading) return (
+    <>
+      <Navbar />
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-amber-900/90 via-amber-800/80 to-stone-800 pt-24">
+        <div className="text-amber-200 text-xl animate-pulse">Loading project...</div>
+      </div>
+    </>
+  );
+  if (error) return (
+    <>
+      <Navbar />
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-amber-900/90 via-amber-800/80 to-stone-800 pt-24">
+        <div className="bg-white/10 backdrop-blur-sm text-white p-8 rounded-xl border border-white/10 text-center">
+          <p className="text-red-400 text-xl">{error}</p>
+        </div>
+      </div>
+    </>
+  );
 
   const isActive = data.status === "active";
   const reactionCounts = reactions.reduce((acc, r) => { acc[r.reaction_type] = (acc[r.reaction_type] || 0) + 1; return acc; }, {});
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-amber-900/90 via-amber-800/80 to-stone-800 py-12">
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-amber-900/90 via-amber-800/80 to-stone-800 pt-24 pb-12">
+      <Navbar />
       <div className="absolute inset-0 opacity-10" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }} />
       <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full bg-amber-400/20 blur-3xl pointer-events-none"></div>
       <div className="absolute bottom-[-10%] right-[-5%] w-[500px] h-[500px] rounded-full bg-orange-300/15 blur-3xl pointer-events-none"></div>
