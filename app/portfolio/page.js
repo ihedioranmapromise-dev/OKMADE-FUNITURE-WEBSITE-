@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 import { getOptimizedImage } from "@/lib/utils";
+import Navbar from "@/app/components/Navbar";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -106,7 +107,9 @@ export default function PortfolioPage() {
   const loadMore = () => setVisibleCount((prev) => prev + 9);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-amber-50 to-white">
+    <div className="min-h-screen bg-gradient-to-b from-amber-50 to-white pt-16">
+      <Navbar />
+
       {/* Hero */}
       <section className="relative h-[500px] flex items-center justify-center overflow-hidden">
         <div
