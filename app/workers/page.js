@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Navbar from "@/app/components/Navbar";
 
 export default function WorkersDirectory() {
   const [workers, setWorkers] = useState([]);
@@ -48,7 +49,8 @@ export default function WorkersDirectory() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-amber-50 to-white py-12 px-4">
+    <div className="min-h-screen bg-gradient-to-b from-amber-50 to-white pt-24 pb-12 px-4">
+      <Navbar />
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-10">
           <h1 className="text-4xl font-bold text-amber-800 font-['Dancing_Script',_cursive]">Our Artisans</h1>
