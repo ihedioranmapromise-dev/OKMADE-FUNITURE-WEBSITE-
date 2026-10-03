@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { CloseIcon } from "@/lib/icons";
+import AutoPostModal from "@/app/components/AutoPostModal";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -15,6 +16,14 @@ export default function AddShowroomTab() {
   const [sold, setSold] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
+
+  const [autoPostOpen, setAutoPostOpen] = useState(false);
+  const [autoPostData, setAutoPostData] = useState({
+    type: "product",
+    sourceId: "",
+    defaultContent: "",
+    previewImages: [],
+  });
 
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files);
@@ -60,17 +69,19 @@ export default function AddShowroomTab() {
         .single();
       if (productError) throw productError;
 
+      const uploadedUrls = [];
       for (let i = 0; i < imageData.length; i++) {
         const { file, description: imgDesc } = imageData[i];
         const ext = file.name.split(".").pop();
         const fileName = `products/${product.id}_${Date.now()}_${i}.${ext}`;
         const { error: uploadError } = await supabase.storage
           .from("showroom-bucket")
-          .upload(fileName, file);
+          .upload(fileName, file, { cacheControl: "31536000" });
         if (uploadError) throw uploadError;
         const { data: urlData } = supabase.storage
           .from("showroom-bucket")
           .getPublicUrl(fileName);
+        uploadedUrls.push(urlData.publicUrl);
         await supabase.from("product_images").insert({
           product_id: product.id,
           image_url: urlData.publicUrl,
@@ -79,61 +90,23 @@ export default function AddShowroomTab() {
         });
       }
 
-      // Auto-post + broadcast to OKMADE followers
-      try {
-        const { data: okmade } = await supabase
-          .from("clients")
-          .select("id")
-          .eq("is_okmade", true)
-          .single();
-
-        if (okmade) {
-          const { data: firstImg } = await supabase
-            .from("product_images")
-            .select("image_url")
-            .eq("product_id", product.id)
-            .limit(1);
-
-          await supabase.from("posts").insert([
-            {
-              author_id: okmade.id,
-              content: `🛋️ New in showroom: ${description} — ₦${parseFloat(
-                price
-              ).toLocaleString()}`,
-              image_urls: (firstImg || []).map((i) => i.image_url),
-              is_auto: true,
-              auto_source: "product_added",
-              auto_source_id: product.id,
-            },
-          ]);
-
-          await fetch("/api/admin/broadcast", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-admin-key":
-                process.env.NEXT_PUBLIC_ADMIN_API_KEY ||
-                "okmade_super_secret_2026",
-            },
-            body: JSON.stringify({
-              title: `New in showroom: ${description}`,
-              body: `A new piece just arrived in our showroom: <strong>${description}</strong> — ₦${parseFloat(
-                price
-              ).toLocaleString()}.`,
-              ctaUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/product/${product.id}`,
-            }),
-          });
-        }
-      } catch (broadcastErr) {
-        console.error("Broadcast failed:", broadcastErr);
-      }
-
       setMessage(`Product added with ${imageData.length} image(s).`);
+
+      // Open auto-post modal
+      setAutoPostData({
+        type: "product",
+        sourceId: product.id,
+        defaultContent: `🛋️ New in showroom: ${description} — ₦${parseFloat(price).toLocaleString()}`,
+        previewImages: uploadedUrls,
+      });
+      setAutoPostOpen(true);
+
       setImageData([]);
       setDescription("");
       setPrice("");
       setSold(false);
-      document.getElementById("productImages").value = "";
+      const el = document.getElementById("productImages");
+      if (el) el.value = "";
     } catch (err) {
       setMessage("Error: " + err.message);
     } finally {
@@ -246,6 +219,15 @@ export default function AddShowroomTab() {
           </p>
         )}
       </form>
+
+      <AutoPostModal
+        open={autoPostOpen}
+        onClose={() => setAutoPostOpen(false)}
+        type={autoPostData.type}
+        sourceId={autoPostData.sourceId}
+        defaultContent={autoPostData.defaultContent}
+        previewImages={autoPostData.previewImages}
+      />
     </div>
   );
 }
