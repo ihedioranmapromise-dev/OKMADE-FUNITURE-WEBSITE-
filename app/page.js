@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
-import { getOptimizedImage } from "@/lib/utils";
+import Image from "next/image";
 import Navbar from "./components/Navbar";
 
 const supabase = createClient(
@@ -11,6 +11,9 @@ const supabase = createClient(
 );
 
 const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "";
+
+const BLUR =
+  "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxIDEiPjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9IiNmZWYzYzciLz48L3N2Zz4=";
 
 function StarRating({ rating }) {
   const full = Math.floor(rating);
@@ -59,7 +62,6 @@ const ClockIcon = () => (
 export default function Home() {
   const [products, setProducts] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
-  const [catalogImages, setCatalogImages] = useState([]);
   const [catalogGroups, setCatalogGroups] = useState([]);
   const [catalogGroupIndex, setCatalogGroupIndex] = useState(0);
   const [loadingCatalog, setLoadingCatalog] = useState(true);
@@ -99,42 +101,62 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [catalogGroups]);
 
+  // BATCHED fetches — 3 queries total instead of N+1
   useEffect(() => {
     async function fetchProducts() {
       const { data: productsData, error } = await supabase
         .from("showroom")
         .select("*")
-        .order("created_at", { ascending: false });
-      if (!error && productsData) {
-        const productsWithDetails = await Promise.all(
-          productsData.map(async (product) => {
-            const { data: images } = await supabase
-              .from("product_images")
-              .select("image_url")
-              .eq("product_id", product.id)
-              .order("display_order");
-            const { data: ratings } = await supabase
-              .from("ratings")
-              .select("rating")
-              .eq("product_id", product.id);
-            let avgRating = 0;
-            if (ratings && ratings.length) {
-              const sum = ratings.reduce((a, b) => a + b.rating, 0);
-              avgRating = sum / ratings.length;
-            }
-            return {
-              ...product,
-              images: images || [],
-              avgRating,
-              reviewCount: ratings ? ratings.length : 0,
-            };
-          })
-        );
-        setProducts(productsWithDetails);
-        const initialIndices = {};
-        productsWithDetails.forEach(p => { initialIndices[p.id] = 0; });
-        setImageIndices(initialIndices);
+        .order("created_at", { ascending: false })
+        .limit(12);
+      if (error || !productsData || productsData.length === 0) {
+        setProducts([]);
+        setLoadingProducts(false);
+        return;
       }
+      const ids = productsData.map((p) => p.id);
+
+      // One query for ALL images
+      const { data: allImages } = await supabase
+        .from("product_images")
+        .select("product_id, image_url, display_order")
+        .in("product_id", ids)
+        .order("display_order", { ascending: true });
+
+      // One query for ALL ratings
+      const { data: allRatings } = await supabase
+        .from("ratings")
+        .select("product_id, rating")
+        .in("product_id", ids);
+
+      const imagesByProduct = {};
+      (allImages || []).forEach((img) => {
+        if (!imagesByProduct[img.product_id]) imagesByProduct[img.product_id] = [];
+        imagesByProduct[img.product_id].push(img);
+      });
+
+      const ratingsByProduct = {};
+      (allRatings || []).forEach((r) => {
+        if (!ratingsByProduct[r.product_id]) ratingsByProduct[r.product_id] = [];
+        ratingsByProduct[r.product_id].push(r.rating);
+      });
+
+      const productsWithDetails = productsData.map((product) => {
+        const imgs = imagesByProduct[product.id] || [];
+        const rts = ratingsByProduct[product.id] || [];
+        const avg = rts.length ? rts.reduce((a, b) => a + b, 0) / rts.length : 0;
+        return {
+          ...product,
+          images: imgs,
+          avgRating: avg,
+          reviewCount: rts.length,
+        };
+      });
+
+      setProducts(productsWithDetails);
+      const initialIndices = {};
+      productsWithDetails.forEach((p) => { initialIndices[p.id] = 0; });
+      setImageIndices(initialIndices);
       setLoadingProducts(false);
     }
 
@@ -144,26 +166,22 @@ export default function Home() {
         .from("catalogs")
         .select("id")
         .order("created_at", { ascending: false });
-      if (error || !catalogs) {
-        setCatalogImages([]);
+      if (error || !catalogs || catalogs.length === 0) {
         setCatalogGroups([]);
         setLoadingCatalog(false);
         return;
       }
-      let allImages = [];
-      for (const catalog of catalogs) {
-        const { data: images } = await supabase
-          .from("catalog_images")
-          .select("image_url")
-          .eq("catalog_id", catalog.id)
-          .order("display_order");
-        if (images && images.length) {
-          allImages = [...allImages, ...images];
-        }
-      }
-      setCatalogImages(allImages);
+      const catIds = catalogs.map((c) => c.id);
+
+      // One query for ALL catalog images
+      const { data: allImages } = await supabase
+        .from("catalog_images")
+        .select("catalog_id, image_url, display_order")
+        .in("catalog_id", catIds)
+        .order("display_order", { ascending: true });
+
       const groups = [];
-      for (let i = 0; i < allImages.length; i += 6) {
+      for (let i = 0; i < (allImages || []).length; i += 6) {
         groups.push(allImages.slice(i, i + 6));
       }
       setCatalogGroups(groups);
@@ -178,21 +196,30 @@ export default function Home() {
         .eq("is_standalone", false)
         .order("created_at", { ascending: false })
         .limit(6);
-      if (killedProjects && killedProjects.length > 0) {
-        const withImages = await Promise.all(
-          killedProjects.map(async (project) => {
-            const { data: images } = await supabase
-              .from("project_request_images")
-              .select("image_url")
-              .eq("project_id", project.id)
-              .limit(1);
-            return { ...project, image: images?.[0]?.image_url || null };
-          })
-        );
-        setTestimonials(withImages);
-      } else {
+      if (!killedProjects || killedProjects.length === 0) {
         setTestimonials([]);
+        setLoadingTestimonials(false);
+        return;
       }
+      const projIds = killedProjects.map((p) => p.id);
+
+      // One query for ALL project request images
+      const { data: allImgs } = await supabase
+        .from("project_request_images")
+        .select("project_id, image_url, display_order")
+        .in("project_id", projIds)
+        .order("display_order", { ascending: true });
+
+      const firstImageByProject = {};
+      (allImgs || []).forEach((img) => {
+        if (!firstImageByProject[img.project_id]) {
+          firstImageByProject[img.project_id] = img.image_url;
+        }
+      });
+
+      setTestimonials(
+        killedProjects.map((p) => ({ ...p, image: firstImageByProject[p.id] || null }))
+      );
       setLoadingTestimonials(false);
     }
 
@@ -241,23 +268,33 @@ export default function Home() {
     <div>
       <Navbar />
 
-      {/* Hero */}
+      {/* Hero — priority image for instant paint */}
       <section id="home" className="relative text-white pt-16">
-        <div className="absolute inset-0 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1589939705384-5185137a7f0f?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80')" }}>
+        <div className="relative w-full h-[500px] md:h-[600px]">
+          <Image
+            src="https://images.unsplash.com/photo-1589939705384-5185137a7f0f?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80"
+            alt="OKMADE Hero"
+            fill
+            priority
+            sizes="100vw"
+            className="object-cover"
+            placeholder="blur"
+            blurDataURL={BLUR}
+          />
           <div className="absolute inset-0 bg-amber-900/30"></div>
-        </div>
-        <div className="relative container mx-auto px-6 py-32 text-center">
-          <p className="text-lg md:text-xl font-light text-amber-200/90 uppercase tracking-widest mb-2">Welcome to OKMADE</p>
-          <h1 className="text-5xl md:text-7xl font-bold mb-4">Furniture &amp; Interiors</h1>
-          <p className="text-2xl md:text-3xl font-['Dancing_Script',_cursive] text-amber-200 mb-4">
-            TRUST THE PROGRESS
-          </p>
-          <p className="text-xl md:text-2xl max-w-2xl mx-auto">
-            Handcrafted pieces for modern living – timeless design, exceptional quality.
-          </p>
-          <div className="mt-8 flex gap-4 justify-center flex-wrap">
-            <a href="/catalog" className="bg-white text-black px-6 py-3 rounded-full font-semibold hover:bg-gray-200 transition">Open Catalogs</a>
-            <a href="/portfolio" className="bg-transparent border-2 border-white px-6 py-3 rounded-full font-semibold hover:bg-white hover:text-black transition">View Our Portfolio</a>
+          <div className="relative z-10 container mx-auto px-6 h-full flex flex-col justify-center text-center">
+            <p className="text-lg md:text-xl font-light text-amber-200/90 uppercase tracking-widest mb-2">Welcome to OKMADE</p>
+            <h1 className="text-5xl md:text-7xl font-bold mb-4">Furniture &amp; Interiors</h1>
+            <p className="text-2xl md:text-3xl font-['Dancing_Script',_cursive] text-amber-200 mb-4">
+              TRUST THE PROGRESS
+            </p>
+            <p className="text-xl md:text-2xl max-w-2xl mx-auto">
+              Handcrafted pieces for modern living – timeless design, exceptional quality.
+            </p>
+            <div className="mt-8 flex gap-4 justify-center flex-wrap">
+              <a href="/catalog" className="bg-white text-black px-6 py-3 rounded-full font-semibold hover:bg-gray-200 transition">Open Catalogs</a>
+              <a href="/portfolio" className="bg-transparent border-2 border-white px-6 py-3 rounded-full font-semibold hover:bg-white hover:text-black transition">View Our Portfolio</a>
+            </div>
           </div>
         </div>
       </section>
@@ -327,29 +364,50 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Featured Pieces */}
+      {/* Featured Pieces — next/image with blur */}
       <section id="featured" className="relative py-16 overflow-hidden bg-gradient-to-br from-amber-50/80 via-orange-50/60 to-white border-y border-amber-100/20">
         <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full bg-amber-200/20 blur-3xl pointer-events-none"></div>
         <div className="relative z-10 container mx-auto px-6">
           {loadingProducts ? (
-            <p className="text-center text-amber-600">Loading products...</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="bg-white rounded-xl shadow-md overflow-hidden border border-amber-100/30">
+                  <div className="relative h-64 bg-amber-50 animate-pulse"></div>
+                  <div className="p-5 space-y-2">
+                    <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse"></div>
+                    <div className="h-4 bg-gray-200 rounded w-1/2 animate-pulse"></div>
+                    <div className="h-8 bg-gray-100 rounded animate-pulse mt-3"></div>
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : products.length === 0 ? (
             <p className="text-center text-gray-500">No products yet. Check back soon!</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {products.slice(0, 6).map((product) => {
+              {products.slice(0, 6).map((product, pIdx) => {
                 const idx = imageIndices[product.id] || 0;
+                const currentImg = product.images[idx]?.image_url;
                 return (
                   <div key={product.id} className="group bg-white rounded-xl shadow-md hover:shadow-2xl transition-all duration-300 overflow-hidden border border-amber-100/30 hover:-translate-y-1">
                     <div className="relative h-64 overflow-hidden bg-amber-50">
-                      {product.images.length > 0 ? (
-                        <img src={product.images[idx]?.image_url} loading="lazy" alt={product.description} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+                      {currentImg ? (
+                        <Image
+                          src={currentImg}
+                          alt={product.description}
+                          fill
+                          sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                          className="object-cover group-hover:scale-105 transition duration-500"
+                          placeholder="blur"
+                          blurDataURL={BLUR}
+                          priority={pIdx < 3}
+                        />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-gray-300">No image</div>
                       )}
-                      {product.sold && <span className="absolute top-4 right-4 bg-red-600 text-white px-3 py-1 rounded-full text-sm font-bold">SOLD</span>}
+                      {product.sold && <span className="absolute top-4 right-4 bg-red-600 text-white px-3 py-1 rounded-full text-sm font-bold z-10">SOLD</span>}
                       {product.images.length > 1 && (
-                        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5">
+                        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
                           {product.images.map((_, i) => (
                             <span key={i} className={`w-2 h-2 rounded-full transition ${i === idx ? 'bg-amber-600' : 'bg-amber-300/60'}`} />
                           ))}
@@ -387,12 +445,19 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Portfolio / Testimonials */}
+      {/* Portfolio / Testimonials — next/image */}
       <section id="portfolio" className="py-16 bg-gradient-to-b from-white to-amber-50/50">
         <div className="container mx-auto px-6">
           <h2 className="text-3xl font-bold text-center mb-12 font-['Dancing_Script',_cursive] text-amber-800">Our Portfolio</h2>
           {loadingTestimonials ? (
-            <p className="text-center text-gray-500">Loading projects...</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="bg-white rounded-xl shadow-md overflow-hidden">
+                  <div className="h-64 bg-amber-50 animate-pulse"></div>
+                  <div className="p-5"><div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse"></div></div>
+                </div>
+              ))}
+            </div>
           ) : testimonials.length === 0 ? (
             <p className="text-center text-gray-500">No completed projects yet. Check back soon!</p>
           ) : (
@@ -401,11 +466,19 @@ export default function Home() {
                 <a key={t.id} href={`/workspace/${t.token_string}`} className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition group">
                   <div className="h-64 overflow-hidden relative">
                     {t.image ? (
-                      <img src={getOptimizedImage(t.image, 500)} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition duration-500" alt="Project" />
+                      <Image
+                        src={t.image}
+                        alt="Project"
+                        fill
+                        sizes="(max-width: 768px) 100vw, 33vw"
+                        className="object-cover group-hover:scale-105 transition duration-500"
+                        placeholder="blur"
+                        blurDataURL={BLUR}
+                      />
                     ) : (
                       <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">No image</div>
                     )}
-                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4">
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4 z-10">
                       <p className="text-white font-semibold text-lg">{t.client_name || "Client"}</p>
                     </div>
                   </div>
@@ -508,11 +581,8 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Catalog Gallery */}
+      {/* Catalog Gallery — next/image */}
       <section id="catalog-gallery" className="relative py-16 overflow-hidden bg-gradient-to-br from-amber-50/80 via-orange-50/60 to-white border-t border-amber-100/30">
-        <div className="absolute inset-0 opacity-5" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d97706' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }} />
-        <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full bg-amber-200/30 blur-3xl pointer-events-none"></div>
-        <div className="absolute bottom-[-10%] right-[-5%] w-[500px] h-[500px] rounded-full bg-orange-200/20 blur-3xl pointer-events-none"></div>
         <div className="container mx-auto px-4 md:px-6 relative z-10">
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-8 font-['Dancing_Script',_cursive] text-amber-800 drop-shadow-sm">Our Catalog Gallery</h2>
           {loadingCatalog ? (
@@ -526,8 +596,16 @@ export default function Home() {
               <div className="overflow-hidden rounded-2xl bg-white/60 backdrop-blur-sm p-4 shadow-xl">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4 transition-opacity duration-700">
                   {catalogGroups[catalogGroupIndex]?.map((img, idx) => (
-                    <div key={idx} className="aspect-square overflow-hidden rounded-lg shadow-md">
-                      <img src={img.image_url} loading="lazy" className="w-full h-full object-cover transition hover:scale-105 duration-300" />
+                    <div key={idx} className="aspect-square overflow-hidden rounded-lg shadow-md relative">
+                      <Image
+                        src={img.image_url}
+                        alt="Catalog"
+                        fill
+                        sizes="(max-width: 768px) 50vw, 33vw"
+                        className="object-cover transition hover:scale-105 duration-300"
+                        placeholder="blur"
+                        blurDataURL={BLUR}
+                      />
                     </div>
                   ))}
                 </div>
