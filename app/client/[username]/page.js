@@ -153,6 +153,8 @@ export default function ClientPortfolio() {
   const [loadingFeed, setLoadingFeed] = useState(true);
   const [status, setStatus] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
+  const [statusLoaded, setStatusLoaded] = useState(false);
+  const [currentUserLoaded, setCurrentUserLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -181,6 +183,7 @@ export default function ClientPortfolio() {
     async function loadStatus() {
       const res = await fetch(`/api/profile-status?username=${username}`);
       if (res.ok) setStatus(await res.json());
+      setStatusLoaded(true);
     }
     if (username) loadStatus();
   }, [username]);
@@ -189,13 +192,18 @@ export default function ClientPortfolio() {
     async function loadCurrentUser() {
       const sb = createSupabaseBrowser();
       const { data: { user } } = await sb.auth.getUser();
-      if (!user) { setCurrentUser(null); return; }
+      if (!user) {
+        setCurrentUser(null);
+        setCurrentUserLoaded(true);
+        return;
+      }
       const { data } = await sb
         .from("clients")
         .select("id, username")
         .eq("auth_id", user.id)
         .maybeSingle();
       setCurrentUser(data || null);
+      setCurrentUserLoaded(true);
     }
     loadCurrentUser();
   }, []);
@@ -264,8 +272,9 @@ export default function ClientPortfolio() {
     );
   }
 
+  const buttonsReady = statusLoaded && currentUserLoaded;
+  const isSelf = buttonsReady && ((currentUser && currentUser.username === client.username) || status?.isSelf);
   const st = status || { isLoggedIn: false, isFollowing: false, friendStatus: "none", followersCount: 0, followingCount: 0 };
-  const isSelf = (currentUser && currentUser.username === client.username) || st.isSelf;
   const displayName = client.display_name || client.username;
 
   return (
@@ -282,7 +291,6 @@ export default function ClientPortfolio() {
 
         {/* Header (X-style) */}
         <div className="bg-white px-4 md:px-6">
-          {/* Row 1: profile pic + action buttons (pulled up onto cover) */}
           <div className="flex items-end justify-between -mt-16 md:-mt-20">
             <div className="relative">
               {client.profile_pic ? (
@@ -298,45 +306,49 @@ export default function ClientPortfolio() {
               )}
             </div>
 
-            {!isSelf && (
-              <div className="pb-2 flex gap-2 flex-wrap">
-                {st.friendStatus === "friends" ? (
-                  <button disabled className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium cursor-default">
-                    ✓ Friends
+            <div className="pb-2 flex gap-2 flex-wrap">
+              {!buttonsReady ? (
+                <>
+                  <div className="h-9 w-24 bg-gray-200 rounded-lg animate-pulse"></div>
+                  <div className="h-9 w-24 bg-gray-200 rounded-lg animate-pulse"></div>
+                </>
+              ) : isSelf ? (
+                <>
+                  <a href="/client/dashboard" className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition">
+                    Dashboard
+                  </a>
+                  <a href="/client/profile" className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg text-sm font-semibold transition">
+                    Edit Profile
+                  </a>
+                </>
+              ) : (
+                <>
+                  {st.friendStatus === "friends" ? (
+                    <button disabled className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium cursor-default">
+                      ✓ Friends
+                    </button>
+                  ) : st.friendStatus === "pending" ? (
+                    <button disabled className="bg-gray-100 text-gray-500 px-4 py-2 rounded-lg text-sm font-medium cursor-default">
+                      {st.requestDirection === "sent" ? "Request Sent" : "Respond in Requests"}
+                    </button>
+                  ) : (
+                    <button onClick={handleFriend} disabled={busy} className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition disabled:opacity-50">
+                      + Add Friend
+                    </button>
+                  )}
+                  <button onClick={handleFollow} disabled={busy} className={`px-4 py-2 rounded-lg text-sm font-semibold transition border ${st.isFollowing ? "bg-gray-100 border-gray-200 text-gray-700 hover:bg-gray-200" : "bg-white border-amber-500 text-amber-700 hover:bg-amber-50"}`}>
+                    {st.isFollowing ? "Following" : "+ Follow"}
                   </button>
-                ) : st.friendStatus === "pending" ? (
-                  <button disabled className="bg-gray-100 text-gray-500 px-4 py-2 rounded-lg text-sm font-medium cursor-default">
-                    {st.requestDirection === "sent" ? "Request Sent" : "Respond in Requests"}
-                  </button>
-                ) : (
-                  <button onClick={handleFriend} disabled={busy} className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition disabled:opacity-50">
-                    + Add Friend
-                  </button>
-                )}
-                <button onClick={handleFollow} disabled={busy} className={`px-4 py-2 rounded-lg text-sm font-semibold transition border ${st.isFollowing ? "bg-gray-100 border-gray-200 text-gray-700 hover:bg-gray-200" : "bg-white border-amber-500 text-amber-700 hover:bg-amber-50"}`}>
-                  {st.isFollowing ? "Following" : "+ Follow"}
-                </button>
-                {st.friendStatus === "friends" && (
-                  <button onClick={handleMessage} disabled={busy} className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold transition disabled:opacity-50">
-                    💬 Message
-                  </button>
-                )}
-              </div>
-            )}
-
-            {isSelf && (
-              <div className="pb-2 flex gap-2 flex-wrap">
-                <a href="/client/dashboard" className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition">
-                  Dashboard
-                </a>
-                <a href="/client/profile" className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg text-sm font-semibold transition">
-                  Edit Profile
-                </a>
-              </div>
-            )}
+                  {st.friendStatus === "friends" && (
+                    <button onClick={handleMessage} disabled={busy} className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold transition disabled:opacity-50">
+                      💬 Message
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
           </div>
 
-          {/* Row 2: name + meta (below cover, normal flow) */}
           <div className="mt-3">
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
               {displayName}
