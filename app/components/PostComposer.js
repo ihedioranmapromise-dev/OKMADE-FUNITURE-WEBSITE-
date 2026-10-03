@@ -28,15 +28,21 @@ export default function PostComposer({ onPosted }) {
       return;
     }
     const allFiles = [...files, ...newFiles];
+    const allPreviews = allFiles.map((f) => URL.createObjectURL(f));
+    // Revoke old previews to avoid memory leak
+    previews.forEach((p) => URL.revokeObjectURL(p));
     setFiles(allFiles);
-    setPreviews(allFiles.map((f) => URL.createObjectURL(f)));
+    setPreviews(allPreviews);
   };
 
   const removeImage = (idx) => {
     const newFiles = [...files];
     newFiles.splice(idx, 1);
+    // Revoke all old previews, then create fresh ones
+    previews.forEach((p) => URL.revokeObjectURL(p));
+    const newPreviews = newFiles.map((f) => URL.createObjectURL(f));
     setFiles(newFiles);
-    setPreviews(newFiles.map((f) => URL.createObjectURL(f)));
+    setPreviews(newPreviews);
   };
 
   const handlePost = async () => {
@@ -50,23 +56,37 @@ export default function PostComposer({ onPosted }) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not logged in");
 
-      // Upload images to story-images bucket (reuse)
-      const imageUrls = [];
-      for (const file of files) {
-        const ext = file.name.split(".").pop();
-        const path = `posts/${user.id}_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-        const { error: uploadError } = await supabase.storage.from("story-images").upload(path, file);
-        if (uploadError) throw uploadError;
-        const { data: urlData } = supabase.storage.from("story-images").getPublicUrl(path);
-        imageUrls.push(urlData.publicUrl);
-      }
+      // Upload all images in parallel
+      const uploadResults = await Promise.all(
+        files.map(async (file, i) => {
+          const ext = file.name.split(".").pop();
+          const path = `posts/${user.id}_${Date.now()}_${i}_${Math.random()
+            .toString(36)
+            .slice(2)}.${ext}`;
+          const { error: uploadError } = await supabase.storage
+            .from("story-images")
+            .upload(path, file, { cacheControl: "31536000" });
+          if (uploadError) throw uploadError;
+          const { data: urlData } = supabase.storage
+            .from("story-images")
+            .getPublicUrl(path);
+          return urlData.publicUrl;
+        })
+      );
 
       const res = await fetch("/api/posts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content, image_urls: imageUrls, font_family: font }),
+        body: JSON.stringify({
+          content,
+          image_urls: uploadResults,
+          font_family: font,
+        }),
       });
       if (!res.ok) throw new Error("Failed to post");
+
+      // Revoke previews before clearing
+      previews.forEach((p) => URL.revokeObjectURL(p));
 
       setContent("");
       setFiles([]);
@@ -96,10 +116,16 @@ export default function PostComposer({ onPosted }) {
         <div className="grid grid-cols-2 gap-2 mt-3">
           {previews.map((p, i) => (
             <div key={i} className="relative">
-              <img src={p} className="w-full h-32 object-cover rounded-lg" alt="" />
+              {/* Local blob preview — next/image doesn't support blobs, plain img is fine */}
+              <img
+                src={p}
+                className="w-full h-32 object-cover rounded-lg"
+                alt=""
+              />
               <button
                 onClick={() => removeImage(i)}
-                className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-6 h-6 text-xs"
+                className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white rounded-full w-6 h-6 text-xs flex items-center justify-center"
+                aria-label="Remove image"
               >
                 ✕
               </button>
@@ -128,7 +154,11 @@ export default function PostComposer({ onPosted }) {
           style={{ fontFamily: font }}
         >
           {FONT_OPTIONS.map((f) => (
-            <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>
+            <option
+              key={f.value}
+              value={f.value}
+              style={{ fontFamily: f.value }}
+            >
               {f.label}
             </option>
           ))}
