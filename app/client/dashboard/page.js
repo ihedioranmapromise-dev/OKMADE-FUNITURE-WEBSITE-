@@ -1,8 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { createSupabaseBrowser } from "@/lib/supabase-browser";
 import PostCard from "@/app/components/PostCard";
+
+const BLUR =
+  "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxIDEiPjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9IiNmZWYzYzciLz48L3N2Zz4=";
 
 const IconMenu = ({ className = "w-6 h-6" }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8">
@@ -69,7 +73,10 @@ export default function ClientDashboard() {
   useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.push("/client/login"); return; }
+      if (!user) {
+        router.push("/client/login");
+        return;
+      }
       const { data, error: loadErr } = await supabase
         .from("clients")
         .select("*")
@@ -87,11 +94,10 @@ export default function ClientDashboard() {
   }, [router, supabase]);
 
   useEffect(() => {
-    if (client) {
-      loadMyPosts();
-      loadFriendRequests();
-      loadNotifications();
-    }
+    if (!client) return;
+    loadMyPosts();
+    loadFriendRequests();
+    loadNotifications();
   }, [client]);
 
   async function loadMyPosts() {
@@ -143,8 +149,22 @@ export default function ClientDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-amber-50 to-white">
-        <div className="text-amber-600 animate-pulse text-lg">Loading your profile...</div>
+      <div className="min-h-screen bg-gray-100">
+        <div className="h-14 bg-white border-b border-gray-200"></div>
+        <div className="relative h-40 md:h-56 bg-amber-100 animate-pulse"></div>
+        <div className="max-w-5xl mx-auto px-4">
+          <div className="flex items-end justify-between -mt-16 md:-mt-20">
+            <div className="w-32 h-32 md:w-40 md:h-40 rounded-full bg-gray-200 border-4 border-white"></div>
+            <div className="pb-2 flex gap-2">
+              <div className="h-9 w-28 bg-gray-200 rounded-lg animate-pulse"></div>
+              <div className="h-9 w-28 bg-gray-200 rounded-lg animate-pulse"></div>
+            </div>
+          </div>
+          <div className="mt-3 space-y-2">
+            <div className="h-7 bg-gray-200 rounded w-1/2 animate-pulse"></div>
+            <div className="h-4 bg-gray-200 rounded w-1/3 animate-pulse"></div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -252,27 +272,40 @@ export default function ClientDashboard() {
       {/* Cover */}
       <div className="relative h-40 md:h-56 bg-gradient-to-r from-amber-700 to-stone-700">
         {client.cover_photo && (
-          <img src={client.cover_photo} className="w-full h-full object-cover" alt="Cover" />
+          <Image
+            src={client.cover_photo}
+            alt="Cover"
+            fill
+            priority
+            sizes="100vw"
+            className="object-cover"
+            placeholder="blur"
+            blurDataURL={BLUR}
+          />
         )}
       </div>
 
       {/* Header (X-style) */}
       <div className="max-w-5xl mx-auto px-4">
-        {/* Row 1: profile pic + action buttons (pulled up onto cover) */}
         <div className="flex items-end justify-between -mt-16 md:-mt-20">
-          <div className="relative">
+          <div className="relative w-32 h-32 md:w-40 md:h-40">
             {client.profile_pic ? (
-              <img
+              <Image
                 src={client.profile_pic}
-                className="w-32 h-32 md:w-40 md:h-40 rounded-full object-cover border-4 border-white shadow-lg"
-                alt="Profile"
+                alt={fullName}
+                fill
+                priority
+                sizes="(max-width: 768px) 128px, 160px"
+                className="rounded-full object-cover border-4 border-white shadow-lg"
+                placeholder="blur"
+                blurDataURL={BLUR}
               />
             ) : (
-              <div className="w-32 h-32 md:w-40 md:h-40 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 border-4 border-white shadow-lg text-5xl font-bold">
+              <div className="w-full h-full rounded-full bg-amber-100 flex items-center justify-center text-amber-700 border-4 border-white shadow-lg text-5xl font-bold">
                 {fullName.charAt(0).toUpperCase()}
               </div>
             )}
-            <a href="/client/profile" className="absolute bottom-2 right-2 bg-white hover:bg-amber-50 rounded-full p-2 shadow border border-gray-200 transition" title="Change profile picture">
+            <a href="/client/profile" className="absolute bottom-2 right-2 bg-white hover:bg-amber-50 rounded-full p-2 shadow border border-gray-200 transition z-10" title="Change profile picture">
               <IconCamera className="w-4 h-4 text-gray-700" />
             </a>
           </div>
@@ -287,7 +320,6 @@ export default function ClientDashboard() {
           </div>
         </div>
 
-        {/* Row 2: name + meta (sits below cover, normal flow) */}
         <div className="mt-3">
           <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{fullName}</h1>
           <p className="text-sm text-gray-600">
@@ -298,7 +330,6 @@ export default function ClientDashboard() {
           {client.age && <p className="text-xs text-gray-500 mt-1">Age: {client.age}</p>}
         </div>
 
-        {/* Tabs */}
         <div className="mt-4 border-t border-gray-200">
           <div className="flex gap-1 md:gap-2 overflow-x-auto">
             {[
@@ -360,7 +391,15 @@ export default function ClientDashboard() {
                 {friendRequests.map((req) => (
                   <div key={req.id} className="flex items-center gap-3">
                     {req.clients?.profile_pic ? (
-                      <img src={req.clients.profile_pic} className="w-10 h-10 rounded-full object-cover" alt="" />
+                      <div className="relative w-10 h-10 rounded-full overflow-hidden">
+                        <Image
+                          src={req.clients.profile_pic}
+                          alt=""
+                          fill
+                          sizes="40px"
+                          className="object-cover"
+                        />
+                      </div>
                     ) : (
                       <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold">
                         {(req.clients?.display_name || "?").charAt(0)}
@@ -386,8 +425,17 @@ export default function ClientDashboard() {
           {activeTab === "posts" && (
             <>
               {loadingPosts ? (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center text-gray-500">
-                  Loading your posts...
+                <div className="space-y-4">
+                  {[...Array(2)].map((_, i) => (
+                    <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-gray-200 animate-pulse"></div>
+                        <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
+                      </div>
+                      <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse"></div>
+                      <div className="h-48 bg-gray-100 rounded animate-pulse"></div>
+                    </div>
+                  ))}
                 </div>
               ) : myPosts.length === 0 ? (
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center text-gray-500">
@@ -448,7 +496,6 @@ export default function ClientDashboard() {
         </main>
       </div>
 
-      {/* Logout confirm */}
       {logoutConfirm && (
         <div
           className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4"
