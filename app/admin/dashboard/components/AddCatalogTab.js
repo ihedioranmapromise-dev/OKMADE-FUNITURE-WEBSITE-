@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { CloseIcon } from "@/lib/icons";
+import AutoPostModal from "@/app/components/AutoPostModal";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -13,6 +14,14 @@ export default function AddCatalogTab() {
   const [imageData, setImageData] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
+
+  const [autoPostOpen, setAutoPostOpen] = useState(false);
+  const [autoPostData, setAutoPostData] = useState({
+    type: "catalog",
+    sourceId: "",
+    defaultContent: "",
+    previewImages: [],
+  });
 
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files);
@@ -58,17 +67,19 @@ export default function AddCatalogTab() {
         .single();
       if (catalogError) throw catalogError;
 
+      const uploadedUrls = [];
       for (let i = 0; i < imageData.length; i++) {
         const { file, description: imgDesc } = imageData[i];
         const ext = file.name.split(".").pop();
         const fileName = `${catalog.id}_${Date.now()}_${i}.${ext}`;
         const { error: uploadError } = await supabase.storage
           .from("catalog-bucket")
-          .upload(fileName, file);
+          .upload(fileName, file, { cacheControl: "31536000" });
         if (uploadError) throw uploadError;
         const { data: urlData } = supabase.storage
           .from("catalog-bucket")
           .getPublicUrl(fileName);
+        uploadedUrls.push(urlData.publicUrl);
         await supabase.from("catalog_images").insert({
           catalog_id: catalog.id,
           image_url: urlData.publicUrl,
@@ -77,57 +88,21 @@ export default function AddCatalogTab() {
         });
       }
 
-      // Auto-post + broadcast
-      try {
-        const { data: okmade } = await supabase
-          .from("clients")
-          .select("id")
-          .eq("is_okmade", true)
-          .single();
+      setMessage(`Catalog "${title}" added with ${imageData.length} image(s).`);
 
-        if (okmade) {
-          const { data: firstImg } = await supabase
-            .from("catalog_images")
-            .select("image_url")
-            .eq("catalog_id", catalog.id)
-            .limit(1);
+      // Open auto-post modal
+      setAutoPostData({
+        type: "catalog",
+        sourceId: catalog.id,
+        defaultContent: `📖 New catalog: ${title}`,
+        previewImages: uploadedUrls,
+      });
+      setAutoPostOpen(true);
 
-          await supabase.from("posts").insert([
-            {
-              author_id: okmade.id,
-              content: `📖 New catalog: ${title}`,
-              image_urls: (firstImg || []).map((i) => i.image_url),
-              is_auto: true,
-              auto_source: "catalog_added",
-              auto_source_id: catalog.id,
-            },
-          ]);
-
-          await fetch("/api/admin/broadcast", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-admin-key":
-                process.env.NEXT_PUBLIC_ADMIN_API_KEY ||
-                "okmade_super_secret_2026",
-            },
-            body: JSON.stringify({
-              title: `New catalog: ${title}`,
-              body: `We just added a new catalog space: <strong>${title}</strong>. Take a look at the designs.`,
-              ctaUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/catalog`,
-            }),
-          });
-        }
-      } catch (broadcastErr) {
-        console.error("Broadcast failed:", broadcastErr);
-      }
-
-      setMessage(
-        `Catalog "${title}" added with ${imageData.length} image(s).`
-      );
       setTitle("");
       setImageData([]);
-      document.getElementById("catalogImages").value = "";
+      const el = document.getElementById("catalogImages");
+      if (el) el.value = "";
     } catch (err) {
       setMessage("Error: " + err.message);
     } finally {
@@ -218,6 +193,15 @@ export default function AddCatalogTab() {
           </p>
         )}
       </form>
+
+      <AutoPostModal
+        open={autoPostOpen}
+        onClose={() => setAutoPostOpen(false)}
+        type={autoPostData.type}
+        sourceId={autoPostData.sourceId}
+        defaultContent={autoPostData.defaultContent}
+        previewImages={autoPostData.previewImages}
+      />
     </div>
   );
 }
