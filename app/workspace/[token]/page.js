@@ -5,6 +5,8 @@ import { useParams } from "next/navigation";
 import Image from "next/image";
 import { LocationIcon, ClockIcon } from "@/lib/icons";
 import Navbar from "@/app/components/Navbar";
+import { fetchWithRetry } from "@/lib/fetch-with-retry";
+import { enqueue } from "@/lib/offline-queue";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -63,6 +65,7 @@ export default function WorkspacePage() {
   const [commentContent, setCommentContent] = useState("");
   const [replyingTo, setReplyingTo] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [localMessage, setLocalMessage] = useState("");
 
   const viewerId = getViewerId();
 
@@ -70,7 +73,6 @@ export default function WorkspacePage() {
     if (!token) return;
 
     async function fetchWorkspace() {
-      // Try token first, then fall back to id — in parallel
       let projectData = null;
 
       const byTokenRes = await supabase
@@ -98,7 +100,6 @@ export default function WorkspacePage() {
 
       setData(projectData);
 
-      // Run all secondary queries in parallel
       const parallelCalls = [
         supabase
           .from("project_request_images")
@@ -172,20 +173,34 @@ export default function WorkspacePage() {
 
   const toggleLike = async () => {
     if (!data || data.status !== "killed") return;
-    if (liked) {
-      await supabase
-        .from("project_likes")
-        .delete()
-        .eq("project_id", data.id)
-        .eq("user_id", viewerId);
-      setLiked(false);
-      setLikeCount((c) => Math.max(0, c - 1));
-    } else {
-      await supabase
-        .from("project_likes")
-        .insert({ project_id: data.id, user_id: viewerId });
-      setLiked(true);
-      setLikeCount((c) => c + 1);
+    const wasLiked = liked;
+    setLiked(!wasLiked);
+    setLikeCount((c) => (wasLiked ? Math.max(0, c - 1) : c + 1));
+
+    if (!navigator.onLine) {
+      enqueue({
+        url: "/api/project-like",
+        method: "POST",
+        body: { project_id: data.id, user_id: viewerId, liked: !wasLiked },
+        label: "Project like",
+      });
+      return;
+    }
+
+    try {
+      const res = await fetchWithRetry("/api/project-like", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project_id: data.id,
+          user_id: viewerId,
+          liked: !wasLiked,
+        }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      setLiked(wasLiked);
+      setLikeCount((c) => (wasLiked ? c + 1 : Math.max(0, c - 1)));
     }
   };
 
@@ -194,23 +209,41 @@ export default function WorkspacePage() {
     const existing = reactions.find(
       (r) => r.reaction_type === type && r.user_id === viewerId
     );
+
+    // Optimistic
     if (existing) {
-      await supabase
-        .from("story_reactions")
-        .delete()
-        .eq("story_id", data.id)
-        .eq("user_id", viewerId)
-        .eq("reaction_type", type);
       setReactions(
         reactions.filter(
           (r) => !(r.reaction_type === type && r.user_id === viewerId)
         )
       );
     } else {
-      await supabase
-        .from("story_reactions")
-        .insert({ story_id: data.id, user_id: viewerId, reaction_type: type });
       setReactions([...reactions, { reaction_type: type, user_id: viewerId }]);
+    }
+
+    if (!navigator.onLine) {
+      enqueue({
+        url: "/api/project-reaction",
+        method: "POST",
+        body: { project_id: data.id, user_id: viewerId, reaction_type: type },
+        label: "Reaction",
+      });
+      return;
+    }
+
+    try {
+      const res = await fetchWithRetry("/api/project-reaction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project_id: data.id,
+          user_id: viewerId,
+          reaction_type: type,
+        }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      // Silent — optimistic stays
     }
   };
 
@@ -219,25 +252,74 @@ export default function WorkspacePage() {
       alert("Please enter your name and comment.");
       return;
     }
-    setSubmitting(true);
-    try {
-      const { data: inserted, error: insertError } = await supabase
-        .from("public_comments")
-        .insert({
+    const text = commentContent;
+    const name = commentName;
+    const email = commentEmail;
+
+    // Optimistic
+    const tempId = `temp_${Date.now()}`;
+    const tempComment = {
+      id: tempId,
+      project_id: data.id,
+      parent_id: parentId,
+      author_name: name,
+      message: text,
+      created_at: new Date().toISOString(),
+      pending: true,
+    };
+    setComments([...comments, tempComment]);
+    setCommentContent("");
+    setReplyingTo(null);
+
+    if (!navigator.onLine) {
+      enqueue({
+        url: "/api/project-comment",
+        method: "POST",
+        body: {
           project_id: data.id,
           parent_id: parentId,
-          author_name: commentName,
-          author_email: commentEmail || null,
-          message: commentContent,
-        })
-        .select()
-        .single();
-      if (insertError) throw insertError;
-      setComments([...comments, inserted]);
-      setCommentContent("");
-      setReplyingTo(null);
-    } catch (err) {
-      alert("Error: " + err.message);
+          author_name: name,
+          author_email: email || null,
+          message: text,
+        },
+        label: "Comment",
+      });
+      setLocalMessage("Saved. Will post when you're back online.");
+      setTimeout(() => setLocalMessage(""), 4000);
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await fetchWithRetry("/api/project-comment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project_id: data.id,
+          parent_id: parentId,
+          author_name: name,
+          author_email: email || null,
+          message: text,
+        }),
+      });
+      if (!res.ok) throw new Error();
+      const inserted = await res.json();
+      setComments((prev) => prev.map((c) => (c.id === tempId ? inserted : c)));
+    } catch {
+      enqueue({
+        url: "/api/project-comment",
+        method: "POST",
+        body: {
+          project_id: data.id,
+          parent_id: parentId,
+          author_name: name,
+          author_email: email || null,
+          message: text,
+        },
+        label: "Comment",
+      });
+      setLocalMessage("Saved. Will retry automatically.");
+      setTimeout(() => setLocalMessage(""), 4000);
     } finally {
       setSubmitting(false);
     }
@@ -528,6 +610,12 @@ export default function WorkspacePage() {
                 </div>
               </div>
 
+              {localMessage && (
+                <div className="mb-3 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                  {localMessage}
+                </div>
+              )}
+
               {comments.length === 0 ? (
                 <p className="text-gray-500 text-sm">
                   No comments yet. Be the first to leave one!
@@ -538,7 +626,7 @@ export default function WorkspacePage() {
                     .filter((c) => !c.parent_id)
                     .map((parent) => (
                       <div key={parent.id} className="space-y-2">
-                        <div className="bg-gray-50 p-3 rounded-lg">
+                        <div className={`bg-gray-50 p-3 rounded-lg ${parent.pending ? "opacity-70" : ""}`}>
                           <p className="text-sm font-semibold text-gray-800">
                             {parent.author_name}
                           </p>
@@ -547,14 +635,18 @@ export default function WorkspacePage() {
                           </p>
                           <div className="flex items-center gap-3 mt-2">
                             <p className="text-xs text-gray-400">
-                              {new Date(parent.created_at).toLocaleString()}
+                              {parent.pending
+                                ? "Sending..."
+                                : new Date(parent.created_at).toLocaleString()}
                             </p>
-                            <button
-                              onClick={() => setReplyingTo(parent.id)}
-                              className="text-xs text-amber-600 hover:underline"
-                            >
-                              Reply
-                            </button>
+                            {!parent.pending && (
+                              <button
+                                onClick={() => setReplyingTo(parent.id)}
+                                className="text-xs text-amber-600 hover:underline"
+                              >
+                                Reply
+                              </button>
+                            )}
                           </div>
                           {replyingTo === parent.id && (
                             <div className="mt-3 flex gap-2">
