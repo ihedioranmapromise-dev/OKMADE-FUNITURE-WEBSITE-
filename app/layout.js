@@ -3,6 +3,7 @@ import Script from "next/script";
 import SplashScreen from "./components/SplashScreen";
 import InstallBanner from "./components/InstallBanner";
 import PWASetup from "./components/PWASetup";
+import OfflineBanner from "./components/OfflineBanner";
 
 export const metadata = {
   title: "OKMADE Furniture",
@@ -49,6 +50,7 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body className="bg-gray-50">
+        <OfflineBanner />
         <PWASetup />
         <SplashScreen />
         <InstallBanner />
