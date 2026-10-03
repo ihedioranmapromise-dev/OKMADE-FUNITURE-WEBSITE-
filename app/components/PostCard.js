@@ -1,6 +1,8 @@
 "use client";
 import { useState } from "react";
 import Image from "next/image";
+import { fetchWithRetry } from "@/lib/fetch-with-retry";
+import { enqueue } from "@/lib/offline-queue";
 
 const REACTIONS = [
   { type: "like", emoji: "👍", label: "Like" },
@@ -44,72 +46,131 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
   const [commentText, setCommentText] = useState("");
   const [replyingTo, setReplyingTo] = useState(null);
   const [loadingComments, setLoadingComments] = useState(false);
+  const [localMessage, setLocalMessage] = useState("");
 
   const author = post.clients || {};
   const fullName = author.display_name || author.username || "User";
-
   const myReaction = localReactions.find((r) => r.user_id === currentUserId);
 
   const reactionCounts = localReactions.reduce((acc, r) => {
     acc[r.reaction_type] = (acc[r.reaction_type] || 0) + 1;
     return acc;
   }, {});
-
   const totalReactions = localReactions.length;
 
   const handleReact = async (type) => {
     setShowReactions(false);
-    const res = await fetch(`/api/posts/${post.id}/react`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reaction_type: type }),
-    });
-    if (!res.ok) return;
 
+    // Optimistic update
     const filtered = localReactions.filter((r) => r.user_id !== currentUserId);
     if (myReaction?.reaction_type === type) {
       setLocalReactions(filtered);
     } else {
       setLocalReactions([...filtered, { reaction_type: type, user_id: currentUserId }]);
     }
-    onUpdate?.();
+
+    // If offline — queue it
+    if (!navigator.onLine) {
+      enqueue({
+        url: `/api/posts/${post.id}/react`,
+        method: "POST",
+        body: { reaction_type: type },
+        label: "Reaction",
+      });
+      return;
+    }
+
+    try {
+      await fetchWithRetry(`/api/posts/${post.id}/react`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reaction_type: type }),
+      });
+      onUpdate?.();
+    } catch {
+      // Silent — optimistic update already shown
+    }
   };
 
   const loadComments = async () => {
     if (commentsLoaded) return;
     setLoadingComments(true);
-    const res = await fetch(`/api/posts/${post.id}`);
-    if (res.ok) {
-      const data = await res.json();
-      setComments(data.comments || []);
-      setCommentsLoaded(true);
+    try {
+      const res = await fetchWithRetry(`/api/posts/${post.id}`, {}, { retries: 1 });
+      if (res.ok) {
+        const data = await res.json();
+        setComments(data.comments || []);
+        setCommentsLoaded(true);
+      }
+    } catch {
+      // Silent
     }
     setLoadingComments(false);
   };
 
   const handleComment = async (parentId = null) => {
     if (!commentText.trim()) return;
-    const res = await fetch(`/api/posts/${post.id}/comment`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        content: commentText,
-        author_name: commentName || undefined,
-        author_email: commentEmail || undefined,
-        parent_id: parentId,
-      }),
-    });
-    if (res.ok) {
-      const newComment = await res.json();
-      setComments([...comments, newComment]);
-      setCommentText("");
-      setReplyingTo(null);
+    const text = commentText;
+    const name = commentName;
+    const email = commentEmail;
+
+    // Clear UI immediately
+    setCommentText("");
+    setReplyingTo(null);
+
+    // If offline — queue it
+    if (!navigator.onLine) {
+      enqueue({
+        url: `/api/posts/${post.id}/comment`,
+        method: "POST",
+        body: {
+          content: text,
+          author_name: name || undefined,
+          author_email: email || undefined,
+          parent_id: parentId,
+        },
+        label: "Comment",
+      });
+      setLocalMessage("Saved. Will post when back online.");
+      setTimeout(() => setLocalMessage(""), 4000);
+      return;
+    }
+
+    try {
+      const res = await fetchWithRetry(`/api/posts/${post.id}/comment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: text,
+          author_name: name || undefined,
+          author_email: email || undefined,
+          parent_id: parentId,
+        }),
+      });
+      if (res.ok) {
+        const newComment = await res.json();
+        setComments([...comments, newComment]);
+      }
+    } catch {
+      setLocalMessage("Couldn't post comment. It's been saved.");
+      setTimeout(() => setLocalMessage(""), 4000);
+      enqueue({
+        url: `/api/posts/${post.id}/comment`,
+        method: "POST",
+        body: {
+          content: text,
+          author_name: name || undefined,
+          author_email: email || undefined,
+          parent_id: parentId,
+        },
+        label: "Comment",
+      });
     }
   };
 
   const handleDelete = async () => {
     if (!confirm("Delete this post?")) return;
-    const res = await fetch(`/api/posts/${post.id}`, { method: "DELETE" });
+    const res = await fetchWithRetry(`/api/posts/${post.id}`, { method: "DELETE" });
     if (res.ok) onUpdate?.();
   };
 
@@ -121,7 +182,6 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      {/* Header */}
       <div className="p-4 flex items-start gap-3">
         {author.profile_pic ? (
           <div className="relative w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
@@ -160,13 +220,15 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
           </p>
         </div>
         {currentUserId && post.author_id === currentUserId && (
-          <button onClick={handleDelete} className="text-gray-400 hover:text-red-600 text-sm flex-shrink-0">
+          <button
+            onClick={handleDelete}
+            className="text-gray-400 hover:text-red-600 text-sm flex-shrink-0"
+          >
             Delete
           </button>
         )}
       </div>
 
-      {/* Content */}
       {post.content && (
         <div className="px-4 pb-3">
           <p
@@ -178,7 +240,6 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
         </div>
       )}
 
-      {/* Images */}
       {imageCount > 0 && (
         <div className={`grid gap-1 ${singleImage ? "grid-cols-1" : "grid-cols-2"}`}>
           {post.image_urls.map((url, i) => (
@@ -190,7 +251,11 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
                 src={url}
                 alt=""
                 fill
-                sizes={singleImage ? "(max-width: 768px) 100vw, 700px" : "(max-width: 768px) 50vw, 350px"}
+                sizes={
+                  singleImage
+                    ? "(max-width: 768px) 100vw, 700px"
+                    : "(max-width: 768px) 50vw, 350px"
+                }
                 className="object-cover"
                 placeholder="blur"
                 blurDataURL={BLUR}
@@ -201,7 +266,6 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
         </div>
       )}
 
-      {/* Counts Bar */}
       {(totalReactions > 0 || post.commentCount > 0) && (
         <div className="px-4 py-2 flex justify-between text-xs text-gray-500 border-t border-gray-100">
           <span className="flex items-center gap-1">
@@ -223,7 +287,6 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
         </div>
       )}
 
-      {/* Action Bar */}
       <div className="border-t border-gray-100 px-2 flex">
         <div
           className="relative flex-1"
@@ -273,7 +336,12 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
         </button>
       </div>
 
-      {/* Comments */}
+      {localMessage && (
+        <div className="px-4 py-2 bg-amber-50 border-t border-amber-100 text-xs text-amber-700">
+          {localMessage}
+        </div>
+      )}
+
       {showAllComments && (
         <div className="border-t border-gray-100 bg-gray-50 p-4 space-y-3">
           {loadingComments && <p className="text-sm text-gray-500">Loading comments...</p>}
@@ -281,7 +349,11 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
             const replies = comments.filter((r) => r.parent_id === c.id);
             return (
               <div key={c.id}>
-                <div className={`p-3 rounded-lg ${c.is_guest ? "bg-white" : "bg-amber-50 border border-amber-100"}`}>
+                <div
+                  className={`p-3 rounded-lg ${
+                    c.is_guest ? "bg-white" : "bg-amber-50 border border-amber-100"
+                  }`}
+                >
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-sm font-semibold text-gray-800">{c.author_name}</span>
                     {c.is_guest ? (
@@ -304,7 +376,10 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
                   </button>
                 </div>
                 {replies.map((r) => (
-                  <div key={r.id} className="ml-6 mt-2 p-2 bg-white rounded-lg border-l-2 border-amber-200">
+                  <div
+                    key={r.id}
+                    className="ml-6 mt-2 p-2 bg-white rounded-lg border-l-2 border-amber-200"
+                  >
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-sm font-semibold text-gray-800">{r.author_name}</span>
                       {r.is_guest ? (
