@@ -1,11 +1,25 @@
 "use client";
 import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { CloseIcon } from "@/lib/icons";
+import { useRouter } from "next/navigation";
+import AutoPostModal from "@/app/components/AutoPostModal";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
+
+const BellIcon = ({ unread }) => (
+  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+    {unread > 0 && <circle cx="20" cy="4" r="3" fill="#ef4444" stroke="#fff" strokeWidth="2" />}
+  </svg>
+);
+
+const CloseIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+  </svg>
 );
 
 export default function UploadProgressTab() {
@@ -21,19 +35,34 @@ export default function UploadProgressTab() {
   const [progressData, setProgressData] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [editExplanation, setEditExplanation] = useState("");
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  // Auto-post modal state
+  const [autoPostOpen, setAutoPostOpen] = useState(false);
+  const [autoPostData, setAutoPostData] = useState({
+    type: "project",
+    sourceId: "",
+    defaultContent: "",
+    previewImages: [],
+  });
+
+  const router = useRouter();
 
   useEffect(() => {
     fetchProjects();
+    fetchNotifications();
     fetchWorkers();
   }, []);
 
   async function fetchProjects() {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("projects")
       .select("id, token_string, work_description, client_name, is_standalone, client_id, city")
       .eq("status", "active")
       .order("created_at", { ascending: false });
-    setProjects(data || []);
+    if (!error) setProjects(data || []);
   }
 
   async function fetchWorkers() {
@@ -43,7 +72,22 @@ export default function UploadProgressTab() {
           process.env.NEXT_PUBLIC_ADMIN_API_KEY || "okmade_super_secret_2026",
       },
     });
-    if (res.ok) setWorkers((await res.json()) || []);
+    if (res.ok) {
+      const data = await res.json();
+      setWorkers(data || []);
+    }
+  }
+
+  async function fetchNotifications() {
+    const { data } = await supabase
+      .from("notifications")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (data) {
+      setNotifications(data);
+      setUnreadCount(data.filter((n) => !n.is_read).length);
+    }
   }
 
   const handleProjectChange = async (e) => {
@@ -65,7 +109,9 @@ export default function UploadProgressTab() {
         .eq("project_id", id)
         .order("created_at", { ascending: false });
       setProgressData(data || []);
-    } else setProgressData([]);
+    } else {
+      setProgressData([]);
+    }
   };
 
   const handleImageChange = (e) => {
@@ -74,10 +120,8 @@ export default function UploadProgressTab() {
       setMessage("You can upload up to 6 progress images total.");
       return;
     }
-    setImageData([
-      ...imageData,
-      ...files.map((file) => ({ file, description: "" })),
-    ]);
+    const newImages = files.map((file) => ({ file, description: "" }));
+    setImageData([...imageData, ...newImages]);
   };
 
   const handleDescriptionChange = (index, value) => {
@@ -107,11 +151,13 @@ export default function UploadProgressTab() {
         const fileName = `progress/${selectedProjectId}_${Date.now()}_${i}.${ext}`;
         const { error: uploadError } = await supabase.storage
           .from("workspace-progress")
-          .upload(fileName, file);
+          .upload(fileName, file, { cacheControl: "31536000" });
         if (uploadError) throw uploadError;
+
         const { data: urlData } = supabase.storage
           .from("workspace-progress")
           .getPublicUrl(fileName);
+
         await supabase.from("progress_images").insert({
           project_id: selectedProjectId,
           image_url: urlData.publicUrl,
@@ -121,7 +167,6 @@ export default function UploadProgressTab() {
         });
       }
 
-      // In-app notification + email to assigned worker
       if (selectedWorkerId) {
         await supabase.from("notifications").insert({
           client_id: selectedWorkerId,
@@ -131,55 +176,20 @@ export default function UploadProgressTab() {
             selectedProjectLabel.split("#")[1]?.replace(")", "") || ""
           }`,
         });
-
-        // Fetch worker email
-        const { data: worker } = await supabase
-          .from("clients")
-          .select("email, display_name")
-          .eq("id", selectedWorkerId)
-          .single();
-
-        if (worker?.email) {
-          // Fetch full project for the token
-          const { data: proj } = await supabase
-            .from("projects")
-            .select("token_string, work_description")
-            .eq("id", selectedProjectId)
-            .single();
-
-          try {
-            await fetch("/api/admin/notify-project-update", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "x-admin-key":
-                  process.env.NEXT_PUBLIC_ADMIN_API_KEY ||
-                  "okmade_super_secret_2026",
-              },
-              body: JSON.stringify({
-                email: worker.email,
-                client_id: selectedWorkerId,
-                projectTitle: proj?.work_description || "Your project",
-                tokenString: proj?.token_string,
-                description: overallDescription || "New progress images uploaded",
-              }),
-            });
-          } catch (emailErr) {
-            console.error("Email notification failed:", emailErr);
-          }
-        }
       }
 
       setMessage(`Uploaded ${imageData.length} progress image(s).`);
       setImageData([]);
       setOverallDescription("");
       document.getElementById("progressImages").value = "";
+
       const { data } = await supabase
         .from("progress_images")
         .select("*")
         .eq("project_id", selectedProjectId)
         .order("created_at", { ascending: false });
       setProgressData(data || []);
+      fetchNotifications();
     } catch (err) {
       setMessage("Error: " + err.message);
     } finally {
@@ -189,33 +199,43 @@ export default function UploadProgressTab() {
 
   const handleEditExplanation = async (id) => {
     if (!editExplanation.trim()) return;
-    await supabase
-      .from("progress_images")
-      .update({ explanation: editExplanation })
-      .eq("id", id);
-    setEditingId(null);
-    setEditExplanation("");
-    const { data } = await supabase
-      .from("progress_images")
-      .select("*")
-      .eq("project_id", selectedProjectId)
-      .order("created_at", { ascending: false });
-    setProgressData(data || []);
-    setMessage("Explanation updated.");
+    try {
+      await supabase
+        .from("progress_images")
+        .update({ explanation: editExplanation })
+        .eq("id", id);
+      setEditingId(null);
+      setEditExplanation("");
+      const { data } = await supabase
+        .from("progress_images")
+        .select("*")
+        .eq("project_id", selectedProjectId)
+        .order("created_at", { ascending: false });
+      setProgressData(data || []);
+      setMessage("Explanation updated.");
+    } catch (err) {
+      setMessage("Error updating explanation: " + err.message);
+    }
   };
 
   const handleDeleteImage = async (imageId, imageUrl) => {
-    if (!confirm("Delete this image?")) return;
-    const path = imageUrl.split("/public/")[1];
-    if (path) await supabase.storage.from("workspace-progress").remove([path]);
-    await supabase.from("progress_images").delete().eq("id", imageId);
-    const { data } = await supabase
-      .from("progress_images")
-      .select("*")
-      .eq("project_id", selectedProjectId)
-      .order("created_at", { ascending: false });
-    setProgressData(data || []);
-    setMessage("Image deleted.");
+    if (!confirm("Delete this image? This cannot be undone.")) return;
+    try {
+      const path = imageUrl.split("/public/")[1];
+      if (path) {
+        await supabase.storage.from("workspace-progress").remove([path]);
+      }
+      await supabase.from("progress_images").delete().eq("id", imageId);
+      const { data } = await supabase
+        .from("progress_images")
+        .select("*")
+        .eq("project_id", selectedProjectId)
+        .order("created_at", { ascending: false });
+      setProgressData(data || []);
+      setMessage("Image deleted.");
+    } catch (err) {
+      setMessage("Error deleting image: " + err.message);
+    }
   };
 
   const handleKill = async () => {
@@ -223,28 +243,21 @@ export default function UploadProgressTab() {
       setMessage("Select a project first.");
       return;
     }
-    if (
-      !confirm(
-        "Mark project as complete? This will publish it to the portfolio AND email all your followers."
-      )
-    )
+    if (!confirm("Mark project as complete? This will publish it to the portfolio."))
       return;
+
     setUploading(true);
-
-    const project = projects.find((p) => p.id === selectedProjectId);
-
     const { error } = await supabase
       .from("projects")
       .update({ status: "killed" })
       .eq("id", selectedProjectId);
 
     if (error) {
-      setMessage("Error: " + error.message);
+      setMessage("Error completing project: " + error.message);
       setUploading(false);
       return;
     }
 
-    // Notify + email the assigned worker
     if (selectedWorkerId) {
       await supabase.from("notifications").insert({
         client_id: selectedWorkerId,
@@ -254,121 +267,112 @@ export default function UploadProgressTab() {
           selectedProjectLabel.split("#")[1]?.replace(")", "") || ""
         }`,
       });
-
-      const { data: worker } = await supabase
-        .from("clients")
-        .select("email")
-        .eq("id", selectedWorkerId)
-        .single();
-
-      if (worker?.email) {
-        try {
-          await fetch("/api/admin/notify-project-complete", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-admin-key":
-                process.env.NEXT_PUBLIC_ADMIN_API_KEY ||
-                "okmade_super_secret_2026",
-            },
-            body: JSON.stringify({
-              email: worker.email,
-              client_id: selectedWorkerId,
-              projectTitle: project?.work_description || "Your project",
-              tokenString: project?.token_string,
-            }),
-          });
-        } catch (emailErr) {
-          console.error("Email failed:", emailErr);
-        }
-      }
     }
 
-    // Auto-post to OKMADE feed
-    try {
-      const { data: okmade } = await supabase
-        .from("clients")
-        .select("id")
-        .eq("is_okmade", true)
-        .single();
+    // Fetch data for auto-post modal
+    const project = projects.find((p) => p.id === selectedProjectId);
+    const { data: progImgs } = await supabase
+      .from("progress_images")
+      .select("image_url")
+      .eq("project_id", selectedProjectId)
+      .order("uploaded_at", { ascending: true })
+      .limit(6);
 
-      if (okmade) {
-        const { data: reqImgs } = await supabase
-          .from("project_request_images")
-          .select("image_url")
-          .eq("project_id", selectedProjectId)
-          .limit(4);
-
-        const cityPart = project?.city ? ` in ${project.city}` : "";
-        const content = `✅ Completed project: ${
-          project?.work_description || "Untitled"
-        }${cityPart}`;
-
-        await supabase.from("posts").insert([
-          {
-            author_id: okmade.id,
-            content,
-            image_urls: (reqImgs || []).map((i) => i.image_url),
-            is_auto: true,
-            auto_source: "project_killed",
-            auto_source_id: selectedProjectId,
-          },
-        ]);
-      }
-    } catch (postErr) {
-      console.error("Auto-post failed:", postErr);
+    let previewImages = (progImgs || []).map((i) => i.image_url).filter(Boolean);
+    if (previewImages.length === 0) {
+      const { data: reqImgs } = await supabase
+        .from("project_request_images")
+        .select("image_url")
+        .eq("project_id", selectedProjectId)
+        .order("display_order", { ascending: true })
+        .limit(6);
+      previewImages = (reqImgs || []).map((i) => i.image_url).filter(Boolean);
     }
 
-    // Broadcast email to OKMADE followers
-    try {
-      const projectTitle = project?.work_description || "Untitled";
-      const cityPart = project?.city ? ` in ${project.city}` : "";
-      const bodyText = `A new project has just been completed: <strong>${projectTitle}</strong>${cityPart}. Visit the portfolio to see the full result.`;
+    const title = project?.work_description || "Our latest project";
+    const city = project?.city ? ` in ${project.city}` : "";
+    const defaultContent = `Just completed: ${title}${city} 🛠️\n\nSee the full story in our portfolio.`;
 
-      await fetch("/api/admin/broadcast", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-admin-key":
-            process.env.NEXT_PUBLIC_ADMIN_API_KEY ||
-            "okmade_super_secret_2026",
-        },
-        body: JSON.stringify({
-          title: `New project completed: ${projectTitle}`,
-          body: bodyText,
-          ctaUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/workspace/${
-            project?.token_string || selectedProjectId
-          }`,
-        }),
-      });
-    } catch (broadcastErr) {
-      console.error("Broadcast failed:", broadcastErr);
-    }
-
-    setMessage("Project completed, published, and followers notified.");
+    setAutoPostData({
+      type: "project",
+      sourceId: selectedProjectId,
+      defaultContent,
+      previewImages,
+    });
+    setAutoPostOpen(true);
+    setUploading(false);
+    setMessage("Project completed and published to portfolio.");
     fetchProjects();
     setSelectedProjectId("");
     setSelectedProjectLabel("");
     setProgressData([]);
-    setUploading(false);
+  };
+
+  const markAsRead = async (id) => {
+    await supabase.from("notifications").update({ is_read: true }).eq("id", id);
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
+    );
+    setUnreadCount((prev) => Math.max(0, prev - 1));
+  };
+
+  const handleNotificationClick = (notif) => {
+    markAsRead(notif.id);
+    if (notif.target_url) router.push(notif.target_url);
+    setShowNotifications(false);
   };
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold mb-6 text-gray-800">
-        Upload Progress & Manage Projects
-      </h1>
+    <div className="p-4 md:p-8 max-w-4xl mx-auto">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Upload Progress & Manage Projects</h1>
+        <div className="relative">
+          <button
+            onClick={() => setShowNotifications(!showNotifications)}
+            className="relative p-2 hover:bg-gray-100 rounded-full transition"
+          >
+            <BellIcon unread={unreadCount} />
+          </button>
+          {showNotifications && (
+            <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-100 z-10 max-h-96 overflow-y-auto">
+              <div className="p-3 border-b font-semibold">Notifications</div>
+              {notifications.length === 0 ? (
+                <div className="p-4 text-center text-gray-500 text-sm">
+                  No notifications.
+                </div>
+              ) : (
+                notifications.map((n) => (
+                  <div
+                    key={n.id}
+                    onClick={() => handleNotificationClick(n)}
+                    className={`p-3 border-b hover:bg-gray-50 cursor-pointer transition ${
+                      !n.is_read ? "bg-amber-50" : ""
+                    }`}
+                  >
+                    <p className="text-sm">{n.message}</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {new Date(n.created_at).toLocaleString()}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      </div>
 
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-8">
+      <div className="bg-white p-6 rounded-xl shadow-md mb-8">
+        <h2 className="text-lg font-semibold mb-4">Upload Progress</h2>
         <form onSubmit={handleUpload} className="space-y-4">
           <div>
-            <label className="block font-medium mb-1 text-sm">
-              Select Active Project
+            <label className="block font-medium mb-1">
+              Select Active Project (Token or Standalone)
             </label>
             <select
               value={selectedProjectId}
               onChange={handleProjectChange}
               className="w-full border p-2 rounded"
+              required
             >
               <option value="">-- Choose a project --</option>
               {projects.map((p) => (
@@ -381,7 +385,7 @@ export default function UploadProgressTab() {
             </select>
           </div>
           <div>
-            <label className="block font-medium mb-1 text-sm">
+            <label className="block font-medium mb-1">
               Overall Description / Notes
             </label>
             <textarea
@@ -389,10 +393,11 @@ export default function UploadProgressTab() {
               onChange={(e) => setOverallDescription(e.target.value)}
               rows="3"
               className="w-full border p-2 rounded"
+              placeholder="Write any general notes about this progress..."
             />
           </div>
           <div>
-            <label className="block font-medium mb-1 text-sm">
+            <label className="block font-medium mb-1">
               Progress Images (up to 6)
             </label>
             <input
@@ -427,20 +432,23 @@ export default function UploadProgressTab() {
                     <button
                       type="button"
                       onClick={() => removeImage(idx)}
-                      className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center hover:bg-red-700"
+                      className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
                     >
-                      <CloseIcon className="w-3 h-3" />
+                      <CloseIcon />
                     </button>
                   </div>
                 ))}
               </div>
             )}
+            <p className="text-sm text-gray-500 mt-1">
+              {imageData.length} file(s) selected
+            </p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-3 flex-wrap">
             <button
               type="submit"
               disabled={uploading}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-medium disabled:opacity-50 transition"
+              className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
             >
               {uploading ? "Uploading..." : "Upload Progress"}
             </button>
@@ -448,15 +456,15 @@ export default function UploadProgressTab() {
               type="button"
               onClick={handleKill}
               disabled={uploading || !selectedProjectId}
-              className="bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-lg font-medium disabled:opacity-50 transition"
+              className="bg-red-600 text-white px-4 py-2 rounded disabled:opacity-50"
             >
               Mark Complete & Publish
             </button>
           </div>
           {message && (
             <p
-              className={`text-sm ${
-                message.startsWith("Error") ? "text-red-500" : "text-green-600"
+              className={`mt-2 ${
+                message.startsWith("Error") ? "text-red-500" : "text-green-500"
               }`}
             >
               {message}
@@ -466,10 +474,8 @@ export default function UploadProgressTab() {
       </div>
 
       {progressData.length > 0 && (
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-          <h2 className="text-lg font-semibold mb-4 text-gray-800">
-            Uploaded Progress
-          </h2>
+        <div className="bg-white p-6 rounded-xl shadow-md">
+          <h2 className="text-lg font-semibold mb-4">Uploaded Progress</h2>
           <div className="space-y-6">
             {progressData.map((item) => {
               const isClient = item.uploaded_by !== null;
@@ -485,7 +491,7 @@ export default function UploadProgressTab() {
                   <div className="flex justify-between items-start">
                     <div>
                       <p className="text-sm font-medium text-gray-700">
-                        {isClient ? "Client" : "Admin"} – {uploaderName}
+                        {isClient ? "👤 Client" : "🛠️ Admin"} – {uploaderName}
                       </p>
                       <p className="text-sm text-gray-500">
                         {new Date(item.created_at).toLocaleString()}
@@ -554,6 +560,15 @@ export default function UploadProgressTab() {
           </div>
         </div>
       )}
+
+      <AutoPostModal
+        open={autoPostOpen}
+        onClose={() => setAutoPostOpen(false)}
+        type={autoPostData.type}
+        sourceId={autoPostData.sourceId}
+        defaultContent={autoPostData.defaultContent}
+        previewImages={autoPostData.previewImages}
+      />
     </div>
   );
 }
