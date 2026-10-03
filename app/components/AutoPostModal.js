@@ -1,5 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
+import Image from "next/image";
+
+const BLUR =
+  "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxIDEiPjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9IiNmZWYzYzciLz48L3N2Zz4=";
 
 export default function AutoPostModal({
   open,
@@ -98,8 +102,19 @@ export default function AutoPostModal({
           {previewImages.length > 0 && (
             <div className="grid grid-cols-3 gap-2">
               {previewImages.slice(0, 6).map((img, idx) => (
-                <div key={idx} className="aspect-square rounded-lg overflow-hidden bg-gray-100">
-                  <img src={img} alt="" className="w-full h-full object-cover" />
+                <div
+                  key={idx}
+                  className="relative aspect-square rounded-lg overflow-hidden bg-gray-100"
+                >
+                  <Image
+                    src={img}
+                    alt=""
+                    fill
+                    sizes="120px"
+                    className="object-cover"
+                    placeholder="blur"
+                    blurDataURL={BLUR}
+                  />
                 </div>
               ))}
             </div>
