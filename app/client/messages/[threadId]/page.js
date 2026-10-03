@@ -3,6 +3,8 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Image from "next/image";
 import { createSupabaseBrowser } from "@/lib/supabase-browser";
+import { fetchWithRetry } from "@/lib/fetch-with-retry";
+import { enqueue } from "@/lib/offline-queue";
 
 const BLUR =
   "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxIDEiPjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9IiNmZWYzYzciLz48L3N2Zz4=";
@@ -14,6 +16,7 @@ export default function ThreadPage() {
   const [content, setContent] = useState("");
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [localMessage, setLocalMessage] = useState("");
   const bottomRef = useRef(null);
   const router = useRouter();
   const supabase = createSupabaseBrowser();
@@ -32,19 +35,23 @@ export default function ThreadPage() {
   }, [messages]);
 
   async function loadThread() {
-    const res = await fetch(`/api/messages/${threadId}`);
-    if (res.status === 401) {
-      router.push("/client/login");
-      return;
-    }
-    if (res.status === 404 || res.status === 403) {
-      router.push("/client/messages");
-      return;
-    }
-    if (res.ok) {
-      const d = await res.json();
-      setData(d);
-      setMessages(d.messages || []);
+    try {
+      const res = await fetchWithRetry(`/api/messages/${threadId}`, {}, { retries: 1 });
+      if (res.status === 401) {
+        router.push("/client/login");
+        return;
+      }
+      if (res.status === 404 || res.status === 403) {
+        router.push("/client/messages");
+        return;
+      }
+      if (res.ok) {
+        const d = await res.json();
+        setData(d);
+        setMessages(d.messages || []);
+      }
+    } catch {
+      // Silent fail on polling
     }
     setLoading(false);
   }
@@ -52,18 +59,63 @@ export default function ThreadPage() {
   async function sendMessage(e) {
     e.preventDefault();
     if (!content.trim() || sending) return;
+    const text = content;
+    setContent("");
     setSending(true);
-    const res = await fetch(`/api/messages/${threadId}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content }),
-    });
-    if (res.ok) {
-      const newMsg = await res.json();
-      setMessages((prev) => [...prev, newMsg]);
-      setContent("");
+
+    // Optimistic bubble
+    const tempId = `temp_${Date.now()}`;
+    const tempMsg = {
+      id: tempId,
+      sender_id: data?.my_id,
+      content: text,
+      created_at: new Date().toISOString(),
+      pending: true,
+    };
+    setMessages((prev) => [...prev, tempMsg]);
+
+    // If offline — queue
+    if (!navigator.onLine) {
+      enqueue({
+        url: `/api/messages/${threadId}`,
+        method: "POST",
+        body: { content: text },
+        label: "Message",
+      });
+      setLocalMessage("Will send when you're back online.");
+      setTimeout(() => setLocalMessage(""), 4000);
+      setSending(false);
+      return;
     }
-    setSending(false);
+
+    try {
+      const res = await fetchWithRetry(`/api/messages/${threadId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: text }),
+      });
+      if (res.ok) {
+        const newMsg = await res.json();
+        setMessages((prev) => prev.map((m) => (m.id === tempId ? newMsg : m)));
+      } else {
+        throw new Error("Failed");
+      }
+    } catch {
+      // On failure, replace temp with pending marker and queue
+      setMessages((prev) =>
+        prev.map((m) => (m.id === tempId ? { ...m, pending: true } : m))
+      );
+      enqueue({
+        url: `/api/messages/${threadId}`,
+        method: "POST",
+        body: { content: text },
+        label: "Message",
+      });
+      setLocalMessage("Message saved. Will send automatically.");
+      setTimeout(() => setLocalMessage(""), 4000);
+    } finally {
+      setSending(false);
+    }
   }
 
   if (loading) {
@@ -95,7 +147,6 @@ export default function ThreadPage() {
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col">
-      {/* Header */}
       <div className="sticky top-0 z-10 bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-2xl mx-auto px-4 h-14 flex items-center gap-3">
           <button
@@ -135,7 +186,6 @@ export default function ThreadPage() {
         </div>
       </div>
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-2xl mx-auto px-4 py-6 space-y-3">
           {messages.length === 0 ? (
@@ -152,15 +202,17 @@ export default function ThreadPage() {
                       mine
                         ? "bg-amber-600 text-white"
                         : "bg-white border border-gray-200 text-gray-800"
-                    }`}
+                    } ${m.pending ? "opacity-70" : ""}`}
                   >
                     <p className="text-sm break-words whitespace-pre-wrap">{m.content}</p>
                     <p className={`text-xs mt-1 ${mine ? "text-amber-100" : "text-gray-400"}`}>
-                      {new Date(m.created_at).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                      {mine && m.read_at && " · Read"}
+                      {m.pending
+                        ? "Sending..."
+                        : new Date(m.created_at).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                      {mine && m.read_at && !m.pending && " · Read"}
                     </p>
                   </div>
                 </div>
@@ -171,7 +223,12 @@ export default function ThreadPage() {
         </div>
       </div>
 
-      {/* Composer */}
+      {localMessage && (
+        <div className="bg-amber-50 border-t border-amber-100 text-xs text-amber-700 text-center py-1.5">
+          {localMessage}
+        </div>
+      )}
+
       <div className="sticky bottom-0 bg-white border-t border-gray-200">
         <form onSubmit={sendMessage} className="max-w-2xl mx-auto px-4 py-3 flex gap-2">
           <input
