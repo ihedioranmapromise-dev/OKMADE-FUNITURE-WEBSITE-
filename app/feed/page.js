@@ -1,10 +1,14 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { createSupabaseBrowser } from "@/lib/supabase-browser";
 import Navbar from "@/app/components/Navbar";
 import PostCard from "@/app/components/PostCard";
 import PostComposer from "@/app/components/PostComposer";
+
+const BLUR =
+  "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxIDEiPjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9IiNmZWYzYzciLz48L3N2Zz4=";
 
 const FeedIcon = ({ className = "w-5 h-5" }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8">
@@ -77,7 +81,10 @@ export default function FeedPage() {
   useEffect(() => {
     async function check() {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.push("/client/login"); return; }
+      if (!user) {
+        router.push("/client/login");
+        return;
+      }
       setUser(user);
 
       const { data: c } = await supabase
@@ -107,9 +114,13 @@ export default function FeedPage() {
     if (!res.ok) return;
     const data = await res.json();
     const followedUsernames = new Set(
-      (data.following || []).map((f) => f.username || f.following_username || f.client_username).filter(Boolean)
+      (data.following || [])
+        .map((f) => f.username || f.following_username || f.client_username)
+        .filter(Boolean)
     );
-    const filtered = allPosts.filter((p) => followedUsernames.has(p.author_username || p.clients?.username));
+    const filtered = allPosts.filter((p) =>
+      followedUsernames.has(p.author_username || p.clients?.username)
+    );
     setFollowingPosts(filtered);
   };
 
@@ -164,15 +175,21 @@ export default function FeedPage() {
               className="flex flex-col items-center gap-1 flex-shrink-0"
               aria-label="Add story"
             >
-              <div className="relative w-16 h-16 rounded-full border-2 border-dashed border-amber-400 flex items-center justify-center bg-amber-50">
+              <div className="relative w-16 h-16 rounded-full border-2 border-dashed border-amber-400 flex items-center justify-center bg-amber-50 overflow-hidden">
                 {client.profile_pic ? (
-                  <img src={client.profile_pic} alt="" className="w-full h-full rounded-full object-cover opacity-70" />
+                  <Image
+                    src={client.profile_pic}
+                    alt=""
+                    fill
+                    sizes="64px"
+                    className="object-cover opacity-70"
+                  />
                 ) : (
                   <div className="w-full h-full rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold">
                     {(client.display_name || client.username || "?").charAt(0).toUpperCase()}
                   </div>
                 )}
-                <div className="absolute -bottom-1 -right-1 bg-amber-600 text-white rounded-full w-6 h-6 flex items-center justify-center border-2 border-white">
+                <div className="absolute -bottom-1 -right-1 bg-amber-600 text-white rounded-full w-6 h-6 flex items-center justify-center border-2 border-white z-10">
                   <PlusIcon className="w-3.5 h-3.5" />
                 </div>
               </div>
@@ -194,14 +211,24 @@ export default function FeedPage() {
                   href={`/client/${owner.username || ""}`}
                   className="flex flex-col items-center gap-1 flex-shrink-0"
                 >
-                  <div className="w-16 h-16 rounded-full p-[2px] bg-gradient-to-tr from-amber-500 via-orange-400 to-amber-600">
-                    {owner.profile_pic ? (
-                      <img src={owner.profile_pic} alt={name} className="w-full h-full rounded-full object-cover border-2 border-white" />
-                    ) : (
-                      <div className="w-full h-full rounded-full bg-amber-100 border-2 border-white flex items-center justify-center text-amber-700 font-bold">
-                        {name.charAt(0).toUpperCase()}
-                      </div>
-                    )}
+                  <div className="relative w-16 h-16 rounded-full p-[2px] bg-gradient-to-tr from-amber-500 via-orange-400 to-amber-600">
+                    <div className="relative w-full h-full rounded-full overflow-hidden border-2 border-white bg-amber-100">
+                      {owner.profile_pic ? (
+                        <Image
+                          src={owner.profile_pic}
+                          alt={name}
+                          fill
+                          sizes="64px"
+                          className="object-cover"
+                          placeholder="blur"
+                          blurDataURL={BLUR}
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-amber-700 font-bold">
+                          {name.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <span className="text-xs text-gray-600 truncate w-16 text-center">
                     {name.split(" ")[0]}
@@ -218,13 +245,21 @@ export default function FeedPage() {
         <div className="max-w-2xl mx-auto flex">
           <button
             onClick={() => setTab("for-you")}
-            className={`flex-1 py-3 text-sm font-semibold border-b-2 transition ${tab === "for-you" ? "border-amber-600 text-amber-700" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+            className={`flex-1 py-3 text-sm font-semibold border-b-2 transition ${
+              tab === "for-you"
+                ? "border-amber-600 text-amber-700"
+                : "border-transparent text-gray-500 hover:text-gray-700"
+            }`}
           >
             For You
           </button>
           <button
             onClick={() => setTab("following")}
-            className={`flex-1 py-3 text-sm font-semibold border-b-2 transition ${tab === "following" ? "border-amber-600 text-amber-700" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+            className={`flex-1 py-3 text-sm font-semibold border-b-2 transition ${
+              tab === "following"
+                ? "border-amber-600 text-amber-700"
+                : "border-transparent text-gray-500 hover:text-gray-700"
+            }`}
           >
             Following
           </button>
@@ -239,9 +274,21 @@ export default function FeedPage() {
       {/* Posts */}
       <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
         {loadingPosts ? (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center text-gray-500">
-            Loading posts...
-          </div>
+          <>
+            {[...Array(3)].map((_, i) => (
+              <div
+                key={i}
+                className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 space-y-3"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-gray-200 animate-pulse"></div>
+                  <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
+                </div>
+                <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse"></div>
+                <div className="h-56 bg-gray-100 rounded animate-pulse"></div>
+              </div>
+            ))}
+          </>
         ) : posts.length === 0 ? (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center text-gray-500">
             {tab === "following"
@@ -319,7 +366,9 @@ export default function FeedPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200">
-              <span className="font-bold text-amber-800 font-['Dancing_Script',_cursive] text-xl">OKMADE</span>
+              <span className="font-bold text-amber-800 font-['Dancing_Script',_cursive] text-xl">
+                OKMADE
+              </span>
               <button
                 onClick={() => setDrawerOpen(false)}
                 className="p-1.5 hover:bg-gray-100 rounded-full transition"
@@ -329,30 +378,57 @@ export default function FeedPage() {
               </button>
             </div>
             <nav className="flex-1 overflow-y-auto py-2">
-              <a href="/feed" onClick={() => setDrawerOpen(false)} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 text-amber-700 font-semibold text-sm">
+              <a
+                href="/feed"
+                onClick={() => setDrawerOpen(false)}
+                className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 text-amber-700 font-semibold text-sm"
+              >
                 <FeedIcon /> Public Feed
               </a>
-              <a href="/client/dashboard" onClick={() => setDrawerOpen(false)} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 text-gray-700 text-sm">
+              <a
+                href="/client/dashboard"
+                onClick={() => setDrawerOpen(false)}
+                className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 text-gray-700 text-sm"
+              >
                 <DashboardIcon /> Dashboard
               </a>
-              <a href="/client/messages" onClick={() => setDrawerOpen(false)} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 text-gray-700 text-sm">
+              <a
+                href="/client/messages"
+                onClick={() => setDrawerOpen(false)}
+                className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 text-gray-700 text-sm"
+              >
                 <MessageIcon /> Messages
               </a>
-              <a href="/client/notifications" onClick={() => setDrawerOpen(false)} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 text-gray-700 text-sm">
+              <a
+                href="/client/notifications"
+                onClick={() => setDrawerOpen(false)}
+                className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 text-gray-700 text-sm"
+              >
                 <BellIcon /> Notifications
               </a>
               {client && (
-                <a href={`/client/${client.username}`} onClick={() => setDrawerOpen(false)} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 text-gray-700 text-sm">
+                <a
+                  href={`/client/${client.username}`}
+                  onClick={() => setDrawerOpen(false)}
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 text-gray-700 text-sm"
+                >
                   <HomeIcon /> My Public Profile
                 </a>
               )}
-              <a href="/client/settings" onClick={() => setDrawerOpen(false)} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 text-gray-700 text-sm">
+              <a
+                href="/client/settings"
+                onClick={() => setDrawerOpen(false)}
+                className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 text-gray-700 text-sm"
+              >
                 <CogIcon /> Settings
               </a>
             </nav>
             <div className="border-t border-gray-200">
               <button
-                onClick={() => { setDrawerOpen(false); setLogoutConfirm(true); }}
+                onClick={() => {
+                  setDrawerOpen(false);
+                  setLogoutConfirm(true);
+                }}
                 className="w-full flex items-center gap-3 px-4 py-4 hover:bg-red-50 text-red-600 text-sm text-left"
               >
                 <LogoutIcon /> Logout
