@@ -2,13 +2,16 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
-import { getOptimizedImage } from "@/lib/utils";
+import Image from "next/image";
 import Navbar from "@/app/components/Navbar";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
+
+const BLUR =
+  "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxIDEiPjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9IiNmZWYzYzciLz48L3N2Zz4=";
 
 export default function PortfolioPage() {
   const [projects, setProjects] = useState([]);
@@ -57,50 +60,64 @@ export default function PortfolioPage() {
 
   async function fetchData() {
     setLoading(true);
-    const { data: cats } = await supabase
-      .from("categories")
-      .select("*")
-      .order("name");
-    setCategories(cats || []);
 
-    const { data: projs, error } = await supabase
-      .from("projects")
-      .select(
-        "id, token_string, work_description, city, duration_weeks, project_details, category_id, created_at, is_standalone, categories(name)"
-      )
-      .eq("status", "killed")
-      .order("created_at", { ascending: false });
+    const [catsRes, projsRes] = await Promise.all([
+      supabase.from("categories").select("*").order("name"),
+      supabase
+        .from("projects")
+        .select(
+          "id, token_string, work_description, city, duration_weeks, project_details, category_id, created_at, is_standalone, categories(name)"
+        )
+        .eq("status", "killed")
+        .order("created_at", { ascending: false }),
+    ]);
 
-    if (!error && projs) {
-      const projectsWithImages = await Promise.all(
-        projs.map(async (p) => {
-          const { data: imgs } = await supabase
-            .from("project_request_images")
-            .select("image_url")
-            .eq("project_id", p.id)
-            .order("display_order")
-            .limit(1);
-          return { ...p, coverImage: imgs?.[0]?.image_url || null };
-        })
-      );
-      setProjects(projectsWithImages);
-      setFilteredProjects(projectsWithImages);
+    setCategories(catsRes.data || []);
 
-      const uniqueCities = new Set(projs.map((p) => p.city).filter(Boolean));
-      const uniqueCategories = new Set(
-        projs.map((p) => p.category_id).filter(Boolean)
-      );
-      const uniqueClients = new Set(
-        projs.filter((p) => !p.is_standalone).map((p) => p.token_string)
-      );
-      setStats({
-        totalProjects: projs.length,
-        totalCities: uniqueCities.size,
-        totalCategories: uniqueCategories.size,
-        totalClients: uniqueClients.size,
-      });
-      setCities([...uniqueCities].sort());
+    const projs = projsRes.data;
+    if (projsRes.error || !projs || projs.length === 0) {
+      setProjects([]);
+      setFilteredProjects([]);
+      setLoading(false);
+      return;
     }
+
+    const ids = projs.map((p) => p.id);
+
+    // ONE query for all cover images
+    const { data: allImgs } = await supabase
+      .from("project_request_images")
+      .select("project_id, image_url, display_order")
+      .in("project_id", ids)
+      .order("display_order", { ascending: true });
+
+    const firstImageByProject = {};
+    (allImgs || []).forEach((img) => {
+      if (!firstImageByProject[img.project_id]) {
+        firstImageByProject[img.project_id] = img.image_url;
+      }
+    });
+
+    const projectsWithImages = projs.map((p) => ({
+      ...p,
+      coverImage: firstImageByProject[p.id] || null,
+    }));
+
+    setProjects(projectsWithImages);
+    setFilteredProjects(projectsWithImages);
+
+    const uniqueCities = new Set(projs.map((p) => p.city).filter(Boolean));
+    const uniqueCategories = new Set(projs.map((p) => p.category_id).filter(Boolean));
+    const uniqueClients = new Set(
+      projs.filter((p) => !p.is_standalone).map((p) => p.token_string)
+    );
+    setStats({
+      totalProjects: projs.length,
+      totalCities: uniqueCities.size,
+      totalCategories: uniqueCategories.size,
+      totalClients: uniqueClients.size,
+    });
+    setCities([...uniqueCities].sort());
     setLoading(false);
   }
 
@@ -112,15 +129,17 @@ export default function PortfolioPage() {
 
       {/* Hero */}
       <section className="relative h-[500px] flex items-center justify-center overflow-hidden">
-        <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-          style={{
-            backgroundImage:
-              "url('https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=2070&q=80')",
-          }}
-        >
-          <div className="absolute inset-0 bg-black/60"></div>
-        </div>
+        <Image
+          src="https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=2070&q=80"
+          alt="Our Portfolio"
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover"
+          placeholder="blur"
+          blurDataURL={BLUR}
+        />
+        <div className="absolute inset-0 bg-black/60"></div>
         <div className="relative z-10 text-center text-white px-6 max-w-3xl">
           <p className="text-sm md:text-base tracking-[0.3em] uppercase text-amber-200 mb-4">
             Our Portfolio
@@ -193,12 +212,7 @@ export default function PortfolioPage() {
               stroke="currentColor"
               viewBox="0 0 24 24"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             {searchTerm && (
               <button
@@ -257,10 +271,16 @@ export default function PortfolioPage() {
       {/* Projects */}
       <section className="container mx-auto px-6 pb-16">
         {loading ? (
-          <div className="flex justify-center items-center h-64">
-            <div className="animate-pulse text-amber-600 text-lg">
-              Loading portfolio...
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="bg-white rounded-2xl shadow-md overflow-hidden border border-amber-100/30">
+                <div className="h-64 bg-amber-50 animate-pulse"></div>
+                <div className="p-5 space-y-2">
+                  <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse"></div>
+                  <div className="h-4 bg-gray-200 rounded w-1/2 animate-pulse"></div>
+                </div>
+              </div>
+            ))}
           </div>
         ) : filteredProjects.length === 0 ? (
           <div className="text-center py-16 text-gray-500 text-lg">
@@ -269,23 +289,25 @@ export default function PortfolioPage() {
         ) : (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {filteredProjects.slice(0, visibleCount).map((project) => (
+              {filteredProjects.slice(0, visibleCount).map((project, idx) => (
                 <div
                   key={project.id}
                   onClick={() =>
-                    router.push(
-                      `/workspace/${project.token_string || project.id}`
-                    )
+                    router.push(`/workspace/${project.token_string || project.id}`)
                   }
                   className="group bg-white rounded-2xl shadow-md overflow-hidden hover:shadow-2xl transition-all duration-300 cursor-pointer border border-amber-100/30 hover:-translate-y-2"
                 >
                   <div className="relative h-64 overflow-hidden bg-amber-50">
                     {project.coverImage ? (
-                      <img
-                        src={getOptimizedImage(project.coverImage, 600)}
-                        loading="lazy"
-                        className="w-full h-full object-cover group-hover:scale-110 transition duration-700"
-                        alt={project.work_description}
+                      <Image
+                        src={project.coverImage}
+                        alt={project.work_description || "Project"}
+                        fill
+                        sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                        className="object-cover group-hover:scale-110 transition duration-700"
+                        placeholder="blur"
+                        blurDataURL={BLUR}
+                        priority={idx < 3}
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-amber-300">
@@ -293,12 +315,12 @@ export default function PortfolioPage() {
                       </div>
                     )}
                     {project.categories?.name && (
-                      <div className="absolute top-4 left-4 bg-amber-700/90 backdrop-blur-sm text-white text-xs px-3 py-1 rounded-full shadow-lg">
+                      <div className="absolute top-4 left-4 bg-amber-700/90 backdrop-blur-sm text-white text-xs px-3 py-1 rounded-full shadow-lg z-10">
                         {project.categories.name}
                       </div>
                     )}
                     {project.token_string && (
-                      <div className="absolute top-4 right-4 bg-black/50 text-white text-xs px-3 py-1 rounded-full backdrop-blur-sm font-mono">
+                      <div className="absolute top-4 right-4 bg-black/50 text-white text-xs px-3 py-1 rounded-full backdrop-blur-sm font-mono z-10">
                         #{project.token_string}
                       </div>
                     )}
@@ -310,42 +332,17 @@ export default function PortfolioPage() {
                     <div className="flex items-center gap-4 text-sm text-gray-500">
                       {project.city && (
                         <span className="flex items-center gap-1">
-                          <svg
-                            className="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth="2"
-                              d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                            />
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth="2"
-                              d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-                            />
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                           </svg>
                           {project.city}
                         </span>
                       )}
                       {project.duration_weeks && (
                         <span className="flex items-center gap-1">
-                          <svg
-                            className="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth="2"
-                              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                            />
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
                           {project.duration_weeks} weeks
                         </span>
