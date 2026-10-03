@@ -14,11 +14,11 @@ export async function POST(request) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
     }
 
-    const { type, source_id, caption, send_email } = await request.json();
+    const { type, source_id, content, send_email } = await request.json();
 
-    if (!type || !source_id || !caption) {
+    if (!type || !source_id || !content) {
       return new Response(
-        JSON.stringify({ error: "Missing type, source_id, or caption" }),
+        JSON.stringify({ error: "Missing type, source_id, or content" }),
         { status: 400 }
       );
     }
@@ -34,6 +34,21 @@ export async function POST(request) {
       return new Response(
         JSON.stringify({ error: "OKMADE profile not found" }),
         { status: 404 }
+      );
+    }
+
+    // Prevent double-posting for the same source
+    const { data: existing } = await admin
+      .from("posts")
+      .select("id")
+      .eq("auto_source", type)
+      .eq("auto_source_id", source_id)
+      .maybeSingle();
+
+    if (existing) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Already posted for this source.", post_id: existing.id }),
+        { status: 200 }
       );
     }
 
@@ -58,16 +73,18 @@ export async function POST(request) {
         .order("uploaded_at", { ascending: true })
         .limit(6);
 
-      const { data: reqImgs } = await admin
-        .from("project_request_images")
-        .select("image_url")
-        .eq("project_id", source_id)
-        .order("display_order", { ascending: true })
-        .limit(6);
+      let imgs = progImgs;
+      if (!imgs || imgs.length === 0) {
+        const { data: reqImgs } = await admin
+          .from("project_request_images")
+          .select("image_url")
+          .eq("project_id", source_id)
+          .order("display_order", { ascending: true })
+          .limit(6);
+        imgs = reqImgs;
+      }
 
-      imageUrls = (progImgs?.length ? progImgs : reqImgs || [])
-        .map((i) => i.image_url)
-        .filter(Boolean);
+      imageUrls = (imgs || []).map((i) => i.image_url).filter(Boolean);
       targetUrl = `/workspace/${project.token_string || project.id}`;
     }
 
@@ -75,7 +92,7 @@ export async function POST(request) {
     if (type === "product") {
       const { data: product } = await admin
         .from("showroom")
-        .select("id, description, price")
+        .select("id")
         .eq("id", source_id)
         .maybeSingle();
       if (!product) {
@@ -96,7 +113,7 @@ export async function POST(request) {
     if (type === "catalog") {
       const { data: catalog } = await admin
         .from("catalogs")
-        .select("id, title")
+        .select("id")
         .eq("id", source_id)
         .maybeSingle();
       if (!catalog) {
@@ -118,7 +135,7 @@ export async function POST(request) {
       .from("posts")
       .insert({
         author_id: okmade.id,
-        caption,
+        content,
         image_urls: imageUrls,
         is_auto: true,
         auto_source: type,
@@ -131,7 +148,7 @@ export async function POST(request) {
       return new Response(JSON.stringify({ error: postErr.message }), { status: 500 });
     }
 
-    // Optionally broadcast email to OKMADE's followers
+    // Broadcast email if requested
     let emailsResult = { sent: 0, skipped: 0, failed: 0, total: 0 };
 
     if (send_email) {
@@ -143,7 +160,7 @@ export async function POST(request) {
       if (followers && followers.length > 0) {
         const tpl = okmadeAnnouncementEmail({
           title: "New on OKMADE",
-          body: caption,
+          body: content,
           ctaUrl: `${process.env.NEXT_PUBLIC_BASE_URL}${targetUrl}`,
         });
 
@@ -179,7 +196,7 @@ export async function POST(request) {
     if (type === "project") {
       await admin.from("projects").update({ broadcast_sent: true }).eq("id", source_id);
     } else if (type === "product") {
-      // showroom doesn't have broadcast_sent by default — skip silently
+      await admin.from("showroom").update({ broadcast_sent: true }).eq("id", source_id);
     } else if (type === "catalog") {
       await admin.from("catalogs").update({ broadcast_sent: true }).eq("id", source_id);
     }
