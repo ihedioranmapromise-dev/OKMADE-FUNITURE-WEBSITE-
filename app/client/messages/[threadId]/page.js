@@ -1,7 +1,11 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
+import Image from "next/image";
 import { createSupabaseBrowser } from "@/lib/supabase-browser";
+
+const BLUR =
+  "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxIDEiPjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9IiNmZWYzYzciLz48L3N2Zz4=";
 
 export default function ThreadPage() {
   const { threadId } = useParams();
@@ -19,7 +23,6 @@ export default function ThreadPage() {
   }, [threadId]);
 
   useEffect(() => {
-    // Poll every 5 seconds for new messages
     const interval = setInterval(loadThread, 5000);
     return () => clearInterval(interval);
   }, [threadId]);
@@ -30,8 +33,14 @@ export default function ThreadPage() {
 
   async function loadThread() {
     const res = await fetch(`/api/messages/${threadId}`);
-    if (res.status === 401) { router.push("/client/login"); return; }
-    if (res.status === 404 || res.status === 403) { router.push("/client/messages"); return; }
+    if (res.status === 401) {
+      router.push("/client/login");
+      return;
+    }
+    if (res.status === 404 || res.status === 403) {
+      router.push("/client/messages");
+      return;
+    }
     if (res.ok) {
       const d = await res.json();
       setData(d);
@@ -57,7 +66,29 @@ export default function ThreadPage() {
     setSending(false);
   }
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-amber-600">Loading chat...</div>;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex flex-col">
+        <div className="sticky top-0 z-10 bg-white shadow-sm border-b border-gray-200">
+          <div className="max-w-2xl mx-auto px-4 h-14 flex items-center gap-3">
+            <div className="w-6 h-6"></div>
+            <div className="w-9 h-9 rounded-full bg-gray-200 animate-pulse"></div>
+            <div className="flex-1 space-y-2">
+              <div className="h-4 bg-gray-200 rounded w-1/3 animate-pulse"></div>
+              <div className="h-3 bg-gray-200 rounded w-1/4 animate-pulse"></div>
+            </div>
+          </div>
+        </div>
+        <div className="flex-1 max-w-2xl mx-auto w-full px-4 py-6 space-y-3">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className={`flex ${i % 2 ? "justify-end" : "justify-start"}`}>
+              <div className="h-12 w-40 bg-gray-200 rounded-2xl animate-pulse"></div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
   if (!data) return null;
 
   const other = data.other;
@@ -67,21 +98,39 @@ export default function ThreadPage() {
       {/* Header */}
       <div className="sticky top-0 z-10 bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-2xl mx-auto px-4 h-14 flex items-center gap-3">
-          <button onClick={() => router.push("/client/messages")} className="text-gray-600 hover:text-amber-700 text-xl">
+          <button
+            onClick={() => router.push("/client/messages")}
+            className="text-gray-600 hover:text-amber-700 text-xl"
+          >
             ←
           </button>
           {other?.profile_pic ? (
-            <img src={other.profile_pic} className="w-9 h-9 rounded-full object-cover" alt="" />
+            <div className="relative w-9 h-9 rounded-full overflow-hidden flex-shrink-0">
+              <Image
+                src={other.profile_pic}
+                alt=""
+                fill
+                sizes="36px"
+                className="object-cover"
+                placeholder="blur"
+                blurDataURL={BLUR}
+              />
+            </div>
           ) : (
-            <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-sm">
+            <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-sm flex-shrink-0">
               {(other?.display_name || "?").charAt(0)}
             </div>
           )}
-          <div className="flex-1">
-            <a href={`/client/${other?.username}`} className="font-semibold text-gray-800 text-sm hover:underline">
+          <div className="flex-1 min-w-0">
+            <a
+              href={`/client/${other?.username}`}
+              className="font-semibold text-gray-800 text-sm hover:underline truncate block"
+            >
               {other?.display_name || other?.username}
             </a>
-            {other?.skill && <p className="text-xs text-gray-500">{other.skill}</p>}
+            {other?.skill && (
+              <p className="text-xs text-gray-500 truncate">{other.skill}</p>
+            )}
           </div>
         </div>
       </div>
@@ -98,10 +147,19 @@ export default function ThreadPage() {
               const mine = m.sender_id === data.my_id;
               return (
                 <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-                  <div className={`max-w-[75%] rounded-2xl px-4 py-2 ${mine ? "bg-amber-600 text-white" : "bg-white border border-gray-200 text-gray-800"}`}>
+                  <div
+                    className={`max-w-[75%] rounded-2xl px-4 py-2 ${
+                      mine
+                        ? "bg-amber-600 text-white"
+                        : "bg-white border border-gray-200 text-gray-800"
+                    }`}
+                  >
                     <p className="text-sm break-words whitespace-pre-wrap">{m.content}</p>
                     <p className={`text-xs mt-1 ${mine ? "text-amber-100" : "text-gray-400"}`}>
-                      {new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      {new Date(m.created_at).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
                       {mine && m.read_at && " · Read"}
                     </p>
                   </div>
