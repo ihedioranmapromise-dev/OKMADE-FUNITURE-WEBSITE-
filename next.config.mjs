@@ -1,7 +1,21 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
-    domains: ["qyvuvcopjkgdugdtiydu.supabase.co"],
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "qyvuvcopjkgdugdtiydu.supabase.co",
+        pathname: "/storage/v1/object/public/**",
+      },
+      {
+        protocol: "https",
+        hostname: "images.unsplash.com",
+      },
+    ],
+    formats: ["image/avif", "image/webp"],
+    minimumCacheTTL: 31536000,
+    deviceSizes: [360, 480, 640, 768, 1024, 1280, 1536, 1920],
+    imageSizes: [64, 96, 128, 200, 256, 384],
   },
   async redirects() {
     return [
