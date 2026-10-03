@@ -1,6 +1,8 @@
 "use client";
 import { useState, useRef } from "react";
 import { createSupabaseBrowser } from "@/lib/supabase-browser";
+import { fetchWithRetry } from "@/lib/fetch-with-retry";
+import { enqueue } from "@/lib/offline-queue";
 
 const FONT_OPTIONS = [
   { label: "Default", value: "sans-serif" },
@@ -29,7 +31,6 @@ export default function PostComposer({ onPosted }) {
     }
     const allFiles = [...files, ...newFiles];
     const allPreviews = allFiles.map((f) => URL.createObjectURL(f));
-    // Revoke old previews to avoid memory leak
     previews.forEach((p) => URL.revokeObjectURL(p));
     setFiles(allFiles);
     setPreviews(allPreviews);
@@ -38,11 +39,19 @@ export default function PostComposer({ onPosted }) {
   const removeImage = (idx) => {
     const newFiles = [...files];
     newFiles.splice(idx, 1);
-    // Revoke all old previews, then create fresh ones
     previews.forEach((p) => URL.revokeObjectURL(p));
     const newPreviews = newFiles.map((f) => URL.createObjectURL(f));
     setFiles(newFiles);
     setPreviews(newPreviews);
+  };
+
+  const clearComposer = () => {
+    previews.forEach((p) => URL.revokeObjectURL(p));
+    setContent("");
+    setFiles([]);
+    setPreviews([]);
+    setFont("sans-serif");
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handlePost = async () => {
@@ -50,13 +59,37 @@ export default function PostComposer({ onPosted }) {
       setMessage("Write something or add an image");
       return;
     }
+
+    // If offline and has images — can't queue images, so block
+    if (!navigator.onLine && files.length > 0) {
+      setMessage("You can't post images while offline. Remove them or wait until you're back online.");
+      return;
+    }
+
     setPosting(true);
     setMessage("");
+
     try {
+      // If offline and no images — queue the post
+      if (!navigator.onLine) {
+        enqueue({
+          url: "/api/posts",
+          method: "POST",
+          body: { content, image_urls: [], font_family: font },
+          label: "Post",
+        });
+        clearComposer();
+        setMessage("Saved. Will post when you're back online.");
+        setTimeout(() => setMessage(""), 4000);
+        onPosted?.();
+        setPosting(false);
+        return;
+      }
+
+      // Online — upload images in parallel
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not logged in");
 
-      // Upload all images in parallel
       const uploadResults = await Promise.all(
         files.map(async (file, i) => {
           const ext = file.name.split(".").pop();
@@ -74,7 +107,7 @@ export default function PostComposer({ onPosted }) {
         })
       );
 
-      const res = await fetch("/api/posts", {
+      const res = await fetchWithRetry("/api/posts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -85,14 +118,7 @@ export default function PostComposer({ onPosted }) {
       });
       if (!res.ok) throw new Error("Failed to post");
 
-      // Revoke previews before clearing
-      previews.forEach((p) => URL.revokeObjectURL(p));
-
-      setContent("");
-      setFiles([]);
-      setPreviews([]);
-      setFont("sans-serif");
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      clearComposer();
       onPosted?.();
     } catch (err) {
       setMessage("Error: " + err.message);
@@ -116,12 +142,7 @@ export default function PostComposer({ onPosted }) {
         <div className="grid grid-cols-2 gap-2 mt-3">
           {previews.map((p, i) => (
             <div key={i} className="relative">
-              {/* Local blob preview — next/image doesn't support blobs, plain img is fine */}
-              <img
-                src={p}
-                className="w-full h-32 object-cover rounded-lg"
-                alt=""
-              />
+              <img src={p} className="w-full h-32 object-cover rounded-lg" alt="" />
               <button
                 onClick={() => removeImage(i)}
                 className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white rounded-full w-6 h-6 text-xs flex items-center justify-center"
@@ -154,11 +175,7 @@ export default function PostComposer({ onPosted }) {
           style={{ fontFamily: font }}
         >
           {FONT_OPTIONS.map((f) => (
-            <option
-              key={f.value}
-              value={f.value}
-              style={{ fontFamily: f.value }}
-            >
+            <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>
               {f.label}
             </option>
           ))}
@@ -173,7 +190,11 @@ export default function PostComposer({ onPosted }) {
         </button>
       </div>
 
-      {message && <p className="mt-2 text-sm text-red-500">{message}</p>}
+      {message && (
+        <p className={`mt-2 text-sm ${message.startsWith("Error") ? "text-red-500" : "text-amber-700"}`}>
+          {message}
+        </p>
+      )}
     </div>
   );
 }
