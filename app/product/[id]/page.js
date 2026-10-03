@@ -5,6 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import { WhatsAppIcon, CloseIcon } from "@/lib/icons";
 import Navbar from "@/app/components/Navbar";
+import { fetchWithRetry } from "@/lib/fetch-with-retry";
+import { enqueue } from "@/lib/offline-queue";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -103,7 +105,6 @@ export default function ProductDetail() {
   async function fetchData() {
     setLoading(true);
 
-    // Fire 4 queries in parallel
     const [prodRes, imgsRes, revsRes, relatedRes] = await Promise.all([
       supabase.from("showroom").select("*").eq("id", id).single(),
       supabase
@@ -143,7 +144,6 @@ export default function ProductDetail() {
 
     setRelatedProducts(relatedRes.data || []);
 
-    // Batch secondary queries if there are reviews
     if (revs.length > 0) {
       const reviewIds = revs.map((r) => r.id);
 
@@ -183,7 +183,6 @@ export default function ProductDetail() {
       setLikeCount(likesRes.count || 0);
       setLiked(!!myLikeRes.data);
     } else {
-      // No reviews — just fetch likes
       const [likesRes, myLikeRes] = await Promise.all([
         supabase
           .from("product_likes")
@@ -204,20 +203,38 @@ export default function ProductDetail() {
   }
 
   const toggleProductLike = async () => {
-    if (liked) {
-      await supabase
-        .from("product_likes")
-        .delete()
-        .eq("product_id", id)
-        .eq("user_id", viewerId);
-      setLiked(false);
-      setLikeCount((c) => Math.max(0, c - 1));
-    } else {
-      await supabase
-        .from("product_likes")
-        .insert({ product_id: id, user_id: viewerId });
-      setLiked(true);
-      setLikeCount((c) => c + 1);
+    const wasLiked = liked;
+    // Optimistic
+    setLiked(!wasLiked);
+    setLikeCount((c) => (wasLiked ? Math.max(0, c - 1) : c + 1));
+
+    // Offline → queue
+    if (!navigator.onLine) {
+      enqueue({
+        url: "/api/product-like",
+        method: "POST",
+        body: { product_id: id, user_id: viewerId, liked: !wasLiked },
+        label: "Product like",
+      });
+      return;
+    }
+
+    try {
+      if (wasLiked) {
+        await supabase
+          .from("product_likes")
+          .delete()
+          .eq("product_id", id)
+          .eq("user_id", viewerId);
+      } else {
+        await supabase
+          .from("product_likes")
+          .insert({ product_id: id, user_id: viewerId });
+      }
+    } catch {
+      // Revert on failure
+      setLiked(wasLiked);
+      setLikeCount((c) => (wasLiked ? c + 1 : Math.max(0, c - 1)));
     }
   };
 
@@ -225,8 +242,9 @@ export default function ProductDetail() {
     const existing = (reviewReactions[reviewId] || []).find(
       (r) => r.reaction_type === type && r.user_id === viewerId
     );
+
+    // Optimistic
     if (existing) {
-      await supabase.from("review_reactions").delete().eq("id", existing.id);
       setReviewReactions((prev) => ({
         ...prev,
         [reviewId]: (prev[reviewId] || []).filter(
@@ -234,15 +252,46 @@ export default function ProductDetail() {
         ),
       }));
     } else {
-      const { data: inserted } = await supabase
-        .from("review_reactions")
-        .insert({ review_id: reviewId, user_id: viewerId, reaction_type: type })
-        .select()
-        .single();
       setReviewReactions((prev) => ({
         ...prev,
-        [reviewId]: [...(prev[reviewId] || []), inserted],
+        [reviewId]: [
+          ...(prev[reviewId] || []),
+          { id: `temp_${Date.now()}`, reaction_type: type, user_id: viewerId },
+        ],
       }));
+    }
+
+    // Offline → queue
+    if (!navigator.onLine) {
+      enqueue({
+        url: "/api/review-reaction",
+        method: "POST",
+        body: { review_id: reviewId, user_id: viewerId, reaction_type: type },
+        label: "Review reaction",
+      });
+      return;
+    }
+
+    try {
+      if (existing) {
+        await supabase.from("review_reactions").delete().eq("id", existing.id);
+      } else {
+        const { data: inserted } = await supabase
+          .from("review_reactions")
+          .insert({ review_id: reviewId, user_id: viewerId, reaction_type: type })
+          .select()
+          .single();
+        if (inserted) {
+          setReviewReactions((prev) => ({
+            ...prev,
+            [reviewId]: (prev[reviewId] || []).map((r) =>
+              r.id?.startsWith("temp_") ? inserted : r
+            ),
+          }));
+        }
+      }
+    } catch {
+      // Silent — optimistic stays
     }
   };
 
@@ -252,19 +301,62 @@ export default function ProductDetail() {
       setMessage("Please enter your name.");
       return;
     }
+
+    // Offline → queue
+    if (!navigator.onLine) {
+      enqueue({
+        url: "/api/product-review",
+        method: "POST",
+        body: {
+          product_id: id,
+          user_name: userName,
+          rating: userRating,
+          comment: userComment,
+        },
+        label: "Review",
+      });
+      setMessage("Saved. Your review will post when you're back online.");
+      setUserName("");
+      setUserRating(5);
+      setUserComment("");
+      return;
+    }
+
     setSubmitting(true);
-    const { error } = await supabase
-      .from("ratings")
-      .insert([
-        { product_id: id, user_name: userName, rating: userRating, comment: userComment },
-      ]);
-    if (error) setMessage("Error: " + error.message);
-    else {
+    try {
+      const res = await fetchWithRetry("/api/product-review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          product_id: id,
+          user_name: userName,
+          rating: userRating,
+          comment: userComment,
+        }),
+      });
+      if (!res.ok) throw new Error("Submit failed");
       setMessage("Thank you for your review!");
       setUserName("");
       setUserRating(5);
       setUserComment("");
       fetchData();
+    } catch (err) {
+      // Queue on failure
+      enqueue({
+        url: "/api/product-review",
+        method: "POST",
+        body: {
+          product_id: id,
+          user_name: userName,
+          rating: userRating,
+          comment: userComment,
+        },
+        label: "Review",
+      });
+      setMessage("Couldn't reach server. Review saved and will post automatically.");
+      setUserName("");
+      setUserRating(5);
+      setUserComment("");
     }
     setSubmitting(false);
   }
@@ -275,27 +367,61 @@ export default function ProductDetail() {
       alert("Please enter your name and message.");
       return;
     }
-    const { data: inserted, error } = await supabase
-      .from("review_comments")
-      .insert({
-        review_id: reviewId,
-        parent_id: parentId,
-        author_name: name,
-        is_admin: isAdmin && replyIsAdmin,
-        message: replyMessage,
-      })
-      .select()
-      .single();
-    if (error) {
-      alert("Error: " + error.message);
-      return;
-    }
-    setReviewComments((prev) => ({
-      ...prev,
-      [reviewId]: [...(prev[reviewId] || []), inserted],
-    }));
+
+    const messageText = replyMessage;
     setReplyMessage("");
     setReplyOpenFor(null);
+
+    // Offline → queue
+    if (!navigator.onLine) {
+      enqueue({
+        url: "/api/review-comment",
+        method: "POST",
+        body: {
+          review_id: reviewId,
+          parent_id: parentId,
+          author_name: name,
+          is_admin: isAdmin && replyIsAdmin,
+          message: messageText,
+        },
+        label: "Reply",
+      });
+      return;
+    }
+
+    try {
+      const res = await fetchWithRetry("/api/review-comment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          review_id: reviewId,
+          parent_id: parentId,
+          author_name: name,
+          is_admin: isAdmin && replyIsAdmin,
+          message: messageText,
+        }),
+      });
+      if (res.ok) {
+        const inserted = await res.json();
+        setReviewComments((prev) => ({
+          ...prev,
+          [reviewId]: [...(prev[reviewId] || []), inserted],
+        }));
+      } else throw new Error("Reply failed");
+    } catch {
+      enqueue({
+        url: "/api/review-comment",
+        method: "POST",
+        body: {
+          review_id: reviewId,
+          parent_id: parentId,
+          author_name: name,
+          is_admin: isAdmin && replyIsAdmin,
+          message: messageText,
+        },
+        label: "Reply",
+      });
+    }
   };
 
   const getWhatsAppLink = () => {
