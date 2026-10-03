@@ -4,6 +4,7 @@ import SplashScreen from "./components/SplashScreen";
 import InstallBanner from "./components/InstallBanner";
 import PWASetup from "./components/PWASetup";
 import OfflineBanner from "./components/OfflineBanner";
+import OfflineQueueIndicator from "./components/OfflineQueueIndicator";
 
 export const metadata = {
   title: "OKMADE Furniture",
@@ -54,6 +55,7 @@ export default function RootLayout({ children }) {
         <PWASetup />
         <SplashScreen />
         <InstallBanner />
+        <OfflineQueueIndicator />
         {children}
       </body>
     </html>
