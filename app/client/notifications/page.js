@@ -8,13 +8,18 @@ export default function NotificationsPage() {
   const router = useRouter();
 
   useEffect(() => {
-    fetch("/api/notifications").then((r) => {
-      if (r.status === 401) { router.push("/client/login"); return []; }
-      return r.json();
-    }).then((data) => {
-      setItems(Array.isArray(data) ? data : []);
-      setLoading(false);
-    });
+    fetch("/api/notifications")
+      .then((r) => {
+        if (r.status === 401) {
+          router.push("/client/login");
+          return [];
+        }
+        return r.json();
+      })
+      .then((data) => {
+        setItems(Array.isArray(data) ? data : []);
+        setLoading(false);
+      });
   }, []);
 
   const markAll = async () => {
@@ -36,7 +41,26 @@ export default function NotificationsPage() {
     if (n.target_url) router.push(n.target_url);
   };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-amber-600">Loading...</div>;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-100 py-8 px-4">
+        <div className="max-w-2xl mx-auto">
+          <div className="h-8 w-44 bg-gray-200 rounded animate-pulse mb-6"></div>
+          <div className="space-y-2">
+            {[...Array(6)].map((_, i) => (
+              <div
+                key={i}
+                className="bg-white rounded-xl border border-gray-200 p-4 space-y-2"
+              >
+                <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse"></div>
+                <div className="h-3 bg-gray-200 rounded w-1/3 animate-pulse"></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 py-8 px-4">
@@ -44,7 +68,10 @@ export default function NotificationsPage() {
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-gray-800">Notifications</h1>
           {items.some((n) => !n.is_read) && (
-            <button onClick={markAll} className="text-sm text-amber-600 hover:underline">
+            <button
+              onClick={markAll}
+              className="text-sm text-amber-600 hover:underline"
+            >
               Mark all as read
             </button>
           )}
@@ -60,16 +87,23 @@ export default function NotificationsPage() {
                 key={n.id}
                 onClick={() => handleClick(n)}
                 className={`w-full text-left p-4 rounded-xl border transition ${
-                  !n.is_read ? "bg-amber-50 border-amber-200" : "bg-white border-gray-200 hover:bg-gray-50"
+                  !n.is_read
+                    ? "bg-amber-50 border-amber-200"
+                    : "bg-white border-gray-200 hover:bg-gray-50"
                 }`}
               >
                 <p className="text-sm text-gray-800">{n.message}</p>
-                <p className="text-xs text-gray-400 mt-1">{new Date(n.created_at).toLocaleString()}</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {new Date(n.created_at).toLocaleString()}
+                </p>
               </button>
             ))}
           </div>
         )}
-        <a href="/client/dashboard" className="inline-block mt-6 text-sm text-amber-600 hover:underline">
+        <a
+          href="/client/dashboard"
+          className="inline-block mt-6 text-sm text-amber-600 hover:underline"
+        >
           ← Back to Dashboard
         </a>
       </div>
