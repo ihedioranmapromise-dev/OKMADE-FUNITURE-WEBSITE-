@@ -2,7 +2,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowser } from "@/lib/supabase-browser";
-import PostComposer from "@/app/components/PostComposer";
 import PostCard from "@/app/components/PostCard";
 
 const IconMenu = ({ className = "w-6 h-6" }) => (
@@ -31,14 +30,14 @@ const IconHome = ({ className = "w-5 h-5" }) => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
   </svg>
 );
+const IconFeed = ({ className = "w-5 h-5" }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h10" />
+  </svg>
+);
 const IconFolder = ({ className = "w-5 h-5" }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8">
     <path strokeLinecap="round" strokeLinejoin="round" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
-  </svg>
-);
-const IconCheck = ({ className = "w-5 h-5" }) => (
-  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
   </svg>
 );
 const IconLogout = ({ className = "w-5 h-5" }) => (
@@ -58,46 +57,48 @@ export default function ClientDashboard() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("posts");
   const [error, setError] = useState("");
-  const [feed, setFeed] = useState([]);
-  const [loadingFeed, setLoadingFeed] = useState(true);
+  const [myPosts, setMyPosts] = useState([]);
+  const [loadingPosts, setLoadingPosts] = useState(true);
   const [friendRequests, setFriendRequests] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [showBell, setShowBell] = useState(false);
+  const [logoutConfirm, setLogoutConfirm] = useState(false);
   const router = useRouter();
   const supabase = createSupabaseBrowser();
 
   useEffect(() => {
     async function load() {
-      const res = await fetch("/api/client/me");
-      if (res.status === 401) {
-        router.push("/client/login");
-        return;
-      }
-      if (!res.ok) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { router.push("/client/login"); return; }
+      const { data, error: loadErr } = await supabase
+        .from("clients")
+        .select("*")
+        .eq("auth_id", user.id)
+        .maybeSingle();
+      if (loadErr || !data) {
         setError("Could not load profile.");
         setLoading(false);
         return;
       }
-      const data = await res.json();
       setClient(data);
       setLoading(false);
     }
     load();
-  }, [router]);
+  }, [router, supabase]);
 
   useEffect(() => {
     if (client) {
-      loadFeed();
+      loadMyPosts();
       loadFriendRequests();
       loadNotifications();
     }
   }, [client]);
 
-  async function loadFeed() {
-    setLoadingFeed(true);
-    const res = await fetch("/api/posts");
-    if (res.ok) setFeed(await res.json());
-    setLoadingFeed(false);
+  async function loadMyPosts() {
+    setLoadingPosts(true);
+    const res = await fetch(`/api/posts?author=${client.username}`);
+    if (res.ok) setMyPosts(await res.json());
+    setLoadingPosts(false);
   }
 
   async function loadFriendRequests() {
@@ -133,8 +134,9 @@ export default function ClientDashboard() {
     if (n.target_url) router.push(n.target_url);
   };
 
-  const handleLogout = async () => {
+  const confirmLogout = async () => {
     await supabase.auth.signOut();
+    setLogoutConfirm(false);
     router.push("/");
     router.refresh();
   };
@@ -169,7 +171,6 @@ export default function ClientDashboard() {
           </a>
 
           <div className="flex items-center gap-1">
-            {/* Bell */}
             <div className="relative">
               <button onClick={() => setShowBell(!showBell)} className="relative p-2 hover:bg-gray-100 rounded-full transition">
                 <IconBell />
@@ -206,7 +207,6 @@ export default function ClientDashboard() {
               )}
             </div>
 
-            {/* Menu */}
             <div className="relative">
               <button onClick={() => setMenuOpen(!menuOpen)} className="p-2 hover:bg-gray-100 rounded-full transition">
                 <IconMenu />
@@ -218,11 +218,11 @@ export default function ClientDashboard() {
                     <a href="/" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 text-gray-700 text-sm">
                       <IconHome /> Home
                     </a>
+                    <a href="/feed" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 text-gray-700 text-sm">
+                      <IconFeed /> Public Feed
+                    </a>
                     <button onClick={() => { setActiveTab("projects"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-amber-50 text-gray-700 text-sm text-left">
-                      <IconFolder /> Active Projects
-                    </button>
-                    <button onClick={() => { setActiveTab("projects"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-amber-50 text-gray-700 text-sm text-left">
-                      <IconCheck /> Completed
+                      <IconFolder /> Projects
                     </button>
                     <div className="border-t" />
                     <a href="/client/notifications" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 text-gray-700 text-sm">
@@ -238,7 +238,7 @@ export default function ClientDashboard() {
                       Settings
                     </a>
                     <div className="border-t" />
-                    <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-red-50 text-red-600 text-sm text-left">
+                    <button onClick={() => { setMenuOpen(false); setLogoutConfirm(true); }} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-red-50 text-red-600 text-sm text-left">
                       <IconLogout /> Logout
                     </button>
                   </div>
@@ -249,72 +249,77 @@ export default function ClientDashboard() {
         </div>
       </nav>
 
-      {/* Cover + Profile Header */}
-      <div className="relative">
-        <div className="relative h-40 md:h-64 bg-gradient-to-r from-amber-700 to-stone-700">
-          {client.cover_photo && (
-            <img src={client.cover_photo} className="w-full h-full object-cover" alt="Cover" />
-          )}
-        </div>
+      {/* Cover */}
+      <div className="relative h-40 md:h-56 bg-gradient-to-r from-amber-700 to-stone-700">
+        {client.cover_photo && (
+          <img src={client.cover_photo} className="w-full h-full object-cover" alt="Cover" />
+        )}
+      </div>
 
-        <div className="max-w-5xl mx-auto px-4 relative">
-          <div className="-mt-16 md:-mt-20 flex flex-col md:flex-row md:items-end md:gap-6">
-            <div className="relative">
-              {client.profile_pic ? (
-                <img src={client.profile_pic} className="w-32 h-32 md:w-40 md:h-40 rounded-full object-cover border-4 border-white shadow-lg" alt="Profile" />
-              ) : (
-                <div className="w-32 h-32 md:w-40 md:h-40 rounded-full bg-gray-300 flex items-center justify-center text-gray-500 border-4 border-white shadow-lg text-5xl font-bold">
-                  {fullName.charAt(0).toUpperCase()}
-                </div>
-              )}
-              <a href="/client/profile" className="absolute bottom-2 right-2 bg-white hover:bg-amber-50 rounded-full p-2 shadow border border-gray-200 transition" title="Change profile picture">
-                <IconCamera className="w-4 h-4 text-gray-700" />
-              </a>
-            </div>
-
-            <div className="mt-3 md:mt-0 md:pb-4 flex-1">
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{fullName}</h1>
-              <p className="text-sm text-gray-600">
-                @{client.username}
-                {client.skill && ` · ${client.skill}`}
-                {client.work_address && ` · ${client.work_address}`}
-              </p>
-              {client.age && <p className="text-xs text-gray-500 mt-1">Age: {client.age}</p>}
-            </div>
-
-            <div className="mt-3 md:mt-0 md:pb-4 flex gap-2">
-              <a href={`/client/${client.username}`} className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg text-sm font-medium transition">
-                View Public
-              </a>
-              <a href="/client/profile" className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition">
-                Edit Profile
-              </a>
-            </div>
+      {/* Header (X-style) */}
+      <div className="max-w-5xl mx-auto px-4">
+        {/* Row 1: profile pic + action buttons (pulled up onto cover) */}
+        <div className="flex items-end justify-between -mt-16 md:-mt-20">
+          <div className="relative">
+            {client.profile_pic ? (
+              <img
+                src={client.profile_pic}
+                className="w-32 h-32 md:w-40 md:h-40 rounded-full object-cover border-4 border-white shadow-lg"
+                alt="Profile"
+              />
+            ) : (
+              <div className="w-32 h-32 md:w-40 md:h-40 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 border-4 border-white shadow-lg text-5xl font-bold">
+                {fullName.charAt(0).toUpperCase()}
+              </div>
+            )}
+            <a href="/client/profile" className="absolute bottom-2 right-2 bg-white hover:bg-amber-50 rounded-full p-2 shadow border border-gray-200 transition" title="Change profile picture">
+              <IconCamera className="w-4 h-4 text-gray-700" />
+            </a>
           </div>
 
-          {/* Tabs */}
-          <div className="mt-4 border-t border-gray-200">
-            <div className="flex gap-1 md:gap-2 overflow-x-auto">
-              {[
-                { id: "posts", label: "Posts" },
-                { id: "about", label: "About" },
-                { id: "projects", label: "Projects" },
-                { id: "reviews", label: "Reviews" },
-                { id: "photos", label: "Photos" },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition ${
-                    activeTab === tab.id
-                      ? "border-amber-600 text-amber-700"
-                      : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
+          <div className="pb-2 flex gap-2">
+            <a href={`/client/${client.username}`} className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg text-sm font-medium transition">
+              View Public
+            </a>
+            <a href="/client/profile" className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition">
+              Edit Profile
+            </a>
+          </div>
+        </div>
+
+        {/* Row 2: name + meta (sits below cover, normal flow) */}
+        <div className="mt-3">
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{fullName}</h1>
+          <p className="text-sm text-gray-600">
+            @{client.username}
+            {client.skill && ` · ${client.skill}`}
+            {client.work_address && ` · ${client.work_address}`}
+          </p>
+          {client.age && <p className="text-xs text-gray-500 mt-1">Age: {client.age}</p>}
+        </div>
+
+        {/* Tabs */}
+        <div className="mt-4 border-t border-gray-200">
+          <div className="flex gap-1 md:gap-2 overflow-x-auto">
+            {[
+              { id: "posts", label: "My Posts" },
+              { id: "about", label: "About" },
+              { id: "projects", label: "Projects" },
+              { id: "reviews", label: "Reviews" },
+              { id: "photos", label: "Photos" },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition ${
+                  activeTab === tab.id
+                    ? "border-amber-600 text-amber-700"
+                    : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
         </div>
       </div>
@@ -346,7 +351,6 @@ export default function ClientDashboard() {
         </aside>
 
         <main className="lg:col-span-2 space-y-4">
-          {/* Friend Requests */}
           {friendRequests.length > 0 && (
             <div className="bg-white rounded-xl shadow-sm border border-amber-200 p-4">
               <h3 className="font-semibold text-gray-800 mb-3">
@@ -381,18 +385,19 @@ export default function ClientDashboard() {
 
           {activeTab === "posts" && (
             <>
-              <PostComposer onPosted={loadFeed} />
-              {loadingFeed ? (
+              {loadingPosts ? (
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center text-gray-500">
-                  Loading feed...
+                  Loading your posts...
                 </div>
-              ) : feed.length === 0 ? (
+              ) : myPosts.length === 0 ? (
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center text-gray-500">
-                  No posts yet. Be the first to share!
+                  You haven't posted yet. Go to the{" "}
+                  <a href="/feed" className="text-amber-600 hover:underline font-medium">Public Feed</a>{" "}
+                  to share your first post.
                 </div>
               ) : (
-                feed.map((post) => (
-                  <PostCard key={post.id} post={post} currentUserId={client.id} onUpdate={loadFeed} />
+                myPosts.map((post) => (
+                  <PostCard key={post.id} post={post} currentUserId={client.id} onUpdate={loadMyPosts} />
                 ))
               )}
             </>
@@ -442,6 +447,38 @@ export default function ClientDashboard() {
           )}
         </main>
       </div>
+
+      {/* Logout confirm */}
+      {logoutConfirm && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4"
+          onClick={() => setLogoutConfirm(false)}
+        >
+          <div
+            className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-gray-800 mb-2">Log out?</h3>
+            <p className="text-gray-600 text-sm mb-5">
+              Are you sure you want to log out of your account?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setLogoutConfirm(false)}
+                className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2.5 rounded-lg transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmLogout}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 rounded-lg transition"
+              >
+                Yes, Log Out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
