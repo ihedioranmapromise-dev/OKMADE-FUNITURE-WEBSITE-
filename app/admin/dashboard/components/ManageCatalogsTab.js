@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
+import AutoPostModal from "@/app/components/AutoPostModal";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -12,6 +13,14 @@ export default function ManageCatalogsTab() {
   const [catalogs, setCatalogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+
+  const [autoPostOpen, setAutoPostOpen] = useState(false);
+  const [autoPostData, setAutoPostData] = useState({
+    type: "catalog",
+    sourceId: "",
+    defaultContent: "",
+    previewImages: [],
+  });
 
   useEffect(() => {
     fetchCatalogs();
@@ -27,12 +36,7 @@ export default function ManageCatalogsTab() {
   }
 
   async function deleteCatalog(id) {
-    if (
-      !confirm(
-        "Delete this catalog space permanently? All images will be removed."
-      )
-    )
-      return;
+    if (!confirm("Delete this catalog space permanently? All images will be removed.")) return;
     const { data: images } = await supabase
       .from("catalog_images")
       .select("image_url")
@@ -49,14 +53,29 @@ export default function ManageCatalogsTab() {
     else fetchCatalogs();
   }
 
+  const openAutoPost = async (catalog) => {
+    const { data: imgs } = await supabase
+      .from("catalog_images")
+      .select("image_url")
+      .eq("catalog_id", catalog.id)
+      .order("display_order", { ascending: true })
+      .limit(6);
+    const previewImages = (imgs || []).map((i) => i.image_url).filter(Boolean);
+    setAutoPostData({
+      type: "catalog",
+      sourceId: catalog.id,
+      defaultContent: `📖 New catalog: ${catalog.title}`,
+      previewImages,
+    });
+    setAutoPostOpen(true);
+  };
+
   if (loading)
     return <div className="text-center py-12 text-amber-600">Loading...</div>;
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6 text-gray-800">
-        Manage Catalogs
-      </h1>
+      <h1 className="text-2xl font-bold mb-6 text-gray-800">Manage Catalogs</h1>
       {catalogs.length === 0 ? (
         <p className="text-gray-500">No catalog spaces yet.</p>
       ) : (
@@ -64,32 +83,28 @@ export default function ManageCatalogsTab() {
           <table className="min-w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase">
-                  Title
-                </th>
-                <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase">
-                  Created
-                </th>
-                <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase">
-                  Actions
-                </th>
+                <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase">Title</th>
+                <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase">Created</th>
+                <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody>
               {catalogs.map((c) => (
                 <tr key={c.id} className="border-b hover:bg-gray-50">
-                  <td className="py-3 px-4 text-sm font-medium">
-                    {c.title}
-                  </td>
+                  <td className="py-3 px-4 text-sm font-medium">{c.title}</td>
                   <td className="py-3 px-4 text-xs text-gray-500">
                     {new Date(c.created_at).toLocaleDateString()}
                   </td>
                   <td className="py-3 px-4">
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                       <button
-                        onClick={() =>
-                          router.push(`/admin/catalogs/edit/${c.id}`)
-                        }
+                        onClick={() => openAutoPost(c)}
+                        className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700"
+                      >
+                        Post to Feed
+                      </button>
+                      <button
+                        onClick={() => router.push(`/admin/catalogs/edit/${c.id}`)}
                         className="bg-blue-500 text-white px-3 py-1 rounded text-xs hover:bg-blue-600"
                       >
                         Edit
@@ -108,6 +123,15 @@ export default function ManageCatalogsTab() {
           </table>
         </div>
       )}
+
+      <AutoPostModal
+        open={autoPostOpen}
+        onClose={() => setAutoPostOpen(false)}
+        type={autoPostData.type}
+        sourceId={autoPostData.sourceId}
+        defaultContent={autoPostData.defaultContent}
+        previewImages={autoPostData.previewImages}
+      />
     </div>
   );
 }
