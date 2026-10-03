@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { getOptimizedImage, thumbImage } from "@/lib/utils";
+import Image from "next/image";
 
 const REACTIONS = [
   { type: "like", emoji: "👍", label: "Like" },
@@ -10,6 +10,9 @@ const REACTIONS = [
   { type: "sad", emoji: "😢", label: "Sad" },
   { type: "angry", emoji: "😡", label: "Angry" },
 ];
+
+const BLUR =
+  "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxIDEiPjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9IiNmZWYzYzciLz48L3N2Zz4=";
 
 const IconCheck = () => (
   <svg className="w-4 h-4 inline-block" fill="currentColor" viewBox="0 0 24 24">
@@ -23,7 +26,11 @@ function timeAgo(dateStr) {
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
   if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
-  return new Date(dateStr).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  return new Date(dateStr).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 export default function PostCard({ post, currentUserId, onUpdate, showFullComments = false }) {
@@ -109,24 +116,40 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
   const topLevel = comments.filter((c) => !c.parent_id);
   const visibleComments = showAllComments ? topLevel : topLevel.slice(0, 2);
 
+  const imageCount = post.image_urls?.length || 0;
+  const singleImage = imageCount === 1;
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
       {/* Header */}
       <div className="p-4 flex items-start gap-3">
         {author.profile_pic ? (
-          <img src={thumbImage(author.profile_pic)} loading="lazy" className="w-10 h-10 rounded-full object-cover" alt="" />
+          <div className="relative w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
+            <Image
+              src={author.profile_pic}
+              alt={fullName}
+              fill
+              sizes="40px"
+              className="object-cover"
+              placeholder="blur"
+              blurDataURL={BLUR}
+            />
+          </div>
         ) : (
-          <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
+          <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold flex-shrink-0">
             {fullName.charAt(0).toUpperCase()}
           </div>
         )}
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1">
-            <a href={`/client/${author.username}`} className="font-semibold text-gray-900 hover:underline">
+            <a
+              href={`/client/${author.username}`}
+              className="font-semibold text-gray-900 hover:underline truncate"
+            >
               {fullName}
             </a>
             {author.is_okmade && (
-              <span className="text-amber-500" title="Official">
+              <span className="text-amber-500 flex-shrink-0" title="Official">
                 <IconCheck />
               </span>
             )}
@@ -137,7 +160,7 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
           </p>
         </div>
         {currentUserId && post.author_id === currentUserId && (
-          <button onClick={handleDelete} className="text-gray-400 hover:text-red-600 text-sm">
+          <button onClick={handleDelete} className="text-gray-400 hover:text-red-600 text-sm flex-shrink-0">
             Delete
           </button>
         )}
@@ -146,23 +169,34 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
       {/* Content */}
       {post.content && (
         <div className="px-4 pb-3">
-          <p className="text-gray-800 whitespace-pre-wrap" style={{ fontFamily: post.font_family || "sans-serif" }}>
+          <p
+            className="text-gray-800 whitespace-pre-wrap"
+            style={{ fontFamily: post.font_family || "sans-serif" }}
+          >
             {post.content}
           </p>
         </div>
       )}
 
       {/* Images */}
-      {post.image_urls && post.image_urls.length > 0 && (
-        <div className={`grid gap-1 ${post.image_urls.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
+      {imageCount > 0 && (
+        <div className={`grid gap-1 ${singleImage ? "grid-cols-1" : "grid-cols-2"}`}>
           {post.image_urls.map((url, i) => (
-            <img
+            <div
               key={i}
-              src={getOptimizedImage(url, post.image_urls.length === 1 ? 700 : 400, 70)}
-              loading="lazy"
-              className={`w-full object-cover ${post.image_urls.length === 1 ? "max-h-96" : "h-48"}`}
-              alt=""
-            />
+              className={`relative w-full ${singleImage ? "aspect-[4/3]" : "aspect-square"}`}
+            >
+              <Image
+                src={url}
+                alt=""
+                fill
+                sizes={singleImage ? "(max-width: 768px) 100vw, 700px" : "(max-width: 768px) 50vw, 350px"}
+                className="object-cover"
+                placeholder="blur"
+                blurDataURL={BLUR}
+                priority={i === 0 && !post.is_auto}
+              />
+            </div>
           ))}
         </div>
       )}
@@ -177,7 +211,13 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
             })}
             {totalReactions}
           </span>
-          <button onClick={() => { loadComments(); setShowAllComments(true); }} className="hover:underline">
+          <button
+            onClick={() => {
+              loadComments();
+              setShowAllComments(true);
+            }}
+            className="hover:underline"
+          >
             {post.commentCount} comments
           </button>
         </div>
@@ -185,7 +225,11 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
 
       {/* Action Bar */}
       <div className="border-t border-gray-100 px-2 flex">
-        <div className="relative flex-1" onMouseEnter={() => setShowReactions(true)} onMouseLeave={() => setShowReactions(false)}>
+        <div
+          className="relative flex-1"
+          onMouseEnter={() => setShowReactions(true)}
+          onMouseLeave={() => setShowReactions(false)}
+        >
           <button
             onClick={() => handleReact("like")}
             className={`w-full py-2 text-sm font-medium flex items-center justify-center gap-2 transition ${
@@ -194,7 +238,9 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
           >
             {myReaction ? (
               <>
-                <span>{REACTIONS.find((r) => r.type === myReaction.reaction_type)?.emoji}</span>
+                <span>
+                  {REACTIONS.find((r) => r.type === myReaction.reaction_type)?.emoji}
+                </span>
                 {REACTIONS.find((r) => r.type === myReaction.reaction_type)?.label}
               </>
             ) : (
@@ -217,7 +263,10 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
           )}
         </div>
         <button
-          onClick={() => { loadComments(); setShowAllComments(!showAllComments); }}
+          onClick={() => {
+            loadComments();
+            setShowAllComments(!showAllComments);
+          }}
           className="flex-1 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 flex items-center justify-center"
         >
           💬 Comment
@@ -236,14 +285,21 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-sm font-semibold text-gray-800">{c.author_name}</span>
                     {c.is_guest ? (
-                      <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">GUEST</span>
+                      <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">
+                        GUEST
+                      </span>
                     ) : (
-                      <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">ARTISAN</span>
+                      <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                        ARTISAN
+                      </span>
                     )}
                     <span className="text-xs text-gray-400">{timeAgo(c.created_at)}</span>
                   </div>
                   <p className="text-sm text-gray-700">{c.content}</p>
-                  <button onClick={() => setReplyingTo(c.id)} className="text-xs text-amber-600 hover:underline mt-1">
+                  <button
+                    onClick={() => setReplyingTo(c.id)}
+                    className="text-xs text-amber-600 hover:underline mt-1"
+                  >
                     Reply
                   </button>
                 </div>
@@ -252,9 +308,13 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-sm font-semibold text-gray-800">{r.author_name}</span>
                       {r.is_guest ? (
-                        <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">GUEST</span>
+                        <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">
+                          GUEST
+                        </span>
                       ) : (
-                        <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">ARTISAN</span>
+                        <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                          ARTISAN
+                        </span>
                       )}
                     </div>
                     <p className="text-sm text-gray-700">{r.content}</p>
@@ -269,7 +329,10 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
                       placeholder="Write a reply..."
                       className="flex-1 p-2 border rounded-lg text-sm"
                     />
-                    <button onClick={() => handleComment(c.id)} className="bg-amber-600 text-white px-3 py-2 rounded-lg text-sm">
+                    <button
+                      onClick={() => handleComment(c.id)}
+                      className="bg-amber-600 text-white px-3 py-2 rounded-lg text-sm"
+                    >
                       Reply
                     </button>
                   </div>
@@ -282,13 +345,34 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
             <div className="space-y-2 pt-2 border-t border-gray-200">
               {!currentUserId && (
                 <div className="flex gap-2">
-                  <input type="text" placeholder="Your name *" value={commentName} onChange={(e) => setCommentName(e.target.value)} className="flex-1 p-2 border rounded-lg text-sm" />
-                  <input type="email" placeholder="Email (optional)" value={commentEmail} onChange={(e) => setCommentEmail(e.target.value)} className="flex-1 p-2 border rounded-lg text-sm" />
+                  <input
+                    type="text"
+                    placeholder="Your name *"
+                    value={commentName}
+                    onChange={(e) => setCommentName(e.target.value)}
+                    className="flex-1 p-2 border rounded-lg text-sm"
+                  />
+                  <input
+                    type="email"
+                    placeholder="Email (optional)"
+                    value={commentEmail}
+                    onChange={(e) => setCommentEmail(e.target.value)}
+                    className="flex-1 p-2 border rounded-lg text-sm"
+                  />
                 </div>
               )}
               <div className="flex gap-2">
-                <input type="text" placeholder="Write a comment..." value={commentText} onChange={(e) => setCommentText(e.target.value)} className="flex-1 p-2 border rounded-lg text-sm" />
-                <button onClick={() => handleComment(null)} className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                <input
+                  type="text"
+                  placeholder="Write a comment..."
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  className="flex-1 p-2 border rounded-lg text-sm"
+                />
+                <button
+                  onClick={() => handleComment(null)}
+                  className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
+                >
                   Comment
                 </button>
               </div>
