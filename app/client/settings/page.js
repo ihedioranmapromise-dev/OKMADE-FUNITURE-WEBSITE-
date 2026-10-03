@@ -26,6 +26,14 @@ export default function SettingsPage() {
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [passwordMsg, setPasswordMsg] = useState("");
+
+  // Delete account flow
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteReason, setDeleteReason] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteMsg, setDeleteMsg] = useState("");
+  const [deleteRequested, setDeleteRequested] = useState(false);
+
   const router = useRouter();
   const supabase = createSupabaseBrowser();
 
@@ -81,9 +89,26 @@ export default function SettingsPage() {
   };
 
   const handleDeleteAccount = async () => {
-    if (!confirm("This will permanently delete your account and all your data. Are you sure?")) return;
-    if (!confirm("Really? This cannot be undone.")) return;
-    alert("Please contact support to fully delete your account.");
+    setDeleting(true);
+    setDeleteMsg("");
+    try {
+      const res = await fetch("/api/client/request-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: deleteReason }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || "Failed to submit request");
+      }
+      setDeleteRequested(true);
+      setDeleteModalOpen(false);
+      setDeleteReason("");
+    } catch (err) {
+      setDeleteMsg("Error: " + err.message);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   if (loading) {
@@ -260,18 +285,29 @@ export default function SettingsPage() {
 
             {activeTab === "danger" && (
               <div className="space-y-4">
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <h3 className="font-semibold text-red-800 mb-1">Delete Account</h3>
-                  <p className="text-sm text-red-600 mb-3">
-                    Permanently delete your account, posts, and data. This cannot be undone.
-                  </p>
-                  <button
-                    onClick={handleDeleteAccount}
-                    className="bg-red-600 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-red-700 transition"
-                  >
-                    Delete My Account
-                  </button>
-                </div>
+                {deleteRequested ? (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <h3 className="font-semibold text-green-800 mb-1">Request received</h3>
+                    <p className="text-sm text-green-700">
+                      We've received your account deletion request. Our team will process it
+                      within 7 days. You'll get a confirmation email when it's complete.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <h3 className="font-semibold text-red-800 mb-1">Delete Account</h3>
+                    <p className="text-sm text-red-600 mb-3">
+                      Permanently delete your account, posts, and data. This cannot be undone.
+                      Our team will review your request and process it manually.
+                    </p>
+                    <button
+                      onClick={() => setDeleteModalOpen(true)}
+                      className="bg-red-600 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-red-700 transition"
+                    >
+                      Request Account Deletion
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -286,6 +322,63 @@ export default function SettingsPage() {
           ← Back to Dashboard
         </a>
       </div>
+
+      {/* Delete confirmation modal */}
+      {deleteModalOpen && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4"
+          onClick={() => !deleting && setDeleteModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-red-800 mb-2">
+              Request account deletion?
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              This sends a request to OKMADE support. Your account will be reviewed
+              and permanently deleted within 7 days. You can still log in during
+              this time.
+            </p>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Reason (optional)
+              </label>
+              <textarea
+                value={deleteReason}
+                onChange={(e) => setDeleteReason(e.target.value)}
+                rows="3"
+                maxLength={500}
+                className="w-full p-3 border rounded-lg text-sm focus:ring-2 focus:ring-red-400"
+                placeholder="Tell us why you're leaving (helps us improve)..."
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                {deleteReason.length}/500
+              </p>
+            </div>
+            {deleteMsg && (
+              <p className="text-sm text-red-500 mb-3">{deleteMsg}</p>
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteModalOpen(false)}
+                disabled={deleting}
+                className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2.5 rounded-lg transition disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleting}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 rounded-lg transition disabled:opacity-50"
+              >
+                {deleting ? "Sending..." : "Yes, Request Deletion"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
