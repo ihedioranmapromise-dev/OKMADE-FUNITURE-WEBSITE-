@@ -6,8 +6,7 @@ import { createSupabaseBrowser } from "@/lib/supabase-browser";
 import { fetchWithRetry } from "@/lib/fetch-with-retry";
 import { enqueue } from "@/lib/offline-queue";
 
-const BLUR =
-  "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxIDEiPjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9IiNmZWYzYzciLz48L3N2Zz4=";
+const BLUR = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxIDEiPjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9IiNmZWYzYzciLz48L3N2Zz4=";
 
 export default function ThreadPage() {
   const { threadId } = useParams();
@@ -50,9 +49,7 @@ export default function ThreadPage() {
         setData(d);
         setMessages(d.messages || []);
       }
-    } catch {
-      // Silent fail on polling
-    }
+    } catch {}
     setLoading(false);
   }
 
@@ -63,7 +60,6 @@ export default function ThreadPage() {
     setContent("");
     setSending(true);
 
-    // Optimistic bubble
     const tempId = `temp_${Date.now()}`;
     const tempMsg = {
       id: tempId,
@@ -74,7 +70,6 @@ export default function ThreadPage() {
     };
     setMessages((prev) => [...prev, tempMsg]);
 
-    // If offline — queue
     if (!navigator.onLine) {
       enqueue({
         url: `/api/messages/${threadId}`,
@@ -98,10 +93,9 @@ export default function ThreadPage() {
         const newMsg = await res.json();
         setMessages((prev) => prev.map((m) => (m.id === tempId ? newMsg : m)));
       } else {
-        throw new Error("Failed");
+        throw new Error();
       }
     } catch {
-      // On failure, replace temp with pending marker and queue
       setMessages((prev) =>
         prev.map((m) => (m.id === tempId ? { ...m, pending: true } : m))
       );
@@ -120,21 +114,21 @@ export default function ThreadPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-100 flex flex-col">
-        <div className="sticky top-0 z-10 bg-white shadow-sm border-b border-gray-200">
+      <div className="min-h-screen bg-gray-100 dark:bg-gray-950 flex flex-col">
+        <div className="sticky top-0 z-10 bg-white dark:bg-gray-900 shadow-sm border-b border-gray-200 dark:border-gray-800">
           <div className="max-w-2xl mx-auto px-4 h-14 flex items-center gap-3">
             <div className="w-6 h-6"></div>
-            <div className="w-9 h-9 rounded-full bg-gray-200 animate-pulse"></div>
+            <div className="w-9 h-9 rounded-full bg-gray-200 dark:bg-gray-800 animate-pulse"></div>
             <div className="flex-1 space-y-2">
-              <div className="h-4 bg-gray-200 rounded w-1/3 animate-pulse"></div>
-              <div className="h-3 bg-gray-200 rounded w-1/4 animate-pulse"></div>
+              <div className="h-4 bg-gray-200 dark:bg-gray-800 rounded w-1/3 animate-pulse"></div>
+              <div className="h-3 bg-gray-200 dark:bg-gray-800 rounded w-1/4 animate-pulse"></div>
             </div>
           </div>
         </div>
         <div className="flex-1 max-w-2xl mx-auto w-full px-4 py-6 space-y-3">
           {[...Array(4)].map((_, i) => (
             <div key={i} className={`flex ${i % 2 ? "justify-end" : "justify-start"}`}>
-              <div className="h-12 w-40 bg-gray-200 rounded-2xl animate-pulse"></div>
+              <div className="h-12 w-40 bg-gray-200 dark:bg-gray-800 rounded-2xl animate-pulse"></div>
             </div>
           ))}
         </div>
@@ -146,12 +140,12 @@ export default function ThreadPage() {
   const other = data.other;
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col">
-      <div className="sticky top-0 z-10 bg-white shadow-sm border-b border-gray-200">
+    <div className="min-h-screen bg-gray-100 dark:bg-gray-950 flex flex-col">
+      <div className="sticky top-0 z-10 bg-white dark:bg-gray-900 shadow-sm border-b border-gray-200 dark:border-gray-800">
         <div className="max-w-2xl mx-auto px-4 h-14 flex items-center gap-3">
           <button
             onClick={() => router.push("/client/messages")}
-            className="text-gray-600 hover:text-amber-700 text-xl"
+            className="text-gray-600 dark:text-gray-300 hover:text-amber-700 dark:hover:text-amber-400 text-xl"
           >
             ←
           </button>
@@ -168,19 +162,19 @@ export default function ThreadPage() {
               />
             </div>
           ) : (
-            <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-sm flex-shrink-0">
+            <div className="w-9 h-9 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-amber-700 dark:text-amber-300 font-bold text-sm flex-shrink-0">
               {(other?.display_name || "?").charAt(0)}
             </div>
           )}
           <div className="flex-1 min-w-0">
             <a
               href={`/client/${other?.username}`}
-              className="font-semibold text-gray-800 text-sm hover:underline truncate block"
+              className="font-semibold text-gray-800 dark:text-gray-200 text-sm hover:underline truncate block"
             >
               {other?.display_name || other?.username}
             </a>
             {other?.skill && (
-              <p className="text-xs text-gray-500 truncate">{other.skill}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{other.skill}</p>
             )}
           </div>
         </div>
@@ -189,7 +183,7 @@ export default function ThreadPage() {
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-2xl mx-auto px-4 py-6 space-y-3">
           {messages.length === 0 ? (
-            <p className="text-center text-gray-500 text-sm py-8">
+            <p className="text-center text-gray-500 dark:text-gray-400 text-sm py-8">
               No messages yet. Say hello 👋
             </p>
           ) : (
@@ -201,11 +195,15 @@ export default function ThreadPage() {
                     className={`max-w-[75%] rounded-2xl px-4 py-2 ${
                       mine
                         ? "bg-amber-600 text-white"
-                        : "bg-white border border-gray-200 text-gray-800"
+                        : "bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-800 dark:text-gray-200"
                     } ${m.pending ? "opacity-70" : ""}`}
                   >
                     <p className="text-sm break-words whitespace-pre-wrap">{m.content}</p>
-                    <p className={`text-xs mt-1 ${mine ? "text-amber-100" : "text-gray-400"}`}>
+                    <p
+                      className={`text-xs mt-1 ${
+                        mine ? "text-amber-100" : "text-gray-400"
+                      }`}
+                    >
                       {m.pending
                         ? "Sending..."
                         : new Date(m.created_at).toLocaleTimeString([], {
@@ -224,19 +222,19 @@ export default function ThreadPage() {
       </div>
 
       {localMessage && (
-        <div className="bg-amber-50 border-t border-amber-100 text-xs text-amber-700 text-center py-1.5">
+        <div className="bg-amber-50 dark:bg-amber-900/20 border-t border-amber-100 dark:border-amber-800 text-xs text-amber-700 dark:text-amber-300 text-center py-1.5">
           {localMessage}
         </div>
       )}
 
-      <div className="sticky bottom-0 bg-white border-t border-gray-200">
+      <div className="sticky bottom-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
         <form onSubmit={sendMessage} className="max-w-2xl mx-auto px-4 py-3 flex gap-2">
           <input
             type="text"
             value={content}
             onChange={(e) => setContent(e.target.value)}
             placeholder="Type a message..."
-            className="flex-1 p-3 border rounded-full text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+            className="flex-1 p-3 border border-gray-300 dark:border-gray-700 rounded-full text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
             disabled={sending}
           />
           <button
@@ -246,8 +244,4 @@ export default function ThreadPage() {
           >
             Send
           </button>
-        </form>
-      </div>
-    </div>
-  );
-}
+        </form
