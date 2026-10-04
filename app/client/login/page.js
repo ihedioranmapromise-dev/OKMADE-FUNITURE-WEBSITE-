@@ -1,6 +1,6 @@
 "use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createSupabaseBrowser } from "@/lib/supabase-browser";
 
 const EyeOpen = ({ className = "w-5 h-5" }) => (
@@ -15,14 +15,23 @@ const EyeOff = ({ className = "w-5 h-5" }) => (
   </svg>
 );
 
-export default function ClientLogin() {
+function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createSupabaseBrowser();
+
+  const deletionScheduled = searchParams.get("deletion") === "scheduled";
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) router.push("/client/dashboard");
+    });
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -52,35 +61,46 @@ export default function ClientLogin() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-amber-50 to-white py-12 px-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
-        <h1 className="text-3xl font-bold text-center text-amber-800 mb-6 font-['Dancing_Script',_cursive]">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-amber-50 to-white dark:from-gray-950 dark:to-gray-900 py-12 px-4">
+      <div className="max-w-md w-full bg-white dark:bg-gray-900 rounded-2xl shadow-xl p-8">
+        <h1 className="text-3xl font-bold text-center text-amber-800 dark:text-amber-400 mb-6 font-['Dancing_Script',_cursive]">
           Welcome Back
         </h1>
+
+        {deletionScheduled && (
+          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 mb-4 text-sm text-amber-800 dark:text-amber-300">
+            Your account deletion has been scheduled. Check your email for a cancel link.
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Email</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Email
+            </label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-amber-500"
+              className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Password</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Password
+            </label>
             <div className="relative">
               <input
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full mt-1 p-3 border rounded-lg pr-12 focus:ring-2 focus:ring-amber-500"
+                className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg pr-12 focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
                 required
               />
               <button
                 type="button"
-                className="absolute inset-y-0 right-3 flex items-center text-gray-500 hover:text-amber-600 transition"
+                className="absolute inset-y-0 right-3 flex items-center text-gray-500 dark:text-gray-400 hover:text-amber-600 transition"
                 onClick={() => setShowPassword(!showPassword)}
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
@@ -89,7 +109,10 @@ export default function ClientLogin() {
             </div>
           </div>
           <div className="text-right">
-            <a href="/client/forgot-password" className="text-sm text-amber-600 hover:underline">
+            <a
+              href="/client/forgot-password"
+              className="text-sm text-amber-600 dark:text-amber-400 hover:underline"
+            >
               Forgot password?
             </a>
           </div>
@@ -101,15 +124,24 @@ export default function ClientLogin() {
             {loading ? "Logging in..." : "Log In"}
           </button>
           {message && (
-            <p className={`text-center text-sm ${message.includes("Error") || message.includes("Invalid") || message.includes("verify") ? "text-red-500" : "text-green-600"}`}>
-              {message}
-            </p>
+            <p className="text-center text-sm text-red-500">{message}</p>
           )}
         </form>
-        <p className="text-center text-sm text-gray-600 mt-4">
-          No account? <a href="/client/signup" className="text-amber-600 hover:underline">Sign up</a>
+        <p className="text-center text-sm text-gray-600 dark:text-gray-400 mt-4">
+          No account?{" "}
+          <a href="/client/signup" className="text-amber-600 dark:text-amber-400 hover:underline">
+            Sign up
+          </a>
         </p>
       </div>
     </div>
+  );
+}
+
+export default function ClientLogin() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+      <LoginForm />
+    </Suspense>
   );
 }
