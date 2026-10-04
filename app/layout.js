@@ -1,10 +1,15 @@
 import "./globals.css";
 import Script from "next/script";
+import { cookies } from "next/headers";
 import SplashScreen from "./components/SplashScreen";
 import InstallBanner from "./components/InstallBanner";
 import PWASetup from "./components/PWASetup";
 import OfflineBanner from "./components/OfflineBanner";
 import OfflineQueueIndicator from "./components/OfflineQueueIndicator";
+import PromoBanner from "./components/PromoBanner";
+import ThemeInit from "./components/ThemeInit";
+import { ThemeProvider } from "@/lib/theme";
+import { THEME_COOKIE, THEME_DEFAULT } from "@/lib/theme-constants";
 
 export const metadata = {
   title: "OKMADE Furniture",
@@ -29,10 +34,14 @@ export const viewport = {
   maximumScale: 1,
 };
 
-export default function RootLayout({ children }) {
+export default async function RootLayout({ children }) {
+  const cookieStore = await cookies();
+  const theme = cookieStore.get(THEME_COOKIE)?.value || THEME_DEFAULT;
+
   return (
-    <html lang="en">
+    <html lang="en" className={theme === "dark" ? "dark" : ""}>
       <head>
+        <ThemeInit />
         <Script
           src="https://www.googletagmanager.com/gtag/js?id=G-C7DX7WTH30"
           strategy="afterInteractive"
@@ -50,13 +59,16 @@ export default function RootLayout({ children }) {
           rel="stylesheet"
         />
       </head>
-      <body className="bg-gray-50">
-        <OfflineBanner />
-        <PWASetup />
-        <SplashScreen />
-        <InstallBanner />
-        <OfflineQueueIndicator />
-        {children}
+      <body className="bg-gray-50 dark:bg-gray-950">
+        <ThemeProvider initialTheme={theme}>
+          <PromoBanner />
+          <OfflineBanner />
+          <PWASetup />
+          <SplashScreen />
+          <InstallBanner />
+          <OfflineQueueIndicator />
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );
