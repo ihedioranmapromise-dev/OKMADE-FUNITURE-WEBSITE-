@@ -2,8 +2,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 
-const BLUR =
-  "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxIDEiPjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9IiNmZWYzYzciLz48L3N2Zz4=";
+const BLUR = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxIDEiPjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9IiNmZWYzYzciLz48L3N2Zz4=";
 
 export default function AutoPostModal({
   open,
@@ -42,8 +41,7 @@ export default function AutoPostModal({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-admin-key":
-            process.env.NEXT_PUBLIC_ADMIN_API_KEY || "okmade_super_secret_2026",
+          "x-admin-key": sessionStorage.getItem("adminKey") || "",
         },
         body: JSON.stringify({
           type,
@@ -59,19 +57,17 @@ export default function AutoPostModal({
       if (data.success === false) {
         setMessage("This item was already posted.");
         setTimeout(() => {
-          onPosted && onPosted(data);
-          onClose && onClose();
+          onPosted?.(data);
+          onClose?.();
         }, 1200);
         return;
       }
       setMessage(
-        `Posted! ${
-          sendEmail ? `Email sent to ${data.emails?.sent || 0} follower(s).` : ""
-        }`
+        `Posted! ${sendEmail ? `Email sent to ${data.emails?.sent || 0} follower(s).` : ""}`
       );
       setTimeout(() => {
-        onPosted && onPosted(data);
-        onClose && onClose();
+        onPosted?.(data);
+        onClose?.();
       }, 900);
     } catch (err) {
       setMessage("Error: " + err.message);
@@ -86,14 +82,14 @@ export default function AutoPostModal({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
+        className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-5 py-4 border-b border-gray-100">
-          <h3 className="text-lg font-bold text-gray-800">
+        <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800">
+          <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">
             Post this to the Public Feed?
           </h3>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             It will appear as <strong>OKMADE Official</strong> and everyone can see it in the feed.
           </p>
         </div>
@@ -104,7 +100,7 @@ export default function AutoPostModal({
               {previewImages.slice(0, 6).map((img, idx) => (
                 <div
                   key={idx}
-                  className="relative aspect-square rounded-lg overflow-hidden bg-gray-100"
+                  className="relative aspect-square rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800"
                 >
                   <Image
                     src={img}
@@ -121,14 +117,14 @@ export default function AutoPostModal({
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Caption (editable)
             </label>
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
               rows="4"
-              className="w-full border rounded-lg p-3 text-sm focus:ring-2 focus:ring-amber-500"
+              className="w-full border border-gray-300 dark:border-gray-700 rounded-lg p-3 text-sm focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
               placeholder="Write your caption..."
             />
           </div>
@@ -140,7 +136,7 @@ export default function AutoPostModal({
               onChange={(e) => setSendEmail(e.target.checked)}
               className="w-4 h-4"
             />
-            <span className="text-sm text-gray-700">
+            <span className="text-sm text-gray-700 dark:text-gray-300">
               Also email all OKMADE followers
             </span>
           </label>
@@ -148,7 +144,9 @@ export default function AutoPostModal({
           {message && (
             <p
               className={`text-sm ${
-                message.startsWith("Error") ? "text-red-500" : "text-green-600"
+                message.startsWith("Error")
+                  ? "text-red-500"
+                  : "text-green-600 dark:text-green-400"
               }`}
             >
               {message}
@@ -156,11 +154,11 @@ export default function AutoPostModal({
           )}
         </div>
 
-        <div className="px-5 py-4 border-t border-gray-100 flex gap-3">
+        <div className="px-5 py-4 border-t border-gray-100 dark:border-gray-800 flex gap-3">
           <button
             onClick={onClose}
             disabled={posting}
-            className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2.5 rounded-lg transition disabled:opacity-50"
+            className="flex-1 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 font-medium py-2.5 rounded-lg transition disabled:opacity-50"
           >
             Skip
           </button>
