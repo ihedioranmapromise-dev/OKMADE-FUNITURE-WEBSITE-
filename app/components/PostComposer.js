@@ -13,6 +13,19 @@ const FONT_OPTIONS = [
   { label: "Modern", value: "'Montserrat', sans-serif" },
 ];
 
+async function uploadWithRetry(supabase, path, file, retries = 3) {
+  let lastErr;
+  for (let i = 0; i <= retries; i++) {
+    const { error } = await supabase.storage
+      .from("story-images")
+      .upload(path, file, { cacheControl: "31536000", upsert: true });
+    if (!error) return { ok: true };
+    lastErr = error;
+    await new Promise((r) => setTimeout(r, 500 * Math.pow(2, i)));
+  }
+  return { ok: false, error: lastErr };
+}
+
 export default function PostComposer({ onPosted }) {
   const [content, setContent] = useState("");
   const [files, setFiles] = useState([]);
@@ -20,6 +33,7 @@ export default function PostComposer({ onPosted }) {
   const [font, setFont] = useState("sans-serif");
   const [posting, setPosting] = useState(false);
   const [message, setMessage] = useState("");
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
   const fileInputRef = useRef(null);
   const supabase = createSupabaseBrowser();
 
@@ -51,6 +65,7 @@ export default function PostComposer({ onPosted }) {
     setFiles([]);
     setPreviews([]);
     setFont("sans-serif");
+    setProgress({ done: 0, total: 0 });
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -60,9 +75,8 @@ export default function PostComposer({ onPosted }) {
       return;
     }
 
-    // If offline and has images — can't queue images, so block
     if (!navigator.onLine && files.length > 0) {
-      setMessage("You can't post images while offline. Remove them or wait until you're back online.");
+      setMessage("You can't post images while offline. Remove them or wait.");
       return;
     }
 
@@ -70,7 +84,6 @@ export default function PostComposer({ onPosted }) {
     setMessage("");
 
     try {
-      // If offline and no images — queue the post
       if (!navigator.onLine) {
         enqueue({
           url: "/api/posts",
@@ -86,9 +99,10 @@ export default function PostComposer({ onPosted }) {
         return;
       }
 
-      // Online — upload images in parallel
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not logged in");
+
+      setProgress({ done: 0, total: files.length });
 
       const uploadResults = await Promise.all(
         files.map(async (file, i) => {
@@ -96,13 +110,12 @@ export default function PostComposer({ onPosted }) {
           const path = `posts/${user.id}_${Date.now()}_${i}_${Math.random()
             .toString(36)
             .slice(2)}.${ext}`;
-          const { error: uploadError } = await supabase.storage
-            .from("story-images")
-            .upload(path, file, { cacheControl: "31536000" });
-          if (uploadError) throw uploadError;
+          const result = await uploadWithRetry(supabase, path, file);
+          if (!result.ok) throw new Error(`Upload failed: ${file.name}`);
           const { data: urlData } = supabase.storage
             .from("story-images")
             .getPublicUrl(path);
+          setProgress((p) => ({ ...p, done: p.done + 1 }));
           return urlData.publicUrl;
         })
       );
@@ -122,19 +135,20 @@ export default function PostComposer({ onPosted }) {
       onPosted?.();
     } catch (err) {
       setMessage("Error: " + err.message);
+      setProgress({ done: 0, total: 0 });
     } finally {
       setPosting(false);
     }
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+    <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-4">
       <textarea
         value={content}
         onChange={(e) => setContent(e.target.value)}
         placeholder="What's on your mind?"
         rows="3"
-        className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-amber-500 resize-none"
+        className="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 resize-none bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
         style={{ fontFamily: font }}
       />
 
@@ -146,7 +160,7 @@ export default function PostComposer({ onPosted }) {
               <button
                 onClick={() => removeImage(i)}
                 className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white rounded-full w-6 h-6 text-xs flex items-center justify-center"
-                aria-label="Remove image"
+                aria-label="Remove"
               >
                 ✕
               </button>
@@ -155,8 +169,27 @@ export default function PostComposer({ onPosted }) {
         </div>
       )}
 
+      {posting && progress.total > 0 && (
+        <div className="mt-3">
+          <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
+            <span>Uploading images...</span>
+            <span>
+              {progress.done} / {progress.total}
+            </span>
+          </div>
+          <div className="w-full h-1.5 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-amber-600 transition-all duration-300"
+              style={{
+                width: `${(progress.done / progress.total) * 100}%`,
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center gap-2 mt-3 flex-wrap">
-        <label className="cursor-pointer bg-gray-100 hover:bg-gray-200 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+        <label className="cursor-pointer bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 text-gray-700 dark:text-gray-300">
           📷 Photo
           <input
             ref={fileInputRef}
@@ -171,7 +204,7 @@ export default function PostComposer({ onPosted }) {
         <select
           value={font}
           onChange={(e) => setFont(e.target.value)}
-          className="bg-gray-100 hover:bg-gray-200 px-3 py-2 rounded-lg text-sm"
+          className="bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 px-3 py-2 rounded-lg text-sm text-gray-700 dark:text-gray-300"
           style={{ fontFamily: font }}
         >
           {FONT_OPTIONS.map((f) => (
@@ -191,7 +224,13 @@ export default function PostComposer({ onPosted }) {
       </div>
 
       {message && (
-        <p className={`mt-2 text-sm ${message.startsWith("Error") ? "text-red-500" : "text-amber-700"}`}>
+        <p
+          className={`mt-2 text-sm ${
+            message.startsWith("Error")
+              ? "text-red-500"
+              : "text-amber-700 dark:text-amber-300"
+          }`}
+        >
           {message}
         </p>
       )}
