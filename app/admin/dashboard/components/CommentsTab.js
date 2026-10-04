@@ -19,7 +19,9 @@ export default function CommentsTab() {
 
   async function load() {
     setLoading(true);
-    const res = await fetch("/api/admin/comments", { headers: { "x-admin-key": key() } });
+    const res = await fetch("/api/admin/comments", {
+      headers: { "x-admin-key": key() },
+    });
     if (res.ok) setData(await res.json());
     setLoading(false);
   }
@@ -29,9 +31,10 @@ export default function CommentsTab() {
   const filtered = useMemo(() => {
     if (!search.trim()) return currentList;
     const q = search.toLowerCase();
-    return currentList.filter((c) =>
-      (c.author_name || "").toLowerCase().includes(q) ||
-      (c.content || c.message || "").toLowerCase().includes(q)
+    return currentList.filter(
+      (c) =>
+        (c.author_name || "").toLowerCase().includes(q) ||
+        (c.content || c.message || "").toLowerCase().includes(q)
     );
   }, [currentList, search]);
 
@@ -46,11 +49,10 @@ export default function CommentsTab() {
       headers: { "x-admin-key": key() },
     });
     if (res.ok) {
+      const field = tab === "posts" ? "post_comments" : "public_comments";
       setData((prev) => ({
         ...prev,
-        [tab === "posts" ? "post_comments" : "public_comments"]: prev[
-          tab === "posts" ? "post_comments" : "public_comments"
-        ].filter((c) => c.id !== id),
+        [field]: prev[field].filter((c) => c.id !== id),
       }));
       setMessage("Comment deleted.");
     } else {
@@ -63,7 +65,10 @@ export default function CommentsTab() {
       <div className="space-y-3">
         <div className="h-8 w-48 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
         {[...Array(8)].map((_, i) => (
-          <div key={i} className="h-14 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" />
+          <div
+            key={i}
+            className="h-14 bg-gray-100 dark:bg-gray-800 rounded animate-pulse"
+          />
         ))}
       </div>
     );
@@ -119,7 +124,9 @@ export default function CommentsTab() {
         />
       </div>
 
-      {message && <p className="text-sm text-green-600 dark:text-green-400 mb-3">{message}</p>}
+      {message && (
+        <p className="text-sm text-green-600 dark:text-green-400 mb-3">{message}</p>
+      )}
 
       {filtered.length === 0 ? (
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-8 text-center text-gray-500 dark:text-gray-400">
@@ -136,4 +143,72 @@ export default function CommentsTab() {
                 <div className="flex justify-between items-start gap-3 flex-wrap">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <span
+                      <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                        {c.author_name}
+                      </span>
+                      {c.is_guest !== undefined && (
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded-full ${
+                            c.is_guest
+                              ? "bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                              : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                          }`}
+                        >
+                          {c.is_guest ? "GUEST" : "ARTISAN"}
+                        </span>
+                      )}
+                      <span className="text-xs text-gray-400">
+                        {new Date(c.created_at).toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-700 dark:text-gray-300">
+                      {c.content || c.message}
+                    </p>
+                    {c.posts && (
+                      <p className="text-xs text-gray-400 mt-1 truncate">
+                        On post: {c.posts.content?.slice(0, 60) || "—"}
+                      </p>
+                    )}
+                    {c.projects && (
+                      <p className="text-xs text-gray-400 mt-1 truncate">
+                        On project: {c.projects.work_description || "—"}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => remove(c.id)}
+                    className="bg-red-500 text-white px-3 py-1 rounded text-xs hover:bg-red-600 flex-shrink-0"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 mt-6">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="px-3 py-1.5 rounded border border-gray-300 dark:border-gray-600 text-sm text-gray-700 dark:text-gray-300 disabled:opacity-40"
+              >
+                ← Prev
+              </button>
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                Page {page} of {totalPages}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="px-3 py-1.5 rounded border border-gray-300 dark:border-gray-600 text-sm text-gray-700 dark:text-gray-300 disabled:opacity-40"
+              >
+                Next →
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
