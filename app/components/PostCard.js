@@ -1,6 +1,8 @@
 "use client";
 import { useState } from "react";
 import Image from "next/image";
+import ShareMenu from "./ShareMenu";
+import ReportButton from "./ReportButton";
 import { fetchWithRetry } from "@/lib/fetch-with-retry";
 import { enqueue } from "@/lib/offline-queue";
 
@@ -13,12 +15,16 @@ const REACTIONS = [
   { type: "angry", emoji: "😡", label: "Angry" },
 ];
 
-const BLUR =
-  "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxIDEiPjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9IiNmZWYzYzciLz48L3N2Zz4=";
+const BLUR = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxIDEiPjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9IiNmZWYzYzciLz48L3N2Zz4=";
 
-const IconCheck = () => (
-  <svg className="w-4 h-4 inline-block" fill="currentColor" viewBox="0 0 24 24">
-    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+const VerifiedBadge = ({ isOkmade }) => (
+  <svg
+    className={`w-4 h-4 inline-block flex-shrink-0 ${isOkmade ? "text-amber-500" : "text-blue-500"}`}
+    viewBox="0 0 24 24"
+    fill="currentColor"
+  >
+    <path d="M12 2l2.09 2.26 3.06-.46.63 3.02 2.81 1.31-1.24 2.83 1.24 2.83-2.81 1.31-.63 3.02-3.06-.46L12 20l-2.09-2.26-3.06.46-.63-3.02L3.41 13.87l1.24-2.83-1.24-2.83 2.81-1.31.63-3.02 3.06.46L12 2z" />
+    <path d="M9.5 12.5l1.8 1.8 3.7-3.7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
   </svg>
 );
 
@@ -35,7 +41,13 @@ function timeAgo(dateStr) {
   });
 }
 
-export default function PostCard({ post, currentUserId, onUpdate, showFullComments = false }) {
+export default function PostCard({
+  post,
+  currentUserId,
+  currentUserIsOkmade = false,
+  onUpdate,
+  showFullComments = false,
+}) {
   const [showReactions, setShowReactions] = useState(false);
   const [localReactions, setLocalReactions] = useState(post.reactions || []);
   const [comments, setComments] = useState([]);
@@ -47,10 +59,15 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
   const [replyingTo, setReplyingTo] = useState(null);
   const [loadingComments, setLoadingComments] = useState(false);
   const [localMessage, setLocalMessage] = useState("");
+  const [content, setContent] = useState(post.content || "");
+  const [editing, setEditing] = useState(false);
+  const [editText, setEditText] = useState(post.content || "");
+  const [editSaving, setEditSaving] = useState(false);
 
   const author = post.clients || {};
   const fullName = author.display_name || author.username || "User";
   const myReaction = localReactions.find((r) => r.user_id === currentUserId);
+  const isMine = currentUserId && post.author_id === currentUserId;
 
   const reactionCounts = localReactions.reduce((acc, r) => {
     acc[r.reaction_type] = (acc[r.reaction_type] || 0) + 1;
@@ -60,8 +77,6 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
 
   const handleReact = async (type) => {
     setShowReactions(false);
-
-    // Optimistic update
     const filtered = localReactions.filter((r) => r.user_id !== currentUserId);
     if (myReaction?.reaction_type === type) {
       setLocalReactions(filtered);
@@ -69,7 +84,6 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
       setLocalReactions([...filtered, { reaction_type: type, user_id: currentUserId }]);
     }
 
-    // If offline — queue it
     if (!navigator.onLine) {
       enqueue({
         url: `/api/posts/${post.id}/react`,
@@ -87,9 +101,7 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
         body: JSON.stringify({ reaction_type: type }),
       });
       onUpdate?.();
-    } catch {
-      // Silent — optimistic update already shown
-    }
+    } catch {}
   };
 
   const loadComments = async () => {
@@ -102,9 +114,7 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
         setComments(data.comments || []);
         setCommentsLoaded(true);
       }
-    } catch {
-      // Silent
-    }
+    } catch {}
     setLoadingComments(false);
   };
 
@@ -114,11 +124,9 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
     const name = commentName;
     const email = commentEmail;
 
-    // Clear UI immediately
     setCommentText("");
     setReplyingTo(null);
 
-    // If offline — queue it
     if (!navigator.onLine) {
       enqueue({
         url: `/api/posts/${post.id}/comment`,
@@ -150,10 +158,10 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
       if (res.ok) {
         const newComment = await res.json();
         setComments([...comments, newComment]);
+      } else {
+        throw new Error();
       }
     } catch {
-      setLocalMessage("Couldn't post comment. It's been saved.");
-      setTimeout(() => setLocalMessage(""), 4000);
       enqueue({
         url: `/api/posts/${post.id}/comment`,
         method: "POST",
@@ -165,6 +173,8 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
         },
         label: "Comment",
       });
+      setLocalMessage("Saved. Will retry automatically.");
+      setTimeout(() => setLocalMessage(""), 4000);
     }
   };
 
@@ -172,6 +182,29 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
     if (!confirm("Delete this post?")) return;
     const res = await fetchWithRetry(`/api/posts/${post.id}`, { method: "DELETE" });
     if (res.ok) onUpdate?.();
+    else alert("Delete failed.");
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editText.trim()) return;
+    setEditSaving(true);
+    try {
+      const res = await fetchWithRetry(`/api/posts/${post.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: editText.trim() }),
+      });
+      if (res.ok) {
+        setContent(editText.trim());
+        setEditing(false);
+      } else {
+        alert("Save failed.");
+      }
+    } catch {
+      alert("Network error.");
+    } finally {
+      setEditSaving(false);
+    }
   };
 
   const topLevel = comments.filter((c) => !c.parent_id);
@@ -179,9 +212,11 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
 
   const imageCount = post.image_urls?.length || 0;
   const singleImage = imageCount === 1;
+  const postUrl = typeof window !== "undefined" ? `${window.location.origin}/client/${author.username}` : "";
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
+      {/* Header */}
       <div className="p-4 flex items-start gap-3">
         {author.profile_pic ? (
           <div className="relative w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
@@ -196,7 +231,7 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
             />
           </div>
         ) : (
-          <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold flex-shrink-0">
+          <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 flex items-center justify-center font-bold flex-shrink-0">
             {fullName.charAt(0).toUpperCase()}
           </div>
         )}
@@ -204,42 +239,95 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
           <div className="flex items-center gap-1">
             <a
               href={`/client/${author.username}`}
-              className="font-semibold text-gray-900 hover:underline truncate"
+              className="font-semibold text-gray-900 dark:text-gray-100 hover:underline truncate"
             >
               {fullName}
             </a>
-            {author.is_okmade && (
-              <span className="text-amber-500 flex-shrink-0" title="Official">
-                <IconCheck />
-              </span>
-            )}
+            {author.is_okmade ? (
+              <VerifiedBadge isOkmade />
+            ) : author.verified ? (
+              <VerifiedBadge isOkmade={false} />
+            ) : null}
           </div>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
             {timeAgo(post.created_at)}
             {post.is_auto && " · Auto-update"}
+            {post.edited_at && " · edited"}
           </p>
         </div>
-        {currentUserId && post.author_id === currentUserId && (
-          <button
-            onClick={handleDelete}
-            className="text-gray-400 hover:text-red-600 text-sm flex-shrink-0"
-          >
-            Delete
-          </button>
-        )}
+        <div className="flex items-center gap-0.5 flex-shrink-0">
+          <ShareMenu
+            url={postUrl}
+            title={`${fullName} on OKMADE`}
+            text={content ? content.slice(0, 100) : "Check this on OKMADE"}
+            iconOnly
+          />
+          {isMine || currentUserIsOkmade ? (
+            <div className="relative">
+              <button
+                onClick={() => {
+                  if (isMine) setEditing(!editing);
+                }}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition text-gray-500 dark:text-gray-400"
+                aria-label="Options"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v.01M12 12v.01M12 19v.01" />
+                </svg>
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
 
-      {post.content && (
+      {/* Content or edit mode */}
+      {editing ? (
         <div className="px-4 pb-3">
-          <p
-            className="text-gray-800 whitespace-pre-wrap"
-            style={{ fontFamily: post.font_family || "sans-serif" }}
-          >
-            {post.content}
-          </p>
+          <textarea
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
+            rows="3"
+            className="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:ring-2 focus:ring-amber-500"
+          />
+          <div className="flex gap-2 mt-2">
+            <button
+              onClick={handleSaveEdit}
+              disabled={editSaving}
+              className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50"
+            >
+              {editSaving ? "Saving..." : "Save"}
+            </button>
+            <button
+              onClick={() => {
+                setEditing(false);
+                setEditText(content);
+              }}
+              className="bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 px-3 py-1.5 rounded-lg text-sm"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDelete}
+              className="ml-auto bg-red-100 dark:bg-red-900/20 hover:bg-red-200 dark:hover:bg-red-900/30 text-red-700 dark:text-red-400 px-3 py-1.5 rounded-lg text-sm"
+            >
+              Delete
+            </button>
+          </div>
         </div>
+      ) : (
+        content && (
+          <div className="px-4 pb-3">
+            <p
+              className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap"
+              style={{ fontFamily: post.font_family || "sans-serif" }}
+            >
+              {content}
+            </p>
+          </div>
+        )
       )}
 
+      {/* Images */}
       {imageCount > 0 && (
         <div className={`grid gap-1 ${singleImage ? "grid-cols-1" : "grid-cols-2"}`}>
           {post.image_urls.map((url, i) => (
@@ -266,10 +354,11 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
         </div>
       )}
 
+      {/* Counts bar */}
       {(totalReactions > 0 || post.commentCount > 0) && (
-        <div className="px-4 py-2 flex justify-between text-xs text-gray-500 border-t border-gray-100">
+        <div className="px-4 py-2 flex justify-between text-xs text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-800">
           <span className="flex items-center gap-1">
-            {Object.entries(reactionCounts).map(([type, count]) => {
+            {Object.entries(reactionCounts).map(([type]) => {
               const emoji = REACTIONS.find((r) => r.type === type)?.emoji;
               return <span key={type}>{emoji}</span>;
             })}
@@ -287,7 +376,8 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
         </div>
       )}
 
-      <div className="border-t border-gray-100 px-2 flex">
+      {/* Action bar */}
+      <div className="border-t border-gray-100 dark:border-gray-800 px-2 flex">
         <div
           className="relative flex-1"
           onMouseEnter={() => setShowReactions(true)}
@@ -296,14 +386,14 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
           <button
             onClick={() => handleReact("like")}
             className={`w-full py-2 text-sm font-medium flex items-center justify-center gap-2 transition ${
-              myReaction ? "text-amber-600" : "text-gray-600 hover:bg-gray-50"
+              myReaction
+                ? "text-amber-600 dark:text-amber-400"
+                : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
             }`}
           >
             {myReaction ? (
               <>
-                <span>
-                  {REACTIONS.find((r) => r.type === myReaction.reaction_type)?.emoji}
-                </span>
+                <span>{REACTIONS.find((r) => r.type === myReaction.reaction_type)?.emoji}</span>
                 {REACTIONS.find((r) => r.type === myReaction.reaction_type)?.label}
               </>
             ) : (
@@ -311,7 +401,7 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
             )}
           </button>
           {showReactions && (
-            <div className="absolute bottom-full left-0 mb-1 bg-white border border-gray-200 rounded-full shadow-lg px-2 py-1 flex gap-1 z-10">
+            <div className="absolute bottom-full left-0 mb-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-full shadow-lg px-2 py-1 flex gap-1 z-10">
               {REACTIONS.map(({ type, emoji, label }) => (
                 <button
                   key={type}
@@ -330,47 +420,56 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
             loadComments();
             setShowAllComments(!showAllComments);
           }}
-          className="flex-1 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 flex items-center justify-center"
+          className="flex-1 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center justify-center"
         >
           💬 Comment
         </button>
+        <ReportButton postId={post.id} iconOnly />
       </div>
 
       {localMessage && (
-        <div className="px-4 py-2 bg-amber-50 border-t border-amber-100 text-xs text-amber-700">
+        <div className="px-4 py-2 bg-amber-50 dark:bg-amber-900/20 border-t border-amber-100 dark:border-amber-800 text-xs text-amber-700 dark:text-amber-300">
           {localMessage}
         </div>
       )}
 
+      {/* Comments */}
       {showAllComments && (
-        <div className="border-t border-gray-100 bg-gray-50 p-4 space-y-3">
-          {loadingComments && <p className="text-sm text-gray-500">Loading comments...</p>}
+        <div className="border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 p-4 space-y-3">
+          {loadingComments && (
+            <p className="text-sm text-gray-500 dark:text-gray-400">Loading comments...</p>
+          )}
           {visibleComments.map((c) => {
             const replies = comments.filter((r) => r.parent_id === c.id);
             return (
               <div key={c.id}>
                 <div
                   className={`p-3 rounded-lg ${
-                    c.is_guest ? "bg-white" : "bg-amber-50 border border-amber-100"
+                    c.is_guest
+                      ? "bg-white dark:bg-gray-900"
+                      : "bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800"
                   }`}
                 >
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm font-semibold text-gray-800">{c.author_name}</span>
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                      {c.author_name}
+                    </span>
                     {c.is_guest ? (
-                      <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">
+                      <span className="text-xs bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-0.5 rounded-full">
                         GUEST
                       </span>
                     ) : (
-                      <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                      <span className="text-xs bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-full">
                         ARTISAN
                       </span>
                     )}
                     <span className="text-xs text-gray-400">{timeAgo(c.created_at)}</span>
+                    <ReportButton commentId={c.id} iconOnly />
                   </div>
-                  <p className="text-sm text-gray-700">{c.content}</p>
+                  <p className="text-sm text-gray-700 dark:text-gray-300">{c.content}</p>
                   <button
                     onClick={() => setReplyingTo(c.id)}
-                    className="text-xs text-amber-600 hover:underline mt-1"
+                    className="text-xs text-amber-600 dark:text-amber-400 hover:underline mt-1"
                   >
                     Reply
                   </button>
@@ -378,21 +477,23 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
                 {replies.map((r) => (
                   <div
                     key={r.id}
-                    className="ml-6 mt-2 p-2 bg-white rounded-lg border-l-2 border-amber-200"
+                    className="ml-6 mt-2 p-2 bg-white dark:bg-gray-900 rounded-lg border-l-2 border-amber-200 dark:border-amber-800"
                   >
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-semibold text-gray-800">{r.author_name}</span>
+                      <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                        {r.author_name}
+                      </span>
                       {r.is_guest ? (
-                        <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">
+                        <span className="text-xs bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-0.5 rounded-full">
                           GUEST
                         </span>
                       ) : (
-                        <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                        <span className="text-xs bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-full">
                           ARTISAN
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-gray-700">{r.content}</p>
+                    <p className="text-sm text-gray-700 dark:text-gray-300">{r.content}</p>
                   </div>
                 ))}
                 {replyingTo === c.id && (
@@ -402,7 +503,7 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
                       value={commentText}
                       onChange={(e) => setCommentText(e.target.value)}
                       placeholder="Write a reply..."
-                      className="flex-1 p-2 border rounded-lg text-sm"
+                      className="flex-1 p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100"
                     />
                     <button
                       onClick={() => handleComment(c.id)}
@@ -417,22 +518,22 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
           })}
 
           {!replyingTo && (
-            <div className="space-y-2 pt-2 border-t border-gray-200">
+            <div className="space-y-2 pt-2 border-t border-gray-200 dark:border-gray-800">
               {!currentUserId && (
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <input
                     type="text"
                     placeholder="Your name *"
                     value={commentName}
                     onChange={(e) => setCommentName(e.target.value)}
-                    className="flex-1 p-2 border rounded-lg text-sm"
+                    className="flex-1 min-w-[140px] p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100"
                   />
                   <input
                     type="email"
                     placeholder="Email (optional)"
                     value={commentEmail}
                     onChange={(e) => setCommentEmail(e.target.value)}
-                    className="flex-1 p-2 border rounded-lg text-sm"
+                    className="flex-1 min-w-[140px] p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100"
                   />
                 </div>
               )}
@@ -442,7 +543,7 @@ export default function PostCard({ post, currentUserId, onUpdate, showFullCommen
                   placeholder="Write a comment..."
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
-                  className="flex-1 p-2 border rounded-lg text-sm"
+                  className="flex-1 p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100"
                 />
                 <button
                   onClick={() => handleComment(null)}
