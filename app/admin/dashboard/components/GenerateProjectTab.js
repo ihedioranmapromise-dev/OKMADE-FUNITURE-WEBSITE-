@@ -1,12 +1,8 @@
 "use client";
 import { useState, useEffect } from "react";
-import { createClient } from "@supabase/supabase-js";
+import { adminFetch } from "@/lib/admin-client";
+import AutoPostModal from "@/app/components/AutoPostModal";
 import { CloseIcon } from "@/lib/icons";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
 
 export default function GenerateProjectTab() {
   const [workers, setWorkers] = useState([]);
@@ -27,27 +23,37 @@ export default function GenerateProjectTab() {
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
 
+  const [autoPostOpen, setAutoPostOpen] = useState(false);
+  const [autoPostData, setAutoPostData] = useState({
+    type: "project",
+    sourceId: "",
+    defaultContent: "",
+    previewImages: [],
+  });
+
+  const key = () => sessionStorage.getItem("adminKey") || "";
+
   useEffect(() => {
-    fetchWorkers();
-    fetchCategories();
+    loadWorkers();
+    loadCategories();
   }, []);
 
-  async function fetchWorkers() {
-    const res = await fetch("/api/admin/workers", {
-      headers: {
-        "x-admin-key":
-          process.env.NEXT_PUBLIC_ADMIN_API_KEY || "okmade_super_secret_2026",
-      },
-    });
-    if (res.ok) setWorkers((await res.json()) || []);
+  async function loadWorkers() {
+    try {
+      const res = await fetch("/api/admin/workers", {
+        headers: { "x-admin-key": key() },
+      });
+      if (res.ok) setWorkers((await res.json()) || []);
+    } catch {}
   }
 
-  async function fetchCategories() {
-    const { data } = await supabase
-      .from("categories")
-      .select("*")
-      .order("name", { ascending: true });
-    setCategories(data || []);
+  async function loadCategories() {
+    try {
+      const res = await fetch("/api/admin/categories", {
+        headers: { "x-admin-key": key() },
+      });
+      if (res.ok) setCategories((await res.json()) || []);
+    } catch {}
   }
 
   const handleWorkerChange = (e) => {
@@ -73,7 +79,7 @@ export default function GenerateProjectTab() {
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files);
     if (imageData.length + files.length > 6) {
-      setMessage("You can upload up to 6 request images total.");
+      setMessage("Max 6 images.");
       return;
     }
     setImageData([
@@ -94,148 +100,89 @@ export default function GenerateProjectTab() {
     setImageData(updated);
   };
 
-  const generateTokenString = () =>
-    Math.random().toString(36).substring(2, 10).toUpperCase();
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!workDescription || imageData.length === 0) {
-      setMessage(
-        "Please enter a work description and select at least one image."
-      );
+      setMessage("Enter a work description and select at least one image.");
       return;
     }
     if (!isStandalone && (!clientName || !clientContact)) {
-      setMessage("Client name and contact are required for client projects.");
+      setMessage("Client name and contact required for client projects.");
       return;
     }
+
     setUploading(true);
     setMessage("");
     try {
-      const tokenString = isStandalone ? null : generateTokenString();
-      const { data: project, error: projectError } = await supabase
-        .from("projects")
-        .insert([
-          {
-            token_string: tokenString,
-            client_name: isStandalone ? null : clientName,
-            client_contact: isStandalone ? null : clientContact,
-            client_address: isStandalone ? null : clientAddress || null,
-            work_description: workDescription,
-            city: city || null,
-            duration_weeks: durationWeeks ? parseInt(durationWeeks) : null,
-            project_details: projectDetails || null,
-            category_id: categoryId || null,
-            price: price ? parseFloat(price) : null,
-            status: "active",
-            is_standalone: isStandalone,
-            client_id:
-              !isStandalone &&
-              selectedWorkerId !== "manual" &&
-              selectedWorkerId !== ""
-                ? selectedWorkerId
-                : null,
-          },
-        ])
-        .select()
-        .single();
-      if (projectError) throw projectError;
+      // Upload images first
+      const { createClient } = await import("@supabase/supabase-js");
+      const sb = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      );
 
+      const uploadedImages = [];
       for (let i = 0; i < imageData.length; i++) {
-        const { file, description: imgDesc } = imageData[i];
+        const { file, description } = imageData[i];
         const ext = file.name.split(".").pop();
-        const folder = isStandalone ? "standalone" : `requests/${tokenString}`;
+        const folder = isStandalone ? "standalone" : "requests";
         const fileName = `${folder}_${Date.now()}_${i}.${ext}`;
-        const { error: uploadError } = await supabase.storage
+        const { error: upErr } = await sb.storage
           .from("workspace-requests")
-          .upload(fileName, file);
-        if (uploadError) throw uploadError;
-        const { data: urlData } = supabase.storage
+          .upload(fileName, file, { cacheControl: "31536000" });
+        if (upErr) throw upErr;
+        const { data: urlData } = sb.storage
           .from("workspace-requests")
           .getPublicUrl(fileName);
-        await supabase.from("project_request_images").insert({
-          project_id: project.id,
-          image_url: urlData.publicUrl,
-          display_order: i,
-          description: imgDesc || null,
+        uploadedImages.push({
+          url: urlData.publicUrl,
+          description: description || null,
         });
       }
 
-      // Notify assigned worker
-      if (
-        !isStandalone &&
-        selectedWorkerId !== "manual" &&
-        selectedWorkerId !== ""
-      ) {
-        await supabase.from("notifications").insert({
-          client_id: selectedWorkerId,
-          type: "project_generated",
-          message: `A new project "${tokenString}" has been assigned to you.`,
-          target_url: `/workspace/${tokenString}`,
-        });
-      }
-
-      // Auto-post + broadcast for new project
-      try {
-        const { data: okmade } = await supabase
-          .from("clients")
-          .select("id")
-          .eq("is_okmade", true)
-          .single();
-
-        if (okmade) {
-          const { data: firstImg } = await supabase
-            .from("project_request_images")
-            .select("image_url")
-            .eq("project_id", project.id)
-            .limit(1);
-
-          const cityPart = city ? ` in ${city}` : "";
-          await supabase.from("posts").insert([
-            {
-              author_id: okmade.id,
-              content: `🛠️ New project started: ${workDescription}${cityPart}`,
-              image_urls: (firstImg || []).map((i) => i.image_url),
-              is_auto: true,
-              auto_source: "project_created",
-              auto_source_id: project.id,
-            },
-          ]);
-
-          await fetch("/api/admin/broadcast", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-admin-key":
-                process.env.NEXT_PUBLIC_ADMIN_API_KEY ||
-                "okmade_super_secret_2026",
-            },
-            body: JSON.stringify({
-              title: `New project started: ${workDescription}`,
-              body: `We just started a new project: <strong>${workDescription}</strong>${cityPart}. Follow along to see the progress.`,
-              ctaUrl: tokenString
-                ? `${process.env.NEXT_PUBLIC_BASE_URL}/workspace/${tokenString}`
-                : `${process.env.NEXT_PUBLIC_BASE_URL}/portfolio`,
-            }),
-          });
-        }
-      } catch (broadcastErr) {
-        console.error("Broadcast failed:", broadcastErr);
-      }
+      const res = await adminFetch("/api/admin/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          is_standalone: isStandalone,
+          client_name: clientName,
+          client_contact: clientContact,
+          client_address: clientAddress,
+          work_description: workDescription,
+          city,
+          duration_weeks: durationWeeks,
+          project_details: projectDetails,
+          category_id: categoryId,
+          price,
+          client_id:
+            !isStandalone && selectedWorkerId && selectedWorkerId !== "manual"
+              ? selectedWorkerId
+              : null,
+          images: uploadedImages,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
 
       if (isStandalone) {
-        setMessage(
-          `Standalone project created successfully (ID: ${project.id.slice(
-            0,
-            8
-          )}).`
-        );
+        setMessage(`Standalone project created.`);
         setGeneratedToken("");
       } else {
-        setGeneratedToken(tokenString);
-        setMessage(`Project token generated: ${tokenString}`);
+        setGeneratedToken(data.token_string);
+        setMessage(`Project created. Token: ${data.token_string}`);
       }
 
+      // Open auto-post modal
+      const cityPart = city ? ` in ${city}` : "";
+      setAutoPostData({
+        type: "project",
+        sourceId: data.id,
+        defaultContent: `🛠️ New project started: ${workDescription}${cityPart}`,
+        previewImages: uploadedImages.slice(0, 6).map((i) => i.url),
+      });
+      setAutoPostOpen(true);
+
+      // Reset
       setClientName("");
       setClientContact("");
       setClientAddress("");
@@ -247,7 +194,8 @@ export default function GenerateProjectTab() {
       setPrice("");
       setImageData([]);
       setSelectedWorkerId("");
-      document.getElementById("requestImages").value = "";
+      const el = document.getElementById("requestImages");
+      if (el) el.value = "";
     } catch (err) {
       setMessage("Error: " + err.message);
     } finally {
@@ -257,16 +205,16 @@ export default function GenerateProjectTab() {
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
-    alert("Workspace link copied to clipboard!");
+    alert("Link copied!");
   };
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6 text-gray-800">
+      <h1 className="text-2xl font-bold mb-6 text-gray-800 dark:text-gray-100">
         Generate Project
       </h1>
 
-      <div className="mb-6 bg-amber-50 p-4 rounded-lg border border-amber-200">
+      <div className="mb-6 bg-amber-50 dark:bg-amber-900/20 p-4 rounded-lg border border-amber-200 dark:border-amber-800">
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
@@ -274,32 +222,32 @@ export default function GenerateProjectTab() {
             onChange={(e) => setIsStandalone(e.target.checked)}
             className="w-4 h-4"
           />
-          <span className="text-sm font-medium text-gray-700">
-            Standalone Project (no client, no token – just for portfolio)
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            Standalone Project (no client, no token)
           </span>
         </label>
-        <p className="text-xs text-gray-500 mt-1">
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
           {isStandalone
-            ? "This project will not generate a client token and will be shown in the portfolio only."
-            : "This project will generate a token for the client to track progress."}
+            ? "Portfolio only — no client workspace."
+            : "Generates a client token for tracking progress."}
         </p>
       </div>
 
       <form
         onSubmit={handleSubmit}
-        className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 space-y-4"
+        className="bg-white dark:bg-gray-900 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 space-y-4"
       >
         {!isStandalone && (
           <div>
-            <label className="block font-medium mb-1 text-sm">
-              Select Worker (Artisan) – or skip
+            <label className="block font-medium mb-1 text-sm text-gray-700 dark:text-gray-300">
+              Assign to Worker
             </label>
             <select
               value={selectedWorkerId}
               onChange={handleWorkerChange}
-              className="w-full border p-2 rounded"
+              className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
             >
-              <option value="">-- Select a worker (or skip) --</option>
+              <option value="">-- Select or skip --</option>
               <option value="manual">Enter manually (skip)</option>
               {workers.map((w) => {
                 const name =
@@ -319,85 +267,87 @@ export default function GenerateProjectTab() {
         {!isStandalone && (
           <>
             <div>
-              <label className="block font-medium mb-1 text-sm">
+              <label className="block font-medium mb-1 text-sm text-gray-700 dark:text-gray-300">
                 Client Name *
               </label>
               <input
                 type="text"
                 value={clientName}
                 onChange={(e) => setClientName(e.target.value)}
-                className="w-full border p-2 rounded"
+                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
               />
             </div>
             <div>
-              <label className="block font-medium mb-1 text-sm">
+              <label className="block font-medium mb-1 text-sm text-gray-700 dark:text-gray-300">
                 Client Contact (WhatsApp) *
               </label>
               <input
                 type="text"
                 value={clientContact}
                 onChange={(e) => setClientContact(e.target.value)}
-                className="w-full border p-2 rounded"
+                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
               />
             </div>
             <div>
-              <label className="block font-medium mb-1 text-sm">
+              <label className="block font-medium mb-1 text-sm text-gray-700 dark:text-gray-300">
                 Client Address
               </label>
               <textarea
                 value={clientAddress}
                 onChange={(e) => setClientAddress(e.target.value)}
-                className="w-full border p-2 rounded"
                 rows="2"
+                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
               />
             </div>
           </>
         )}
 
         <div>
-          <label className="block font-medium mb-1 text-sm">
-            Work Description (Project Title) *
+          <label className="block font-medium mb-1 text-sm text-gray-700 dark:text-gray-300">
+            Work Description (Title) *
           </label>
           <textarea
             value={workDescription}
             onChange={(e) => setWorkDescription(e.target.value)}
-            className="w-full border p-2 rounded"
             rows="2"
             placeholder="e.g., Luxury Hotel Suite Renovation"
+            className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
           />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block font-medium mb-1 text-sm">City</label>
+            <label className="block font-medium mb-1 text-sm text-gray-700 dark:text-gray-300">
+              City
+            </label>
             <input
               type="text"
               value={city}
               onChange={(e) => setCity(e.target.value)}
-              className="w-full border p-2 rounded"
-              placeholder="e.g., Lagos"
+              className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
             />
           </div>
           <div>
-            <label className="block font-medium mb-1 text-sm">
+            <label className="block font-medium mb-1 text-sm text-gray-700 dark:text-gray-300">
               Duration (weeks)
             </label>
             <input
               type="number"
               value={durationWeeks}
               onChange={(e) => setDurationWeeks(e.target.value)}
-              className="w-full border p-2 rounded"
-              placeholder="e.g., 4"
+              className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
             />
           </div>
         </div>
 
         <div>
-          <label className="block font-medium mb-1 text-sm">Category</label>
+          <label className="block font-medium mb-1 text-sm text-gray-700 dark:text-gray-300">
+            Category
+          </label>
           <select
             value={categoryId}
             onChange={(e) => setCategoryId(e.target.value)}
-            className="w-full border p-2 rounded"
+            className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
           >
             <option value="">-- Select Category --</option>
             {categories.map((cat) => (
@@ -409,33 +359,33 @@ export default function GenerateProjectTab() {
         </div>
 
         <div>
-          <label className="block font-medium mb-1 text-sm">
-            Project Details (full story)
+          <label className="block font-medium mb-1 text-sm text-gray-700 dark:text-gray-300">
+            Project Details
           </label>
           <textarea
             value={projectDetails}
             onChange={(e) => setProjectDetails(e.target.value)}
-            className="w-full border p-2 rounded"
             rows="5"
+            className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
           />
         </div>
 
         <div>
-          <label className="block font-medium mb-1 text-sm">
-            Price (₦) (optional)
+          <label className="block font-medium mb-1 text-sm text-gray-700 dark:text-gray-300">
+            Price (₦) — optional
           </label>
           <input
             type="number"
             step="0.01"
             value={price}
             onChange={(e) => setPrice(e.target.value)}
-            className="w-full border p-2 rounded"
+            className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
           />
         </div>
 
         <div>
-          <label className="block font-medium mb-1 text-sm">
-            Request / Concept Images (up to 6) *
+          <label className="block font-medium mb-1 text-sm text-gray-700 dark:text-gray-300">
+            Request Images (up to 6) *
           </label>
           <input
             id="requestImages"
@@ -443,33 +393,31 @@ export default function GenerateProjectTab() {
             accept="image/*"
             multiple
             onChange={handleImageChange}
-            className="w-full border p-2 rounded"
+            className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2 text-sm bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
           />
           {imageData.length > 0 && (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
               {imageData.map((item, idx) => (
                 <div
                   key={idx}
-                  className="relative border rounded p-2 bg-gray-50"
+                  className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-2 bg-gray-50 dark:bg-gray-800"
                 >
                   <img
                     src={URL.createObjectURL(item.file)}
                     className="w-full h-24 object-cover rounded"
-                    alt="Preview"
+                    alt=""
                   />
                   <input
                     type="text"
-                    placeholder="Image description (optional)"
+                    placeholder="Description"
                     value={item.description}
-                    onChange={(e) =>
-                      handleDescriptionChange(idx, e.target.value)
-                    }
-                    className="w-full mt-1 p-1 border rounded text-sm"
+                    onChange={(e) => handleDescriptionChange(idx, e.target.value)}
+                    className="w-full mt-1 p-1 border border-gray-300 dark:border-gray-600 rounded text-xs bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100"
                   />
                   <button
                     type="button"
                     onClick={() => removeImage(idx)}
-                    className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center hover:bg-red-700"
+                    className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center"
                   >
                     <CloseIcon className="w-3 h-3" />
                   </button>
@@ -482,52 +430,54 @@ export default function GenerateProjectTab() {
         <button
           type="submit"
           disabled={uploading}
-          className="bg-amber-600 hover:bg-amber-700 text-white px-5 py-2.5 rounded-lg font-medium disabled:opacity-50 transition"
+          className="bg-amber-600 hover:bg-amber-700 text-white px-5 py-2.5 rounded-lg font-medium disabled:opacity-50"
         >
-          {uploading
-            ? "Generating..."
-            : isStandalone
-            ? "Create Project"
-            : "Generate Token"}
+          {uploading ? "Creating..." : isStandalone ? "Create Project" : "Generate Token"}
         </button>
 
         {message && (
-          <p
-            className={`text-sm ${
-              message.startsWith("Error") ? "text-red-500" : "text-green-600"
-            }`}
-          >
+          <p className={`text-sm ${message.startsWith("Error") ? "text-red-500" : "text-green-600 dark:text-green-400"}`}>
             {message}
           </p>
         )}
 
         {generatedToken && (
-          <div className="mt-4 p-4 bg-gray-100 rounded">
-            <p className="font-bold">
+          <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
+            <p className="font-bold text-gray-800 dark:text-gray-100">
               Token: <span className="font-mono">{generatedToken}</span>
             </p>
-            <p className="text-sm text-gray-600 mt-2">Workspace URL:</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">Workspace URL:</p>
             <div className="flex items-center gap-2 mt-1">
               <input
                 type="text"
                 readOnly
                 value={`${process.env.NEXT_PUBLIC_BASE_URL}/workspace/${generatedToken}`}
-                className="flex-1 p-2 border rounded text-sm bg-white"
+                className="flex-1 p-2 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100"
               />
               <button
+                type="button"
                 onClick={() =>
                   copyToClipboard(
                     `${process.env.NEXT_PUBLIC_BASE_URL}/workspace/${generatedToken}`
                   )
                 }
-                className="bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded text-sm"
               >
-                Copy Link
+                Copy
               </button>
             </div>
           </div>
         )}
       </form>
+
+      <AutoPostModal
+        open={autoPostOpen}
+        onClose={() => setAutoPostOpen(false)}
+        type={autoPostData.type}
+        sourceId={autoPostData.sourceId}
+        defaultContent={autoPostData.defaultContent}
+        previewImages={autoPostData.previewImages}
+      />
     </div>
   );
 }
