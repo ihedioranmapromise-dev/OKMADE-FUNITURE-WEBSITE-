@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Image from "next/image";
 import { LocationIcon, ClockIcon } from "@/lib/icons";
 import Navbar from "@/app/components/Navbar";
+import ShareMenu from "@/app/components/ShareMenu";
 import { fetchWithRetry } from "@/lib/fetch-with-retry";
 import { enqueue } from "@/lib/offline-queue";
 
@@ -36,17 +37,104 @@ const REACTIONS = [
   { type: "angry", emoji: "😡" },
 ];
 
+const STATUS_COLORS = {
+  complete: "bg-green-500",
+  "in-progress": "bg-amber-500",
+  pending: "bg-gray-300 dark:bg-gray-600",
+};
+
+const STATUS_LABELS = {
+  complete: "Complete",
+  "in-progress": "In Progress",
+  pending: "Pending",
+};
+
 const getViewerId = () => {
   if (typeof window === "undefined") return "anonymous";
   let id = localStorage.getItem("viewer_id");
   if (!id) {
-    id = crypto.randomUUID
-      ? crypto.randomUUID()
-      : Math.random().toString(36).substring(2, 15);
+    id = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15);
     localStorage.setItem("viewer_id", id);
   }
   return id;
 };
+
+function TimelineDisplay({ timeline }) {
+  if (!timeline || timeline.length === 0) return null;
+
+  const completed = timeline.filter((m) => m.status === "complete").length;
+  const percent = Math.round((completed / timeline.length) * 100);
+
+  return (
+    <div className="border-t border-gray-200 dark:border-gray-800 pt-6">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100">
+          Project Timeline
+        </h2>
+        <span className="text-sm text-gray-500 dark:text-gray-400">
+          {completed} of {timeline.length} milestones complete
+        </span>
+      </div>
+
+      <div className="w-full h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden mb-6">
+        <div
+          className="h-full bg-gradient-to-r from-amber-500 to-green-500 transition-all duration-700"
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+
+      <ol className="space-y-4">
+        {timeline.map((m, idx) => {
+          const isLast = idx === timeline.length - 1;
+          return (
+            <li key={m.id || idx} className="relative pl-8">
+              {!isLast && (
+                <span className="absolute left-3 top-6 bottom-[-16px] w-0.5 bg-gray-200 dark:bg-gray-700" />
+              )}
+              <span
+                className={`absolute left-0 top-1 w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold ${
+                  STATUS_COLORS[m.status] || STATUS_COLORS.pending
+                }`}
+              >
+                {m.status === "complete" ? "✓" : idx + 1}
+              </span>
+              <div className="flex flex-wrap items-baseline gap-2">
+                <span className="font-medium text-gray-800 dark:text-gray-200">
+                  {m.name}
+                </span>
+                <span
+                  className={`text-xs px-2 py-0.5 rounded-full ${
+                    m.status === "complete"
+                      ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+                      : m.status === "in-progress"
+                      ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300"
+                      : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400"
+                  }`}
+                >
+                  {STATUS_LABELS[m.status] || m.status}
+                </span>
+              </div>
+              {m.date && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {new Date(m.date).toLocaleDateString("en-GB", {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  })}
+                </p>
+              )}
+              {m.note && (
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  {m.note}
+                </p>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}
 
 export default function WorkspacePage() {
   const { token } = useParams();
@@ -74,7 +162,6 @@ export default function WorkspacePage() {
 
     async function fetchWorkspace() {
       let projectData = null;
-
       const byTokenRes = await supabase
         .from("projects")
         .select("*")
@@ -125,25 +212,10 @@ export default function WorkspacePage() {
 
       if (projectData.status === "killed") {
         parallelCalls.push(
-          supabase
-            .from("project_likes")
-            .select("*", { count: "exact", head: true })
-            .eq("project_id", projectData.id),
-          supabase
-            .from("project_likes")
-            .select("id")
-            .eq("project_id", projectData.id)
-            .eq("user_id", viewerId)
-            .maybeSingle(),
-          supabase
-            .from("story_reactions")
-            .select("reaction_type, user_id")
-            .eq("story_id", projectData.id),
-          supabase
-            .from("public_comments")
-            .select("*")
-            .eq("project_id", projectData.id)
-            .order("created_at", { ascending: true })
+          supabase.from("project_likes").select("*", { count: "exact", head: true }).eq("project_id", projectData.id),
+          supabase.from("project_likes").select("id").eq("project_id", projectData.id).eq("user_id", viewerId).maybeSingle(),
+          supabase.from("story_reactions").select("reaction_type, user_id").eq("story_id", projectData.id),
+          supabase.from("public_comments").select("*").eq("project_id", projectData.id).order("created_at", { ascending: true })
         );
       }
 
@@ -191,11 +263,7 @@ export default function WorkspacePage() {
       const res = await fetchWithRetry("/api/project-like", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          project_id: data.id,
-          user_id: viewerId,
-          liked: !wasLiked,
-        }),
+        body: JSON.stringify({ project_id: data.id, user_id: viewerId, liked: !wasLiked }),
       });
       if (!res.ok) throw new Error();
     } catch {
@@ -206,17 +274,10 @@ export default function WorkspacePage() {
 
   const toggleReaction = async (type) => {
     if (!data || data.status !== "killed") return;
-    const existing = reactions.find(
-      (r) => r.reaction_type === type && r.user_id === viewerId
-    );
+    const existing = reactions.find((r) => r.reaction_type === type && r.user_id === viewerId);
 
-    // Optimistic
     if (existing) {
-      setReactions(
-        reactions.filter(
-          (r) => !(r.reaction_type === type && r.user_id === viewerId)
-        )
-      );
+      setReactions(reactions.filter((r) => !(r.reaction_type === type && r.user_id === viewerId)));
     } else {
       setReactions([...reactions, { reaction_type: type, user_id: viewerId }]);
     }
@@ -232,19 +293,12 @@ export default function WorkspacePage() {
     }
 
     try {
-      const res = await fetchWithRetry("/api/project-reaction", {
+      await fetchWithRetry("/api/project-reaction", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          project_id: data.id,
-          user_id: viewerId,
-          reaction_type: type,
-        }),
+        body: JSON.stringify({ project_id: data.id, user_id: viewerId, reaction_type: type }),
       });
-      if (!res.ok) throw new Error();
-    } catch {
-      // Silent — optimistic stays
-    }
+    } catch {}
   };
 
   const postComment = async (parentId = null) => {
@@ -256,7 +310,6 @@ export default function WorkspacePage() {
     const name = commentName;
     const email = commentEmail;
 
-    // Optimistic
     const tempId = `temp_${Date.now()}`;
     const tempComment = {
       id: tempId,
@@ -275,13 +328,7 @@ export default function WorkspacePage() {
       enqueue({
         url: "/api/project-comment",
         method: "POST",
-        body: {
-          project_id: data.id,
-          parent_id: parentId,
-          author_name: name,
-          author_email: email || null,
-          message: text,
-        },
+        body: { project_id: data.id, parent_id: parentId, author_name: name, author_email: email || null, message: text },
         label: "Comment",
       });
       setLocalMessage("Saved. Will post when you're back online.");
@@ -309,13 +356,7 @@ export default function WorkspacePage() {
       enqueue({
         url: "/api/project-comment",
         method: "POST",
-        body: {
-          project_id: data.id,
-          parent_id: parentId,
-          author_name: name,
-          author_email: email || null,
-          message: text,
-        },
+        body: { project_id: data.id, parent_id: parentId, author_name: name, author_email: email || null, message: text },
         label: "Comment",
       });
       setLocalMessage("Saved. Will retry automatically.");
@@ -329,16 +370,16 @@ export default function WorkspacePage() {
     return (
       <>
         <Navbar />
-        <div className="min-h-screen bg-gradient-to-br from-amber-900/90 via-amber-800/80 to-stone-800 pt-24 pb-12">
+        <div className="min-h-screen bg-gradient-to-br from-amber-900/90 via-amber-800/80 to-stone-800 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 pt-24 pb-12">
           <div className="container mx-auto px-6 max-w-4xl">
             <div className="h-10 bg-white/10 rounded w-2/3 mx-auto mb-3 animate-pulse"></div>
             <div className="h-6 bg-white/10 rounded w-1/2 mx-auto mb-8 animate-pulse"></div>
-            <div className="bg-white/90 rounded-2xl p-6 md:p-8 space-y-4">
-              <div className="h-4 bg-gray-200 rounded w-3/4 animate-pulse"></div>
-              <div className="h-4 bg-gray-200 rounded w-1/2 animate-pulse"></div>
+            <div className="bg-white/90 dark:bg-gray-900/90 rounded-2xl p-6 md:p-8 space-y-4">
+              <div className="h-4 bg-gray-200 dark:bg-gray-800 rounded w-3/4 animate-pulse"></div>
+              <div className="h-4 bg-gray-200 dark:bg-gray-800 rounded w-1/2 animate-pulse"></div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
                 {[...Array(3)].map((_, i) => (
-                  <div key={i} className="h-48 bg-gray-100 rounded animate-pulse"></div>
+                  <div key={i} className="h-48 bg-gray-100 dark:bg-gray-800 rounded animate-pulse"></div>
                 ))}
               </div>
             </div>
@@ -352,7 +393,7 @@ export default function WorkspacePage() {
     return (
       <>
         <Navbar />
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-amber-900/90 via-amber-800/80 to-stone-800 pt-24">
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-amber-900/90 via-amber-800/80 to-stone-800 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 pt-24">
           <div className="bg-white/10 backdrop-blur-sm text-white p-8 rounded-xl border border-white/10 text-center">
             <p className="text-red-400 text-xl">{error}</p>
           </div>
@@ -366,9 +407,11 @@ export default function WorkspacePage() {
     acc[r.reaction_type] = (acc[r.reaction_type] || 0) + 1;
     return acc;
   }, {});
+  const workspaceUrl = typeof window !== "undefined" ? window.location.href : "";
+  const timeline = Array.isArray(data.timeline) ? data.timeline : [];
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-amber-900/90 via-amber-800/80 to-stone-800 pt-24 pb-12">
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-amber-900/90 via-amber-800/80 to-stone-800 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 pt-24 pb-12">
       <Navbar />
       <div
         className="absolute inset-0 opacity-10"
@@ -380,6 +423,14 @@ export default function WorkspacePage() {
       <div className="absolute bottom-[-10%] right-[-5%] w-[500px] h-[500px] rounded-full bg-orange-300/15 blur-3xl pointer-events-none"></div>
 
       <div className="relative z-10 container mx-auto px-6 py-12 max-w-4xl">
+        <div className="flex justify-center mb-3">
+          <ShareMenu
+            url={workspaceUrl}
+            title={data.work_description || "OKMADE Project"}
+            text={`Check out this project from OKMADE: ${data.work_description || ""}`}
+            iconOnly
+          />
+        </div>
         <h1 className="text-3xl md:text-4xl font-bold text-center text-white mb-3 font-['Dancing_Script',_cursive] drop-shadow-lg">
           {isActive ? "Project In Progress" : "Completed Project"}
         </h1>
@@ -387,8 +438,8 @@ export default function WorkspacePage() {
           {data.work_description || "Untitled Project"}
         </p>
 
-        <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-2xl p-6 md:p-8 space-y-6 border border-white/20">
-          <div className="flex flex-wrap gap-4 text-sm text-gray-600 border-b border-gray-200 pb-4 items-center">
+        <div className="bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm rounded-2xl shadow-2xl p-6 md:p-8 space-y-6 border border-white/20 dark:border-gray-800">
+          <div className="flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-800 pb-4 items-center">
             {data.token_string && (
               <span>
                 Token:{" "}
@@ -406,19 +457,19 @@ export default function WorkspacePage() {
               </span>
             )}
             {category && (
-              <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-xs">
+              <span className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-3 py-1 rounded-full text-xs">
                 {category.name}
               </span>
             )}
           </div>
 
           {!isActive && (
-            <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
               <div>
-                <p className="text-base font-semibold text-gray-800">
+                <p className="text-base font-semibold text-gray-800 dark:text-gray-200">
                   Are you happy with this project?
                 </p>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   Click the heart if this work impressed you.
                 </p>
               </div>
@@ -427,7 +478,7 @@ export default function WorkspacePage() {
                 className={`flex items-center gap-2 px-5 py-2 rounded-full font-medium transition border ${
                   liked
                     ? "bg-red-500 text-white border-red-500 hover:bg-red-600"
-                    : "bg-white text-red-500 border-red-300 hover:bg-red-50"
+                    : "bg-white dark:bg-gray-800 text-red-500 border-red-300 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20"
                 }`}
               >
                 <HeartIcon filled={liked} />
@@ -438,29 +489,33 @@ export default function WorkspacePage() {
             </div>
           )}
 
+          {timeline.length > 0 && <TimelineDisplay timeline={timeline} />}
+
           {data.project_details && (
             <div>
-              <h2 className="text-xl font-semibold text-gray-800 mb-2">
+              <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-2">
                 Project Details
               </h2>
-              <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">
+              <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
                 {data.project_details}
               </p>
             </div>
           )}
 
           <div>
-            <h2 className="text-xl font-semibold text-gray-800 mb-2">
+            <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-2">
               Original Request
             </h2>
             {requestImages.length === 0 ? (
-              <p className="text-gray-500">No request images uploaded.</p>
+              <p className="text-gray-500 dark:text-gray-400">
+                No request images uploaded.
+              </p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 {requestImages.map((img, idx) => (
                   <div
                     key={idx}
-                    className="bg-white rounded-lg overflow-hidden border border-gray-200 shadow-sm"
+                    className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm"
                   >
                     <div className="relative w-full h-48">
                       <Image
@@ -474,7 +529,7 @@ export default function WorkspacePage() {
                       />
                     </div>
                     {img.description && (
-                      <div className="p-2 text-sm text-gray-600 border-t border-gray-100">
+                      <div className="p-2 text-sm text-gray-600 dark:text-gray-400 border-t border-gray-100 dark:border-gray-700">
                         {img.description}
                       </div>
                     )}
@@ -485,17 +540,19 @@ export default function WorkspacePage() {
           </div>
 
           <div>
-            <h2 className="text-xl font-semibold text-gray-800 mb-2">
+            <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-2">
               {isActive ? "Work in Progress" : "Final Result & Progress"}
             </h2>
             {progressImages.length === 0 ? (
-              <p className="text-gray-500">No progress images yet.</p>
+              <p className="text-gray-500 dark:text-gray-400">
+                No progress images yet.
+              </p>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {progressImages.map((img, idx) => (
                   <div
                     key={idx}
-                    className="bg-white rounded-lg shadow overflow-hidden border border-gray-200"
+                    className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden border border-gray-200 dark:border-gray-700"
                   >
                     <div className="relative w-full h-64">
                       <Image
@@ -509,14 +566,14 @@ export default function WorkspacePage() {
                       />
                     </div>
                     {(img.description || img.explanation) && (
-                      <div className="p-3 bg-gray-50 border-t border-gray-100">
+                      <div className="p-3 bg-gray-50 dark:bg-gray-900 border-t border-gray-100 dark:border-gray-700">
                         {img.description && (
-                          <p className="text-sm font-medium text-gray-700">
+                          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
                             {img.description}
                           </p>
                         )}
                         {img.explanation && (
-                          <p className="text-xs text-gray-500 mt-1">
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                             {img.explanation}
                           </p>
                         )}
@@ -538,12 +595,14 @@ export default function WorkspacePage() {
           </div>
 
           {data.client_name && !data.is_standalone && (
-            <p className="text-gray-700 font-medium">Client: {data.client_name}</p>
+            <p className="text-gray-700 dark:text-gray-300 font-medium">
+              Client: {data.client_name}
+            </p>
           )}
 
           {!isActive && (
-            <div className="border-t border-gray-200 pt-6">
-              <h2 className="text-xl font-semibold text-gray-800 mb-3">
+            <div className="border-t border-gray-200 dark:border-gray-800 pt-6">
+              <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-3">
                 React to this Project
               </h2>
               <div className="flex flex-wrap gap-2">
@@ -558,8 +617,8 @@ export default function WorkspacePage() {
                       onClick={() => toggleReaction(type)}
                       className={`px-3 py-2 rounded-full border text-sm transition ${
                         hasReacted
-                          ? "bg-amber-100 border-amber-400"
-                          : "bg-gray-50 border-gray-200 hover:bg-gray-100"
+                          ? "bg-amber-100 dark:bg-amber-900/30 border-amber-400 dark:border-amber-700"
+                          : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700"
                       }`}
                     >
                       {emoji} {count > 0 && count}
@@ -571,25 +630,25 @@ export default function WorkspacePage() {
           )}
 
           {!isActive && (
-            <div className="border-t border-gray-200 pt-6">
-              <h2 className="text-xl font-semibold text-gray-800 mb-4">
+            <div className="border-t border-gray-200 dark:border-gray-800 pt-6">
+              <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-4">
                 Public Comments
               </h2>
               <div className="mb-6 space-y-2">
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <input
                     type="text"
                     placeholder="Your name *"
                     value={commentName}
                     onChange={(e) => setCommentName(e.target.value)}
-                    className="flex-1 p-2 border rounded-lg text-sm"
+                    className="flex-1 min-w-[150px] p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
                   />
                   <input
                     type="email"
                     placeholder="Email (optional)"
                     value={commentEmail}
                     onChange={(e) => setCommentEmail(e.target.value)}
-                    className="flex-1 p-2 border rounded-lg text-sm"
+                    className="flex-1 min-w-[150px] p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
                   />
                 </div>
                 <div className="flex gap-2">
@@ -598,7 +657,7 @@ export default function WorkspacePage() {
                     placeholder="Write a comment..."
                     value={commentContent}
                     onChange={(e) => setCommentContent(e.target.value)}
-                    className="flex-1 p-2 border rounded-lg text-sm"
+                    className="flex-1 p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
                   />
                   <button
                     onClick={() => postComment(null)}
@@ -611,13 +670,13 @@ export default function WorkspacePage() {
               </div>
 
               {localMessage && (
-                <div className="mb-3 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                <div className="mb-3 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800 rounded-lg px-3 py-2">
                   {localMessage}
                 </div>
               )}
 
               {comments.length === 0 ? (
-                <p className="text-gray-500 text-sm">
+                <p className="text-gray-500 dark:text-gray-400 text-sm">
                   No comments yet. Be the first to leave one!
                 </p>
               ) : (
@@ -626,11 +685,15 @@ export default function WorkspacePage() {
                     .filter((c) => !c.parent_id)
                     .map((parent) => (
                       <div key={parent.id} className="space-y-2">
-                        <div className={`bg-gray-50 p-3 rounded-lg ${parent.pending ? "opacity-70" : ""}`}>
-                          <p className="text-sm font-semibold text-gray-800">
+                        <div
+                          className={`bg-gray-50 dark:bg-gray-800 p-3 rounded-lg ${
+                            parent.pending ? "opacity-70" : ""
+                          }`}
+                        >
+                          <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">
                             {parent.author_name}
                           </p>
-                          <p className="text-sm text-gray-700 mt-1">
+                          <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">
                             {parent.message}
                           </p>
                           <div className="flex items-center gap-3 mt-2">
@@ -642,7 +705,7 @@ export default function WorkspacePage() {
                             {!parent.pending && (
                               <button
                                 onClick={() => setReplyingTo(parent.id)}
-                                className="text-xs text-amber-600 hover:underline"
+                                className="text-xs text-amber-600 dark:text-amber-400 hover:underline"
                               >
                                 Reply
                               </button>
@@ -655,12 +718,12 @@ export default function WorkspacePage() {
                                 placeholder="Write a reply..."
                                 value={commentContent}
                                 onChange={(e) => setCommentContent(e.target.value)}
-                                className="flex-1 p-2 border rounded-lg text-sm"
+                                className="flex-1 p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100"
                               />
                               <button
                                 onClick={() => postComment(parent.id)}
                                 disabled={submitting}
-                                className="bg-gray-600 text-white px-3 py-2 rounded text-sm hover:bg-gray-700 disabled:opacity-50"
+                                className="bg-gray-600 dark:bg-gray-700 text-white px-3 py-2 rounded text-sm hover:bg-gray-700 dark:hover:bg-gray-600 disabled:opacity-50"
                               >
                                 Reply
                               </button>
@@ -672,12 +735,12 @@ export default function WorkspacePage() {
                           .map((reply) => (
                             <div
                               key={reply.id}
-                              className="bg-gray-50 p-3 rounded-lg ml-6 border-l-2 border-amber-200"
+                              className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg ml-6 border-l-2 border-amber-200 dark:border-amber-800"
                             >
-                              <p className="text-sm font-semibold text-gray-800">
+                              <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">
                                 {reply.author_name}
                               </p>
-                              <p className="text-sm text-gray-700 mt-1">
+                              <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">
                                 {reply.message}
                               </p>
                               <p className="text-xs text-gray-400 mt-2">
@@ -693,11 +756,11 @@ export default function WorkspacePage() {
           )}
 
           {isActive ? (
-            <p className="text-blue-600 bg-blue-50 p-3 rounded-lg text-sm border border-blue-100">
+            <p className="text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg text-sm border border-blue-100 dark:border-blue-800">
               Your custom piece is being crafted. Check back later for updates.
             </p>
           ) : (
-            <p className="text-green-600 bg-green-50 p-3 rounded-lg text-sm border border-green-100">
+            <p className="text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 p-3 rounded-lg text-sm border border-green-100 dark:border-green-800">
               Work completed! Thank you for choosing OKMADE Furniture.
             </p>
           )}
