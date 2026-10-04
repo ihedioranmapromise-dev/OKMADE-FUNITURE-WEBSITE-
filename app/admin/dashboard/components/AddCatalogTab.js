@@ -2,9 +2,10 @@
 import { useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { CloseIcon } from "@/lib/icons";
+import { adminFetch } from "@/lib/admin-client";
 import AutoPostModal from "@/app/components/AutoPostModal";
 
-const supabase = createClient(
+const sb = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
@@ -26,7 +27,7 @@ export default function AddCatalogTab() {
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files);
     if (imageData.length + files.length > 6) {
-      setMessage("You can upload up to 6 images total.");
+      setMessage("Max 6 images.");
       return;
     }
     setImageData([
@@ -35,7 +36,7 @@ export default function AddCatalogTab() {
     ]);
   };
 
-  const handleDescriptionChange = (index, value) => {
+  const handleDescChange = (index, value) => {
     const updated = [...imageData];
     updated[index].description = value;
     setImageData(updated);
@@ -50,7 +51,7 @@ export default function AddCatalogTab() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!title.trim()) {
-      setMessage("Title is required.");
+      setMessage("Title required.");
       return;
     }
     if (imageData.length === 0) {
@@ -60,42 +61,36 @@ export default function AddCatalogTab() {
     setUploading(true);
     setMessage("");
     try {
-      const { data: catalog, error: catalogError } = await supabase
-        .from("catalogs")
-        .insert([{ title }])
-        .select()
-        .single();
-      if (catalogError) throw catalogError;
-
-      const uploadedUrls = [];
+      const uploaded = [];
+      const tempId = Date.now();
       for (let i = 0; i < imageData.length; i++) {
-        const { file, description: imgDesc } = imageData[i];
+        const { file, description: d } = imageData[i];
         const ext = file.name.split(".").pop();
-        const fileName = `${catalog.id}_${Date.now()}_${i}.${ext}`;
-        const { error: uploadError } = await supabase.storage
+        const path = `${tempId}_${i}.${ext}`;
+        const { error: upErr } = await sb.storage
           .from("catalog-bucket")
-          .upload(fileName, file, { cacheControl: "31536000" });
-        if (uploadError) throw uploadError;
-        const { data: urlData } = supabase.storage
+          .upload(path, file, { cacheControl: "31536000" });
+        if (upErr) throw upErr;
+        const { data: urlData } = sb.storage
           .from("catalog-bucket")
-          .getPublicUrl(fileName);
-        uploadedUrls.push(urlData.publicUrl);
-        await supabase.from("catalog_images").insert({
-          catalog_id: catalog.id,
-          image_url: urlData.publicUrl,
-          display_order: i,
-          description: imgDesc || null,
-        });
+          .getPublicUrl(path);
+        uploaded.push({ url: urlData.publicUrl, description: d || null });
       }
 
-      setMessage(`Catalog "${title}" added with ${imageData.length} image(s).`);
+      const res = await adminFetch("/api/admin/catalogs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: title.trim(), images: uploaded }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
 
-      // Open auto-post modal
+      setMessage(`Catalog added.`);
       setAutoPostData({
         type: "catalog",
-        sourceId: catalog.id,
-        defaultContent: `📖 New catalog: ${title}`,
-        previewImages: uploadedUrls,
+        sourceId: data.id,
+        defaultContent: `📖 New catalog: ${title.trim()}`,
+        previewImages: uploaded.map((i) => i.url),
       });
       setAutoPostOpen(true);
 
@@ -112,25 +107,27 @@ export default function AddCatalogTab() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6 text-gray-800">
+      <h1 className="text-2xl font-bold mb-6 text-gray-800 dark:text-gray-100">
         Add Catalog Space
       </h1>
       <form
         onSubmit={handleSubmit}
-        className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 space-y-4"
+        className="bg-white dark:bg-gray-900 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 space-y-4"
       >
         <div>
-          <label className="block font-medium mb-1 text-sm">Title *</label>
+          <label className="block font-medium mb-1 text-sm text-gray-700 dark:text-gray-300">
+            Title *
+          </label>
           <input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full border p-2 rounded"
+            className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
           />
         </div>
 
         <div>
-          <label className="block font-medium mb-1 text-sm">
+          <label className="block font-medium mb-1 text-sm text-gray-700 dark:text-gray-300">
             Images (up to 6)
           </label>
           <input
@@ -139,33 +136,31 @@ export default function AddCatalogTab() {
             accept="image/*"
             multiple
             onChange={handleImageChange}
-            className="w-full border p-2 rounded"
+            className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2 text-sm bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
           />
           {imageData.length > 0 && (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
               {imageData.map((item, idx) => (
                 <div
                   key={idx}
-                  className="relative border rounded p-2 bg-gray-50"
+                  className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-2 bg-gray-50 dark:bg-gray-800"
                 >
                   <img
                     src={URL.createObjectURL(item.file)}
                     className="w-full h-24 object-cover rounded"
-                    alt="Preview"
+                    alt=""
                   />
                   <input
                     type="text"
-                    placeholder="Image description (optional)"
+                    placeholder="Description"
                     value={item.description}
-                    onChange={(e) =>
-                      handleDescriptionChange(idx, e.target.value)
-                    }
-                    className="w-full mt-1 p-1 border rounded text-sm"
+                    onChange={(e) => handleDescChange(idx, e.target.value)}
+                    className="w-full mt-1 p-1 border border-gray-300 dark:border-gray-600 rounded text-xs bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100"
                   />
                   <button
                     type="button"
                     onClick={() => removeImage(idx)}
-                    className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center hover:bg-red-700"
+                    className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center"
                   >
                     <CloseIcon className="w-3 h-3" />
                   </button>
@@ -178,7 +173,7 @@ export default function AddCatalogTab() {
         <button
           type="submit"
           disabled={uploading}
-          className="bg-amber-600 hover:bg-amber-700 text-white px-5 py-2.5 rounded-lg font-medium disabled:opacity-50 transition"
+          className="bg-amber-600 hover:bg-amber-700 text-white px-5 py-2.5 rounded-lg font-medium disabled:opacity-50"
         >
           {uploading ? "Uploading..." : "Add Catalog Space"}
         </button>
@@ -186,7 +181,7 @@ export default function AddCatalogTab() {
         {message && (
           <p
             className={`text-sm ${
-              message.startsWith("Error") ? "text-red-500" : "text-green-600"
+              message.startsWith("Error") ? "text-red-500" : "text-green-600 dark:text-green-400"
             }`}
           >
             {message}
