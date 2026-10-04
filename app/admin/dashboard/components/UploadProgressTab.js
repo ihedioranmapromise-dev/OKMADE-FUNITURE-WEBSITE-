@@ -72,7 +72,7 @@ export default function UploadProgressTab() {
   async function loadProjectDetails(id) {
     try {
       const [progRes, projRes] = await Promise.all([
-        adminFetch(`/api/admin/progress-images?project_id=${id}`),
+        adminFetch(`/api/admin/progress-images/list?project_id=${id}`),
         adminFetch(`/api/admin/timeline?project_id=${id}`),
       ]);
       if (progRes.ok) setProgressData((await progRes.json()) || []);
@@ -130,24 +130,28 @@ export default function UploadProgressTab() {
     setUploading(true);
     setMessage("");
     try {
-      // Upload images to storage
+      const { createClient } = await import("@supabase/supabase-js");
+      const sb = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      );
+
       const uploaded = [];
       for (let i = 0; i < imageData.length; i++) {
         const { file, description } = imageData[i];
         const ext = file.name.split(".").pop();
         const path = `progress/${selectedProjectId}_${Date.now()}_${i}.${ext}`;
-        // Get signed upload via supabase-js using anon key — storage policy allows authenticated upload
-        const { createClient } = await import("@supabase/supabase-js");
-        const sb = createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL,
-          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-        );
         const { error: upErr } = await sb.storage
           .from("workspace-progress")
           .upload(path, file, { cacheControl: "31536000" });
         if (upErr) throw upErr;
-        const { data: urlData } = sb.storage.from("workspace-progress").getPublicUrl(path);
-        uploaded.push({ url: urlData.publicUrl, description: description || null });
+        const { data: urlData } = sb.storage
+          .from("workspace-progress")
+          .getPublicUrl(path);
+        uploaded.push({
+          url: urlData.publicUrl,
+          description: description || null,
+        });
       }
 
       const res = await adminFetch("/api/admin/progress-images", {
@@ -256,7 +260,6 @@ export default function UploadProgressTab() {
       } catch {}
     }
 
-    // Fetch preview images for auto-post modal
     const previewImages = (progressData || [])
       .slice(0, 6)
       .map((p) => p.image_url);
@@ -280,8 +283,6 @@ export default function UploadProgressTab() {
     setProgressData([]);
     setTimeline([]);
   };
-
-  // ----- Timeline helpers -----
 
   const addMilestone = () => {
     setTimeline([
@@ -337,12 +338,6 @@ export default function UploadProgressTab() {
     }
   };
 
-  const selectedLabel = selectedProject
-    ? `${selectedProject.work_description || "Untitled"} ${
-        selectedProject.token_string ? `(#${selectedProject.token_string})` : "(Standalone)"
-      }`
-    : "";
-
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-100">
@@ -371,7 +366,6 @@ export default function UploadProgressTab() {
 
       {selectedProjectId && (
         <>
-          {/* Timeline editor */}
           <div className="bg-white dark:bg-gray-900 p-5 md:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
               <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">
@@ -474,7 +468,6 @@ export default function UploadProgressTab() {
             )}
           </div>
 
-          {/* Upload progress */}
           <div className="bg-white dark:bg-gray-900 p-5 md:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
             <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">
               Upload Progress Images
@@ -555,7 +548,9 @@ export default function UploadProgressTab() {
               {message && (
                 <p
                   className={`text-sm ${
-                    message.startsWith("Error") ? "text-red-500" : "text-green-600 dark:text-green-400"
+                    message.startsWith("Error")
+                      ? "text-red-500"
+                      : "text-green-600 dark:text-green-400"
                   }`}
                 >
                   {message}
@@ -564,7 +559,6 @@ export default function UploadProgressTab() {
             </form>
           </div>
 
-          {/* Existing progress images */}
           {progressData.length > 0 && (
             <div className="bg-white dark:bg-gray-900 p-5 md:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
               <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">
