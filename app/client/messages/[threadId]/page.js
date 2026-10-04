@@ -244,4 +244,8 @@ export default function ThreadPage() {
           >
             Send
           </button>
-        </form
+        </form>
+      </div>
+    </div>
+  );
+}
