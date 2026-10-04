@@ -1,45 +1,41 @@
 "use client";
 import { useState, useEffect } from "react";
-import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
+import { adminFetch } from "@/lib/admin-client";
 import AutoPostModal from "@/app/components/AutoPostModal";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+const STATUS_OPTIONS = ["pending", "in-progress", "complete"];
 
-const BellIcon = ({ unread }) => (
-  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-    {unread > 0 && <circle cx="20" cy="4" r="3" fill="#ef4444" stroke="#fff" strokeWidth="2" />}
+const CloseIcon = ({ className = "w-4 h-4" }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
   </svg>
 );
 
-const CloseIcon = () => (
-  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+const PlusIcon = ({ className = "w-4 h-4" }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
   </svg>
 );
 
 export default function UploadProgressTab() {
+  const router = useRouter();
   const [projects, setProjects] = useState([]);
   const [workers, setWorkers] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState("");
-  const [selectedProjectLabel, setSelectedProjectLabel] = useState("");
+  const [selectedProject, setSelectedProject] = useState(null);
   const [selectedWorkerId, setSelectedWorkerId] = useState("");
   const [overallDescription, setOverallDescription] = useState("");
   const [imageData, setImageData] = useState([]);
-  const [uploading, setUploading] = useState(false);
-  const [message, setMessage] = useState("");
   const [progressData, setProgressData] = useState([]);
+  const [timeline, setTimeline] = useState([]);
+  const [timelineDirty, setTimelineDirty] = useState(false);
+  const [timelineSaving, setTimelineSaving] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editExplanation, setEditExplanation] = useState("");
-  const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [showNotifications, setShowNotifications] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [message, setMessage] = useState("");
 
-  // Auto-post modal state
   const [autoPostOpen, setAutoPostOpen] = useState(false);
   const [autoPostData, setAutoPostData] = useState({
     type: "project",
@@ -48,80 +44,69 @@ export default function UploadProgressTab() {
     previewImages: [],
   });
 
-  const router = useRouter();
+  const key = () => sessionStorage.getItem("adminKey") || "";
 
   useEffect(() => {
-    fetchProjects();
-    fetchNotifications();
-    fetchWorkers();
+    loadProjects();
+    loadWorkers();
   }, []);
 
-  async function fetchProjects() {
-    const { data, error } = await supabase
-      .from("projects")
-      .select("id, token_string, work_description, client_name, is_standalone, client_id, city")
-      .eq("status", "active")
-      .order("created_at", { ascending: false });
-    if (!error) setProjects(data || []);
+  async function loadProjects() {
+    try {
+      const res = await fetch("/api/admin/projects/list?status=active", {
+        headers: { "x-admin-key": key() },
+      });
+      if (res.ok) setProjects((await res.json()) || []);
+    } catch {}
   }
 
-  async function fetchWorkers() {
-    const res = await fetch("/api/admin/workers", {
-      headers: {
-        "x-admin-key":
-          process.env.NEXT_PUBLIC_ADMIN_API_KEY || "okmade_super_secret_2026",
-      },
-    });
-    if (res.ok) {
-      const data = await res.json();
-      setWorkers(data || []);
-    }
+  async function loadWorkers() {
+    try {
+      const res = await fetch("/api/admin/workers", {
+        headers: { "x-admin-key": key() },
+      });
+      if (res.ok) setWorkers((await res.json()) || []);
+    } catch {}
   }
 
-  async function fetchNotifications() {
-    const { data } = await supabase
-      .from("notifications")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(20);
-    if (data) {
-      setNotifications(data);
-      setUnreadCount(data.filter((n) => !n.is_read).length);
-    }
+  async function loadProjectDetails(id) {
+    try {
+      const [progRes, projRes] = await Promise.all([
+        adminFetch(`/api/admin/progress-images?project_id=${id}`),
+        adminFetch(`/api/admin/timeline?project_id=${id}`),
+      ]);
+      if (progRes.ok) setProgressData((await progRes.json()) || []);
+      if (projRes.ok) {
+        const d = await projRes.json();
+        setTimeline(Array.isArray(d.timeline) ? d.timeline : []);
+      }
+      setTimelineDirty(false);
+    } catch {}
   }
 
   const handleProjectChange = async (e) => {
     const id = e.target.value;
-    const project = projects.find((p) => p.id === id);
     setSelectedProjectId(id);
-    setSelectedProjectLabel(
-      project
-        ? `${project.work_description || "Untitled"} ${
-            project.token_string ? `(#${project.token_string})` : "(Standalone)"
-          }`
-        : ""
-    );
-    setSelectedWorkerId(project ? project.client_id : "");
-    if (id) {
-      const { data } = await supabase
-        .from("progress_images")
-        .select("*")
-        .eq("project_id", id)
-        .order("created_at", { ascending: false });
-      setProgressData(data || []);
-    } else {
+    const p = projects.find((x) => x.id === id);
+    setSelectedProject(p || null);
+    setSelectedWorkerId(p?.client_id || "");
+    if (id) await loadProjectDetails(id);
+    else {
       setProgressData([]);
+      setTimeline([]);
     }
   };
 
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files);
     if (imageData.length + files.length > 6) {
-      setMessage("You can upload up to 6 progress images total.");
+      setMessage("Max 6 images per upload batch.");
       return;
     }
-    const newImages = files.map((file) => ({ file, description: "" }));
-    setImageData([...imageData, ...newImages]);
+    setImageData([
+      ...imageData,
+      ...files.map((file) => ({ file, description: "" })),
+    ]);
   };
 
   const handleDescriptionChange = (index, value) => {
@@ -145,51 +130,59 @@ export default function UploadProgressTab() {
     setUploading(true);
     setMessage("");
     try {
+      // Upload images to storage
+      const uploaded = [];
       for (let i = 0; i < imageData.length; i++) {
-        const { file, description: imgDesc } = imageData[i];
+        const { file, description } = imageData[i];
         const ext = file.name.split(".").pop();
-        const fileName = `progress/${selectedProjectId}_${Date.now()}_${i}.${ext}`;
-        const { error: uploadError } = await supabase.storage
+        const path = `progress/${selectedProjectId}_${Date.now()}_${i}.${ext}`;
+        // Get signed upload via supabase-js using anon key — storage policy allows authenticated upload
+        const { createClient } = await import("@supabase/supabase-js");
+        const sb = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+        );
+        const { error: upErr } = await sb.storage
           .from("workspace-progress")
-          .upload(fileName, file, { cacheControl: "31536000" });
-        if (uploadError) throw uploadError;
-
-        const { data: urlData } = supabase.storage
-          .from("workspace-progress")
-          .getPublicUrl(fileName);
-
-        await supabase.from("progress_images").insert({
-          project_id: selectedProjectId,
-          image_url: urlData.publicUrl,
-          description: imgDesc || null,
-          explanation: overallDescription || null,
-          uploaded_by: null,
-        });
+          .upload(path, file, { cacheControl: "31536000" });
+        if (upErr) throw upErr;
+        const { data: urlData } = sb.storage.from("workspace-progress").getPublicUrl(path);
+        uploaded.push({ url: urlData.publicUrl, description: description || null });
       }
+
+      const res = await adminFetch("/api/admin/progress-images", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project_id: selectedProjectId,
+          images: uploaded,
+          explanation: overallDescription || null,
+        }),
+      });
+      if (!res.ok) throw new Error("Upload failed");
 
       if (selectedWorkerId) {
-        await supabase.from("notifications").insert({
-          client_id: selectedWorkerId,
-          type: "progress_uploaded",
-          message: `New progress update on project "${selectedProjectLabel}".`,
-          target_url: `/workspace/${
-            selectedProjectLabel.split("#")[1]?.replace(")", "") || ""
-          }`,
-        });
+        try {
+          await adminFetch("/api/admin/notify-user", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              client_id: selectedWorkerId,
+              message: `New progress update on "${selectedProject?.work_description || "your project"}".`,
+              target_url: selectedProject?.token_string
+                ? `/workspace/${selectedProject.token_string}`
+                : null,
+            }),
+          });
+        } catch {}
       }
 
-      setMessage(`Uploaded ${imageData.length} progress image(s).`);
+      setMessage(`Uploaded ${imageData.length} image(s).`);
       setImageData([]);
       setOverallDescription("");
-      document.getElementById("progressImages").value = "";
-
-      const { data } = await supabase
-        .from("progress_images")
-        .select("*")
-        .eq("project_id", selectedProjectId)
-        .order("created_at", { ascending: false });
-      setProgressData(data || []);
-      fetchNotifications();
+      const el = document.getElementById("progressImages");
+      if (el) el.value = "";
+      await loadProjectDetails(selectedProjectId);
     } catch (err) {
       setMessage("Error: " + err.message);
     } finally {
@@ -199,42 +192,31 @@ export default function UploadProgressTab() {
 
   const handleEditExplanation = async (id) => {
     if (!editExplanation.trim()) return;
-    try {
-      await supabase
-        .from("progress_images")
-        .update({ explanation: editExplanation })
-        .eq("id", id);
+    const res = await adminFetch("/api/admin/progress-images", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, explanation: editExplanation }),
+    });
+    if (res.ok) {
       setEditingId(null);
       setEditExplanation("");
-      const { data } = await supabase
-        .from("progress_images")
-        .select("*")
-        .eq("project_id", selectedProjectId)
-        .order("created_at", { ascending: false });
-      setProgressData(data || []);
+      await loadProjectDetails(selectedProjectId);
       setMessage("Explanation updated.");
-    } catch (err) {
-      setMessage("Error updating explanation: " + err.message);
+    } else {
+      setMessage("Failed to update.");
     }
   };
 
-  const handleDeleteImage = async (imageId, imageUrl) => {
-    if (!confirm("Delete this image? This cannot be undone.")) return;
-    try {
-      const path = imageUrl.split("/public/")[1];
-      if (path) {
-        await supabase.storage.from("workspace-progress").remove([path]);
-      }
-      await supabase.from("progress_images").delete().eq("id", imageId);
-      const { data } = await supabase
-        .from("progress_images")
-        .select("*")
-        .eq("project_id", selectedProjectId)
-        .order("created_at", { ascending: false });
-      setProgressData(data || []);
+  const handleDeleteImage = async (id) => {
+    if (!confirm("Delete this image?")) return;
+    const res = await adminFetch(`/api/admin/progress-images?id=${id}`, {
+      method: "DELETE",
+    });
+    if (res.ok) {
+      await loadProjectDetails(selectedProjectId);
       setMessage("Image deleted.");
-    } catch (err) {
-      setMessage("Error deleting image: " + err.message);
+    } else {
+      setMessage("Delete failed.");
     }
   };
 
@@ -243,196 +225,246 @@ export default function UploadProgressTab() {
       setMessage("Select a project first.");
       return;
     }
-    if (!confirm("Mark project as complete? This will publish it to the portfolio."))
-      return;
+    if (!confirm("Mark project as complete? This will publish it to the portfolio.")) return;
 
     setUploading(true);
-    const { error } = await supabase
-      .from("projects")
-      .update({ status: "killed" })
-      .eq("id", selectedProjectId);
+    const res = await adminFetch("/api/admin/projects", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: selectedProjectId, status: "killed" }),
+    });
 
-    if (error) {
-      setMessage("Error completing project: " + error.message);
+    if (!res.ok) {
+      setMessage("Error completing project.");
       setUploading(false);
       return;
     }
 
     if (selectedWorkerId) {
-      await supabase.from("notifications").insert({
-        client_id: selectedWorkerId,
-        type: "project_killed",
-        message: `Project "${selectedProjectLabel}" has been marked as completed.`,
-        target_url: `/workspace/${
-          selectedProjectLabel.split("#")[1]?.replace(")", "") || ""
-        }`,
-      });
+      try {
+        await adminFetch("/api/admin/notify-user", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            client_id: selectedWorkerId,
+            message: `Project "${selectedProject?.work_description || ""}" has been marked as completed.`,
+            target_url: selectedProject?.token_string
+              ? `/workspace/${selectedProject.token_string}`
+              : null,
+          }),
+        });
+      } catch {}
     }
 
-    // Fetch data for auto-post modal
-    const project = projects.find((p) => p.id === selectedProjectId);
-    const { data: progImgs } = await supabase
-      .from("progress_images")
-      .select("image_url")
-      .eq("project_id", selectedProjectId)
-      .order("uploaded_at", { ascending: true })
-      .limit(6);
+    // Fetch preview images for auto-post modal
+    const previewImages = (progressData || [])
+      .slice(0, 6)
+      .map((p) => p.image_url);
 
-    let previewImages = (progImgs || []).map((i) => i.image_url).filter(Boolean);
-    if (previewImages.length === 0) {
-      const { data: reqImgs } = await supabase
-        .from("project_request_images")
-        .select("image_url")
-        .eq("project_id", selectedProjectId)
-        .order("display_order", { ascending: true })
-        .limit(6);
-      previewImages = (reqImgs || []).map((i) => i.image_url).filter(Boolean);
-    }
-
-    const title = project?.work_description || "Our latest project";
-    const city = project?.city ? ` in ${project.city}` : "";
-    const defaultContent = `Just completed: ${title}${city} 🛠️\n\nSee the full story in our portfolio.`;
-
+    const title = selectedProject?.work_description || "Our latest project";
+    const city = selectedProject?.city ? ` in ${selectedProject.city}` : "";
     setAutoPostData({
       type: "project",
       sourceId: selectedProjectId,
-      defaultContent,
+      defaultContent: `Just completed: ${title}${city} 🛠️\n\nSee the full story in our portfolio.`,
       previewImages,
     });
     setAutoPostOpen(true);
-    setUploading(false);
+
     setMessage("Project completed and published to portfolio.");
-    fetchProjects();
+    setUploading(false);
+    await loadProjects();
     setSelectedProjectId("");
-    setSelectedProjectLabel("");
+    setSelectedProject(null);
+    setSelectedWorkerId("");
     setProgressData([]);
+    setTimeline([]);
   };
 
-  const markAsRead = async (id) => {
-    await supabase.from("notifications").update({ is_read: true }).eq("id", id);
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
-    );
-    setUnreadCount((prev) => Math.max(0, prev - 1));
+  // ----- Timeline helpers -----
+
+  const addMilestone = () => {
+    setTimeline([
+      ...timeline,
+      {
+        id: `m_${Date.now()}`,
+        name: "New milestone",
+        status: "pending",
+        date: new Date().toISOString().slice(0, 10),
+        note: "",
+      },
+    ]);
+    setTimelineDirty(true);
   };
 
-  const handleNotificationClick = (notif) => {
-    markAsRead(notif.id);
-    if (notif.target_url) router.push(notif.target_url);
-    setShowNotifications(false);
+  const updateMilestone = (idx, field, value) => {
+    const next = [...timeline];
+    next[idx] = { ...next[idx], [field]: value };
+    setTimeline(next);
+    setTimelineDirty(true);
   };
+
+  const removeMilestone = (idx) => {
+    const next = [...timeline];
+    next.splice(idx, 1);
+    setTimeline(next);
+    setTimelineDirty(true);
+  };
+
+  const moveMilestone = (idx, dir) => {
+    const next = [...timeline];
+    const target = idx + dir;
+    if (target < 0 || target >= next.length) return;
+    [next[idx], next[target]] = [next[target], next[idx]];
+    setTimeline(next);
+    setTimelineDirty(true);
+  };
+
+  const saveTimeline = async () => {
+    if (!selectedProjectId) return;
+    setTimelineSaving(true);
+    const res = await adminFetch("/api/admin/projects", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: selectedProjectId, timeline }),
+    });
+    setTimelineSaving(false);
+    if (res.ok) {
+      setTimelineDirty(false);
+      setMessage("Timeline saved.");
+    } else {
+      setMessage("Failed to save timeline.");
+    }
+  };
+
+  const selectedLabel = selectedProject
+    ? `${selectedProject.work_description || "Untitled"} ${
+        selectedProject.token_string ? `(#${selectedProject.token_string})` : "(Standalone)"
+      }`
+    : "";
 
   return (
-    <div className="p-4 md:p-8 max-w-4xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Upload Progress & Manage Projects</h1>
-        <div className="relative">
-          <button
-            onClick={() => setShowNotifications(!showNotifications)}
-            className="relative p-2 hover:bg-gray-100 rounded-full transition"
-          >
-            <BellIcon unread={unreadCount} />
-          </button>
-          {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-100 z-10 max-h-96 overflow-y-auto">
-              <div className="p-3 border-b font-semibold">Notifications</div>
-              {notifications.length === 0 ? (
-                <div className="p-4 text-center text-gray-500 text-sm">
-                  No notifications.
-                </div>
-              ) : (
-                notifications.map((n) => (
-                  <div
-                    key={n.id}
-                    onClick={() => handleNotificationClick(n)}
-                    className={`p-3 border-b hover:bg-gray-50 cursor-pointer transition ${
-                      !n.is_read ? "bg-amber-50" : ""
-                    }`}
-                  >
-                    <p className="text-sm">{n.message}</p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      {new Date(n.created_at).toLocaleString()}
-                    </p>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-        </div>
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-100">
+        Upload Progress & Manage Projects
+      </h1>
+
+      <div className="bg-white dark:bg-gray-900 p-5 md:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+        <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">
+          Select Project
+        </h2>
+        <select
+          value={selectedProjectId}
+          onChange={handleProjectChange}
+          className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:ring-2 focus:ring-amber-500"
+        >
+          <option value="">-- Choose an active project --</option>
+          {projects.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.work_description || "Untitled"}{" "}
+              {p.token_string ? `(#${p.token_string})` : "(Standalone)"}
+              {p.client_name ? ` – ${p.client_name}` : ""}
+            </option>
+          ))}
+        </select>
       </div>
 
-      <div className="bg-white p-6 rounded-xl shadow-md mb-8">
-        <h2 className="text-lg font-semibold mb-4">Upload Progress</h2>
-        <form onSubmit={handleUpload} className="space-y-4">
-          <div>
-            <label className="block font-medium mb-1">
-              Select Active Project (Token or Standalone)
-            </label>
-            <select
-              value={selectedProjectId}
-              onChange={handleProjectChange}
-              className="w-full border p-2 rounded"
-              required
-            >
-              <option value="">-- Choose a project --</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.work_description || "Untitled"}{" "}
-                  {p.token_string ? `(#${p.token_string})` : "(Standalone)"}
-                  {p.client_name ? ` – ${p.client_name}` : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block font-medium mb-1">
-              Overall Description / Notes
-            </label>
-            <textarea
-              value={overallDescription}
-              onChange={(e) => setOverallDescription(e.target.value)}
-              rows="3"
-              className="w-full border p-2 rounded"
-              placeholder="Write any general notes about this progress..."
-            />
-          </div>
-          <div>
-            <label className="block font-medium mb-1">
-              Progress Images (up to 6)
-            </label>
-            <input
-              id="progressImages"
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={handleImageChange}
-              className="w-full border p-2 rounded"
-            />
-            {imageData.length > 0 && (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
-                {imageData.map((item, idx) => (
-                  <div
-                    key={idx}
-                    className="relative border rounded p-2 bg-gray-50"
+      {selectedProjectId && (
+        <>
+          {/* Timeline editor */}
+          <div className="bg-white dark:bg-gray-900 p-5 md:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+              <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">
+                Project Timeline
+              </h2>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={addMilestone}
+                  className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded-lg text-sm font-medium"
+                >
+                  <PlusIcon /> Add Milestone
+                </button>
+                {timelineDirty && (
+                  <button
+                    type="button"
+                    onClick={saveTimeline}
+                    disabled={timelineSaving}
+                    className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
                   >
-                    <img
-                      src={URL.createObjectURL(item.file)}
-                      className="w-full h-24 object-cover rounded"
-                      alt="Preview"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Image description (optional)"
-                      value={item.description}
-                      onChange={(e) =>
-                        handleDescriptionChange(idx, e.target.value)
-                      }
-                      className="w-full mt-1 p-1 border rounded text-sm"
-                    />
+                    {timelineSaving ? "Saving..." : "Save Timeline"}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {timeline.length === 0 ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                No milestones yet. Add the first one to give clients a clear picture of progress.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {timeline.map((m, idx) => (
+                  <div
+                    key={m.id || idx}
+                    className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 flex flex-col md:flex-row gap-3 items-start"
+                  >
+                    <div className="flex flex-col gap-1">
+                      <button
+                        type="button"
+                        onClick={() => moveMilestone(idx, -1)}
+                        disabled={idx === 0}
+                        className="text-xs text-gray-500 hover:text-amber-600 disabled:opacity-30"
+                      >
+                        ▲
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveMilestone(idx, 1)}
+                        disabled={idx === timeline.length - 1}
+                        className="text-xs text-gray-500 hover:text-amber-600 disabled:opacity-30"
+                      >
+                        ▼
+                      </button>
+                    </div>
+                    <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-2 w-full">
+                      <input
+                        type="text"
+                        value={m.name || ""}
+                        onChange={(e) => updateMilestone(idx, "name", e.target.value)}
+                        placeholder="Milestone name"
+                        className="md:col-span-2 border border-gray-300 dark:border-gray-600 rounded p-2 text-sm bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
+                      />
+                      <select
+                        value={m.status || "pending"}
+                        onChange={(e) => updateMilestone(idx, "status", e.target.value)}
+                        className="border border-gray-300 dark:border-gray-600 rounded p-2 text-sm bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
+                      >
+                        {STATUS_OPTIONS.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="date"
+                        value={m.date || ""}
+                        onChange={(e) => updateMilestone(idx, "date", e.target.value)}
+                        className="border border-gray-300 dark:border-gray-600 rounded p-2 text-sm bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
+                      />
+                      <input
+                        type="text"
+                        value={m.note || ""}
+                        onChange={(e) => updateMilestone(idx, "note", e.target.value)}
+                        placeholder="Optional note"
+                        className="md:col-span-2 border border-gray-300 dark:border-gray-600 rounded p-2 text-sm bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
+                      />
+                    </div>
                     <button
                       type="button"
-                      onClick={() => removeImage(idx)}
-                      className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
+                      onClick={() => removeMilestone(idx)}
+                      className="text-red-500 hover:text-red-700 p-2"
+                      aria-label="Remove"
                     >
                       <CloseIcon />
                     </button>
@@ -440,125 +472,180 @@ export default function UploadProgressTab() {
                 ))}
               </div>
             )}
-            <p className="text-sm text-gray-500 mt-1">
-              {imageData.length} file(s) selected
-            </p>
           </div>
-          <div className="flex gap-3 flex-wrap">
-            <button
-              type="submit"
-              disabled={uploading}
-              className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
-            >
-              {uploading ? "Uploading..." : "Upload Progress"}
-            </button>
-            <button
-              type="button"
-              onClick={handleKill}
-              disabled={uploading || !selectedProjectId}
-              className="bg-red-600 text-white px-4 py-2 rounded disabled:opacity-50"
-            >
-              Mark Complete & Publish
-            </button>
-          </div>
-          {message && (
-            <p
-              className={`mt-2 ${
-                message.startsWith("Error") ? "text-red-500" : "text-green-500"
-              }`}
-            >
-              {message}
-            </p>
-          )}
-        </form>
-      </div>
 
-      {progressData.length > 0 && (
-        <div className="bg-white p-6 rounded-xl shadow-md">
-          <h2 className="text-lg font-semibold mb-4">Uploaded Progress</h2>
-          <div className="space-y-6">
-            {progressData.map((item) => {
-              const isClient = item.uploaded_by !== null;
-              let uploaderName = "Admin";
-              if (isClient) {
-                const worker = workers.find((w) => w.id === item.uploaded_by);
-                uploaderName = worker
-                  ? worker.display_name || worker.username || "Client"
-                  : "Client";
-              }
-              return (
-                <div key={item.id} className="border-b pb-4 last:border-0">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="text-sm font-medium text-gray-700">
-                        {isClient ? "👤 Client" : "🛠️ Admin"} – {uploaderName}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {new Date(item.created_at).toLocaleString()}
-                      </p>
-                      {item.description && (
-                        <p className="text-sm text-gray-600">
-                          <strong>Image desc:</strong> {item.description}
-                        </p>
-                      )}
-                      {item.explanation && (
-                        <p className="text-sm text-gray-600">
-                          <strong>Overall note:</strong> {item.explanation}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => {
-                          setEditingId(item.id);
-                          setEditExplanation(item.explanation || "");
-                        }}
-                        className="text-blue-600 hover:underline text-sm"
+          {/* Upload progress */}
+          <div className="bg-white dark:bg-gray-900 p-5 md:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+            <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">
+              Upload Progress Images
+            </h2>
+            <form onSubmit={handleUpload} className="space-y-4">
+              <div>
+                <label className="block font-medium mb-1 text-sm text-gray-700 dark:text-gray-300">
+                  Overall note (optional)
+                </label>
+                <textarea
+                  value={overallDescription}
+                  onChange={(e) => setOverallDescription(e.target.value)}
+                  rows="2"
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-3 text-sm bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
+                  placeholder="Batch note for this upload..."
+                />
+              </div>
+              <div>
+                <label className="block font-medium mb-1 text-sm text-gray-700 dark:text-gray-300">
+                  Images (up to 6)
+                </label>
+                <input
+                  id="progressImages"
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleImageChange}
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2 text-sm bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
+                />
+                {imageData.length > 0 && (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-4">
+                    {imageData.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-2 bg-gray-50 dark:bg-gray-800"
                       >
-                        Edit Note
-                      </button>
-                      <button
-                        onClick={() =>
-                          handleDeleteImage(item.id, item.image_url)
-                        }
-                        className="text-red-600 hover:underline text-sm"
-                      >
-                        Delete
-                      </button>
-                    </div>
+                        <img
+                          src={URL.createObjectURL(item.file)}
+                          className="w-full h-24 object-cover rounded"
+                          alt=""
+                        />
+                        <input
+                          type="text"
+                          placeholder="Image description"
+                          value={item.description}
+                          onChange={(e) => handleDescriptionChange(idx, e.target.value)}
+                          className="w-full mt-1 p-1 border border-gray-300 dark:border-gray-600 rounded text-xs bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeImage(idx)}
+                          className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white rounded-full w-6 h-6 flex items-center justify-center"
+                        >
+                          <CloseIcon className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                  <img
-                    src={item.image_url}
-                    className="w-full max-h-60 object-cover rounded-lg mt-2"
-                    alt="Progress"
-                  />
-                  {editingId === item.id && (
-                    <div className="mt-2 flex gap-2">
-                      <textarea
-                        value={editExplanation}
-                        onChange={(e) => setEditExplanation(e.target.value)}
-                        rows="2"
-                        className="flex-1 border p-2 rounded"
-                      />
-                      <button
-                        onClick={() => handleEditExplanation(item.id)}
-                        className="bg-green-600 text-white px-3 py-1 rounded"
-                      >
-                        Save
-                      </button>
-                      <button
-                        onClick={() => setEditingId(null)}
-                        className="bg-gray-300 px-3 py-1 rounded"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                )}
+              </div>
+              <div className="flex gap-3 flex-wrap">
+                <button
+                  type="submit"
+                  disabled={uploading}
+                  className="bg-amber-600 hover:bg-amber-700 text-white px-5 py-2.5 rounded-lg font-medium disabled:opacity-50"
+                >
+                  {uploading ? "Uploading..." : "Upload Progress"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleKill}
+                  disabled={uploading}
+                  className="bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-lg font-medium disabled:opacity-50"
+                >
+                  Mark Complete & Publish
+                </button>
+              </div>
+              {message && (
+                <p
+                  className={`text-sm ${
+                    message.startsWith("Error") ? "text-red-500" : "text-green-600 dark:text-green-400"
+                  }`}
+                >
+                  {message}
+                </p>
+              )}
+            </form>
           </div>
-        </div>
+
+          {/* Existing progress images */}
+          {progressData.length > 0 && (
+            <div className="bg-white dark:bg-gray-900 p-5 md:p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+              <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">
+                Uploaded Progress ({progressData.length})
+              </h2>
+              <div className="space-y-5">
+                {progressData.map((item) => (
+                  <div
+                    key={item.id}
+                    className="border-b border-gray-100 dark:border-gray-800 pb-4 last:border-0"
+                  >
+                    <div className="flex flex-wrap justify-between items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          {item.uploaded_by ? "👤 Client" : "🛠️ Admin"}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {new Date(item.created_at || item.uploaded_at).toLocaleString()}
+                        </p>
+                        {item.description && (
+                          <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                            <strong>Image:</strong> {item.description}
+                          </p>
+                        )}
+                        {item.explanation && (
+                          <p className="text-sm text-gray-600 dark:text-gray-300">
+                            <strong>Note:</strong> {item.explanation}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setEditingId(item.id);
+                            setEditExplanation(item.explanation || "");
+                          }}
+                          className="text-blue-600 dark:text-blue-400 hover:underline text-sm"
+                        >
+                          Edit note
+                        </button>
+                        <button
+                          onClick={() => handleDeleteImage(item.id)}
+                          className="text-red-600 dark:text-red-400 hover:underline text-sm"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                    <img
+                      src={item.image_url}
+                      className="w-full max-h-60 object-cover rounded-lg mt-2"
+                      alt=""
+                    />
+                    {editingId === item.id && (
+                      <div className="mt-2 flex gap-2">
+                        <textarea
+                          value={editExplanation}
+                          onChange={(e) => setEditExplanation(e.target.value)}
+                          rows="2"
+                          className="flex-1 border border-gray-300 dark:border-gray-600 rounded p-2 text-sm bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
+                        />
+                        <button
+                          onClick={() => handleEditExplanation(item.id)}
+                          className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={() => setEditingId(null)}
+                          className="bg-gray-300 dark:bg-gray-700 px-3 py-1 rounded text-sm text-gray-800 dark:text-gray-200"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       <AutoPostModal
