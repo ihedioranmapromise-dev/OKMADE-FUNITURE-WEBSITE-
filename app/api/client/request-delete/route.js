@@ -1,110 +1,116 @@
-import { createClient } from "@supabase/supabase-js";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { createClient } from "@supabase/supabase-js";
+import crypto from "crypto";
 import { sendEmail } from "@/lib/send-email";
+
+const admin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
+
+function makeCancelToken() {
+  return crypto.randomBytes(32).toString("hex");
+}
 
 export async function POST(request) {
   try {
     const cookieStore = await cookies();
-    const supabase = createServerClient(
+    const sb = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
       {
         cookies: {
-          getAll() {
-            return cookieStore.getAll();
-          },
-          setAll() {
-            // no-op in route handler
-          },
+          getAll() { return cookieStore.getAll(); },
+          setAll() {},
         },
       }
     );
-
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await sb.auth.getUser();
     if (!user) {
-      return new Response(JSON.stringify({ error: "Not logged in" }), {
-        status: 401,
-      });
+      return new Response(JSON.stringify({ error: "Not logged in" }), { status: 401 });
     }
 
     const body = await request.json().catch(() => ({}));
     const reason = (body.reason || "").slice(0, 500);
 
-    const admin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
-
     const { data: client } = await admin
       .from("clients")
-      .select("username, display_name, first_name, last_name, email, phone_number")
+      .select("id, username, display_name, first_name, last_name, email")
       .eq("auth_id", user.id)
       .maybeSingle();
 
-    const username = client?.username || "(unknown)";
-    const displayName =
-      client?.display_name ||
-      `${client?.first_name || ""} ${client?.last_name || ""}`.trim() ||
-      "(no name)";
-    const clientEmail = client?.email || user.email || "(no email)";
-    const phone = client?.phone_number || "(no phone)";
+    if (!client) {
+      return new Response(JSON.stringify({ error: "Profile not found" }), { status: 404 });
+    }
 
-    const adminEmail =
-      process.env.ADMIN_EMAIL || "okeywoodwork@gmail.com";
+    if (client.deletion_requested_at) {
+      return new Response(
+        JSON.stringify({ error: "Deletion already scheduled" }),
+        { status: 400 }
+      );
+    }
 
-    const subject = `Account deletion request: @${username}`;
+    const now = new Date();
+    const scheduledFor = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const cancelToken = makeCancelToken();
 
-    const html = `
+    const { error: updateErr } = await admin
+      .from("clients")
+      .update({
+        deletion_requested_at: now.toISOString(),
+        deletion_scheduled_for: scheduledFor.toISOString(),
+        deletion_reason: reason || null,
+        deletion_cancel_token: cancelToken,
+      })
+      .eq("id", client.id);
+
+    if (updateErr) {
+      return new Response(JSON.stringify({ error: updateErr.message }), { status: 500 });
+    }
+
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://okmade.vercel.app";
+    const cancelUrl = `${baseUrl}/cancel-delete?token=${cancelToken}`;
+
+    const emailHtml = `
 <!DOCTYPE html>
 <html>
 <body style="font-family:Arial,sans-serif;background:#FFFBEB;padding:40px 20px;margin:0;">
-  <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:16px;padding:32px;">
-    <h2 style="color:#92400E;margin:0 0 16px 0;">Account Deletion Request</h2>
-    <p style="color:#4B5563;font-size:15px;line-height:1.6;margin:0 0 20px 0;">
-      A user has requested that their OKMADE account be deleted.
+  <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:16px;padding:40px 30px;">
+    <h2 style="color:#991B1B;margin:0 0 16px 0;">Account Deletion Scheduled</h2>
+    <p style="color:#4B5563;font-size:15px;line-height:1.6;">
+      Hi ${client.display_name || client.username}, we've received your request to delete your OKMADE account.
     </p>
-    <table style="width:100%;border-collapse:collapse;font-size:14px;color:#374151;">
-      <tr><td style="padding:8px 0;width:140px;color:#9CA3AF;">Username</td><td style="padding:8px 0;"><strong>@${username}</strong></td></tr>
-      <tr><td style="padding:8px 0;color:#9CA3AF;">Display name</td><td style="padding:8px 0;">${displayName}</td></tr>
-      <tr><td style="padding:8px 0;color:#9CA3AF;">Email</td><td style="padding:8px 0;">${clientEmail}</td></tr>
-      <tr><td style="padding:8px 0;color:#9CA3AF;">Phone</td><td style="padding:8px 0;">${phone}</td></tr>
-      <tr><td style="padding:8px 0;color:#9CA3AF;">Auth user id</td><td style="padding:8px 0;font-family:monospace;font-size:12px;">${user.id}</td></tr>
-    </table>
-    ${
-      reason
-        ? `<div style="margin-top:20px;padding:14px;background:#FEF3C7;border-radius:8px;border-left:4px solid #D97706;">
-             <p style="margin:0 0 6px 0;font-size:13px;color:#92400E;font-weight:bold;">Reason given by user:</p>
-             <p style="margin:0;font-size:14px;color:#78350F;white-space:pre-wrap;">${reason}</p>
-           </div>`
-        : ""
-    }
-    <p style="color:#6B7280;font-size:13px;line-height:1.6;margin:24px 0 0 0;">
-      <strong>To complete the deletion:</strong> open the Supabase dashboard, go to
-      Authentication → Users, and delete the user with the auth id above. Then
-      delete the matching row from the <code>clients</code> table.
+    <p style="color:#4B5563;font-size:15px;line-height:1.6;">
+      Your account will be <strong>permanently deleted on ${scheduledFor.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</strong>.
+    </p>
+    <p style="color:#4B5563;font-size:15px;line-height:1.6;">
+      Changed your mind? Click below to cancel. This link works until the deletion date.
+    </p>
+    <div style="text-align:center;margin:30px 0;">
+      <a href="${cancelUrl}" style="display:inline-block;background:#D97706;color:#fff;padding:14px 32px;border-radius:999px;text-decoration:none;font-weight:bold;font-size:15px;">Cancel Deletion</a>
+    </div>
+    <p style="color:#9CA3AF;font-size:12px;line-height:1.6;margin-top:30px;">
+      If you didn't request this, please contact us immediately at okeywoodwork@gmail.com.
     </p>
   </div>
 </body>
 </html>`;
 
-    const result = await sendEmail({
-      to: adminEmail,
-      subject,
-      html,
+    await sendEmail({
+      to: client.email || user.email,
+      subject: "Your OKMADE account is scheduled for deletion",
+      html: emailHtml,
     });
 
-    if (result.error) {
-      return new Response(
-        JSON.stringify({ error: "Email failed to send: " + result.error }),
-        { status: 500 }
-      );
-    }
-
-    return new Response(JSON.stringify({ success: true }), { status: 200 });
+    return new Response(
+      JSON.stringify({
+        success: true,
+        scheduled_for: scheduledFor.toISOString(),
+      }),
+      { status: 200 }
+    );
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
-    });
+    return new Response(JSON.stringify({ error: err.message }), { status: 500 });
   }
 }
