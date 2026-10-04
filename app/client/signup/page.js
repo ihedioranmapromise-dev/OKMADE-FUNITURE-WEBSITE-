@@ -281,4 +281,88 @@ export default function ClientSignup() {
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-               
+                className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg pr-12 focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
+                required
+              />
+              <button
+                type="button"
+                className="absolute inset-y-0 right-3 flex items-center text-gray-500 dark:text-gray-400 hover:text-amber-600 transition"
+                onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff /> : <EyeOpen />}
+              </button>
+            </div>
+            {password && (
+              <div className="mt-2">
+                <div className="flex gap-1">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div
+                      key={i}
+                      className={`h-1.5 flex-1 rounded-full transition ${
+                        strength.score >= i ? strength.color : "bg-gray-200 dark:bg-gray-700"
+                      }`}
+                    />
+                  ))}
+                </div>
+                {strength.label && (
+                  <p
+                    className={`text-xs mt-1 ${
+                      strength.label === "Strong"
+                        ? "text-green-600 dark:text-green-400"
+                        : strength.label === "Weak"
+                        ? "text-red-500"
+                        : "text-amber-600 dark:text-amber-400"
+                    }`}
+                  >
+                    {strength.label}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Confirm Password *
+            </label>
+            <div className="relative">
+              <input
+                type={showConfirm ? "text" : "password"}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg pr-12 focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
+                required
+              />
+              <button
+                type="button"
+                className="absolute inset-y-0 right-3 flex items-center text-gray-500 dark:text-gray-400 hover:text-amber-600 transition"
+                onClick={() => setShowConfirm(!showConfirm)}
+                aria-label={showConfirm ? "Hide password" : "Show password"}
+              >
+                {showConfirm ? <EyeOff /> : <EyeOpen />}
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 rounded-lg transition disabled:opacity-50"
+          >
+            {loading ? "Creating..." : "Create Account"}
+          </button>
+          {message && (
+            <p className="text-center text-sm text-red-500">{message}</p>
+          )}
+        </form>
+        <p className="text-center text-sm text-gray-600 dark:text-gray-400 mt-4">
+          Already have an account?{" "}
+          <a href="/client/login" className="text-amber-600 dark:text-amber-400 hover:underline">
+            Log in
+          </a>
+        </p>
+      </div>
+    </div>
+  );
+}
