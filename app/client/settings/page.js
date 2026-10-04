@@ -26,14 +26,11 @@ export default function SettingsPage() {
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [passwordMsg, setPasswordMsg] = useState("");
-
-  // Delete account flow
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [deleteModal, setDeleteModal] = useState(false);
   const [deleteReason, setDeleteReason] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [deleteMsg, setDeleteMsg] = useState("");
-  const [deleteRequested, setDeleteRequested] = useState(false);
-
   const router = useRouter();
   const supabase = createSupabaseBrowser();
 
@@ -50,6 +47,12 @@ export default function SettingsPage() {
         if (data) setSettings(data);
         setLoading(false);
       });
+    fetch("/api/client/delete-status")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.pending) setPendingDelete(d);
+      })
+      .catch(() => {});
   }, []);
 
   const handleSave = async (updates) => {
@@ -88,7 +91,7 @@ export default function SettingsPage() {
     }
   };
 
-  const handleDeleteAccount = async () => {
+  const requestDelete = async () => {
     setDeleting(true);
     setDeleteMsg("");
     try {
@@ -98,12 +101,11 @@ export default function SettingsPage() {
         body: JSON.stringify({ reason: deleteReason }),
       });
       const data = await res.json();
-      if (!res.ok || data.error) {
-        throw new Error(data.error || "Failed to submit request");
-      }
-      setDeleteRequested(true);
-      setDeleteModalOpen(false);
-      setDeleteReason("");
+      if (!res.ok || data.error) throw new Error(data.error || "Failed");
+      setDeleteModal(false);
+      setPendingDelete({ pending: true, scheduled_for: data.scheduled_for });
+      await supabase.auth.signOut();
+      router.push("/client/login?deletion=scheduled");
     } catch (err) {
       setDeleteMsg("Error: " + err.message);
     } finally {
@@ -111,24 +113,38 @@ export default function SettingsPage() {
     }
   };
 
+  const cancelDelete = async () => {
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/client/cancel-delete", { method: "POST" });
+      if (!res.ok) throw new Error("Failed to cancel");
+      setPendingDelete(null);
+      setMessage("Deletion cancelled. Your account is safe.");
+    } catch (err) {
+      setMessage("Error: " + err.message);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-100 py-8 px-4">
+      <div className="min-h-screen bg-gray-100 dark:bg-gray-950 py-8 px-4">
         <div className="max-w-3xl mx-auto">
-          <div className="h-8 w-32 bg-gray-200 rounded animate-pulse mb-6"></div>
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="flex border-b">
+          <div className="h-8 w-32 bg-gray-200 dark:bg-gray-800 rounded animate-pulse mb-6"></div>
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
+            <div className="flex border-b border-gray-200 dark:border-gray-800">
               {[...Array(4)].map((_, i) => (
                 <div key={i} className="px-5 py-3">
-                  <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
+                  <div className="h-4 w-20 bg-gray-200 dark:bg-gray-800 rounded animate-pulse"></div>
                 </div>
               ))}
             </div>
             <div className="p-6 space-y-6">
               {[...Array(2)].map((_, i) => (
                 <div key={i} className="space-y-2">
-                  <div className="h-4 bg-gray-200 rounded w-1/3 animate-pulse"></div>
-                  <div className="h-12 bg-gray-100 rounded animate-pulse"></div>
+                  <div className="h-4 bg-gray-200 dark:bg-gray-800 rounded w-1/3 animate-pulse"></div>
+                  <div className="h-12 bg-gray-100 dark:bg-gray-800 rounded animate-pulse"></div>
                 </div>
               ))}
             </div>
@@ -139,12 +155,38 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 py-8 px-4">
+    <div className="min-h-screen bg-gray-100 dark:bg-gray-950 py-8 px-4">
       <div className="max-w-3xl mx-auto">
-        <h1 className="text-2xl font-bold text-gray-800 mb-6">Settings</h1>
+        <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6">
+          Settings
+        </h1>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="flex border-b overflow-x-auto">
+        {pendingDelete?.pending && (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 mb-6">
+            <h3 className="font-semibold text-red-800 dark:text-red-300 mb-1">
+              Account scheduled for deletion
+            </h3>
+            <p className="text-sm text-red-700 dark:text-red-400 mb-3">
+              Your account will be permanently deleted on{" "}
+              <strong>
+                {pendingDelete.scheduled_for
+                  ? new Date(pendingDelete.scheduled_for).toLocaleDateString()
+                  : "7 days from request"}
+              </strong>
+              . You can cancel anytime before then.
+            </p>
+            <button
+              onClick={cancelDelete}
+              disabled={deleting}
+              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+            >
+              {deleting ? "Cancelling..." : "Cancel Deletion"}
+            </button>
+          </div>
+        )}
+
+        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
+          <div className="flex border-b border-gray-200 dark:border-gray-800 overflow-x-auto">
             {[
               { id: "privacy", label: "Privacy" },
               { id: "notifications", label: "Notifications" },
@@ -156,8 +198,8 @@ export default function SettingsPage() {
                 onClick={() => setActiveTab(t.id)}
                 className={`px-5 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition ${
                   activeTab === t.id
-                    ? "border-amber-600 text-amber-700"
-                    : "border-transparent text-gray-500 hover:text-gray-700"
+                    ? "border-amber-600 text-amber-700 dark:text-amber-400"
+                    : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
                 }`}
               >
                 {t.label}
@@ -169,13 +211,13 @@ export default function SettingsPage() {
             {activeTab === "privacy" && (
               <div className="space-y-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Who can see your posts
                   </label>
                   <select
                     value={settings?.post_visibility || "public"}
                     onChange={(e) => handleSave({ post_visibility: e.target.value })}
-                    className="w-full p-3 border rounded-lg"
+                    className="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
                   >
                     <option value="public">Public — Anyone can see</option>
                     <option value="friends">Friends only</option>
@@ -183,13 +225,13 @@ export default function SettingsPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Who can message you
                   </label>
                   <select
                     value={settings?.message_permission || "friends"}
                     onChange={(e) => handleSave({ message_permission: e.target.value })}
-                    className="w-full p-3 border rounded-lg"
+                    className="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
                   >
                     <option value="everyone">Everyone</option>
                     <option value="friends">Friends only</option>
@@ -201,8 +243,10 @@ export default function SettingsPage() {
 
             {activeTab === "notifications" && (
               <div className="space-y-4">
-                <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg cursor-pointer">
-                  <span className="text-sm font-medium text-gray-700">Email notifications</span>
+                <label className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg cursor-pointer">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Email notifications
+                  </span>
                   <input
                     type="checkbox"
                     checked={settings?.email_notifications ?? true}
@@ -210,8 +254,10 @@ export default function SettingsPage() {
                     className="w-5 h-5"
                   />
                 </label>
-                <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg cursor-pointer">
-                  <span className="text-sm font-medium text-gray-700">Push notifications</span>
+                <label className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg cursor-pointer">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Push notifications
+                  </span>
                   <input
                     type="checkbox"
                     checked={settings?.push_notifications ?? true}
@@ -224,9 +270,11 @@ export default function SettingsPage() {
 
             {activeTab === "security" && (
               <form onSubmit={handleChangePassword} className="space-y-4">
-                <h3 className="font-semibold text-gray-800">Change Password</h3>
+                <h3 className="font-semibold text-gray-800 dark:text-gray-100">
+                  Change Password
+                </h3>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     New Password
                   </label>
                   <div className="relative">
@@ -234,21 +282,21 @@ export default function SettingsPage() {
                       type={showNew ? "text" : "password"}
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      className="w-full p-3 border rounded-lg pr-12"
+                      className="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg pr-12 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
                       required
                     />
                     <button
                       type="button"
-                      className="absolute inset-y-0 right-3 flex items-center text-gray-500 hover:text-amber-600 transition"
+                      className="absolute inset-y-0 right-3 flex items-center text-gray-500 dark:text-gray-400 hover:text-amber-600 transition"
                       onClick={() => setShowNew(!showNew)}
-                      aria-label={showNew ? "Hide password" : "Show password"}
+                      aria-label={showNew ? "Hide" : "Show"}
                     >
                       {showNew ? <EyeOff /> : <EyeOpen />}
                     </button>
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Confirm New Password
                   </label>
                   <div className="relative">
@@ -256,14 +304,14 @@ export default function SettingsPage() {
                       type={showConfirm ? "text" : "password"}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="w-full p-3 border rounded-lg pr-12"
+                      className="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg pr-12 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
                       required
                     />
                     <button
                       type="button"
-                      className="absolute inset-y-0 right-3 flex items-center text-gray-500 hover:text-amber-600 transition"
+                      className="absolute inset-y-0 right-3 flex items-center text-gray-500 dark:text-gray-400 hover:text-amber-600 transition"
                       onClick={() => setShowConfirm(!showConfirm)}
-                      aria-label={showConfirm ? "Hide password" : "Show password"}
+                      aria-label={showConfirm ? "Hide" : "Show"}
                     >
                       {showConfirm ? <EyeOff /> : <EyeOpen />}
                     </button>
@@ -276,7 +324,11 @@ export default function SettingsPage() {
                   Update Password
                 </button>
                 {passwordMsg && (
-                  <p className={`text-sm ${passwordMsg.includes("Error") ? "text-red-500" : "text-green-600"}`}>
+                  <p
+                    className={`text-sm ${
+                      passwordMsg.includes("Error") ? "text-red-500" : "text-green-600 dark:text-green-400"
+                    }`}
+                  >
                     {passwordMsg}
                   </p>
                 )}
@@ -285,64 +337,59 @@ export default function SettingsPage() {
 
             {activeTab === "danger" && (
               <div className="space-y-4">
-                {deleteRequested ? (
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                    <h3 className="font-semibold text-green-800 mb-1">Request received</h3>
-                    <p className="text-sm text-green-700">
-                      We've received your account deletion request. Our team will process it
-                      within 7 days. You'll get a confirmation email when it's complete.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <h3 className="font-semibold text-red-800 mb-1">Delete Account</h3>
-                    <p className="text-sm text-red-600 mb-3">
-                      Permanently delete your account, posts, and data. This cannot be undone.
-                      Our team will review your request and process it manually.
-                    </p>
-                    <button
-                      onClick={() => setDeleteModalOpen(true)}
-                      className="bg-red-600 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-red-700 transition"
-                    >
-                      Request Account Deletion
-                    </button>
-                  </div>
-                )}
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                  <h3 className="font-semibold text-red-800 dark:text-red-300 mb-1">
+                    Delete Account
+                  </h3>
+                  <p className="text-sm text-red-700 dark:text-red-400 mb-3">
+                    Permanently delete your account, posts, and data. You'll be logged
+                    out immediately. You have 7 days to cancel by clicking the link in
+                    the email we'll send you.
+                  </p>
+                  <button
+                    onClick={() => setDeleteModal(true)}
+                    disabled={!!pendingDelete?.pending}
+                    className="bg-red-600 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-red-700 transition disabled:opacity-50"
+                  >
+                    {pendingDelete?.pending ? "Already Scheduled" : "Request Account Deletion"}
+                  </button>
+                </div>
               </div>
             )}
 
-            {message && <p className="mt-4 text-sm text-green-600">{message}</p>}
+            {message && (
+              <p className="mt-4 text-sm text-green-600 dark:text-green-400">{message}</p>
+            )}
           </div>
         </div>
 
         <a
           href="/client/dashboard"
-          className="inline-block mt-6 text-sm text-amber-600 hover:underline"
+          className="inline-block mt-6 text-sm text-amber-600 dark:text-amber-400 hover:underline"
         >
           ← Back to Dashboard
         </a>
       </div>
 
-      {/* Delete confirmation modal */}
-      {deleteModalOpen && (
+      {deleteModal && (
         <div
           className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4"
-          onClick={() => !deleting && setDeleteModalOpen(false)}
+          onClick={() => !deleting && setDeleteModal(false)}
         >
           <div
-            className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl"
+            className="bg-white dark:bg-gray-900 rounded-2xl p-6 max-w-md w-full shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-lg font-bold text-red-800 mb-2">
-              Request account deletion?
+            <h3 className="text-lg font-bold text-red-800 dark:text-red-300 mb-2">
+              Delete your account?
             </h3>
-            <p className="text-sm text-gray-600 mb-4">
-              This sends a request to OKMADE support. Your account will be reviewed
-              and permanently deleted within 7 days. You can still log in during
-              this time.
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              You'll be logged out immediately. After 7 days, everything is
+              permanently deleted. You'll get an email with a cancel link —
+              use it if you change your mind.
             </p>
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Reason (optional)
               </label>
               <textarea
@@ -350,30 +397,25 @@ export default function SettingsPage() {
                 onChange={(e) => setDeleteReason(e.target.value)}
                 rows="3"
                 maxLength={500}
-                className="w-full p-3 border rounded-lg text-sm focus:ring-2 focus:ring-red-400"
+                className="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
                 placeholder="Tell us why you're leaving (helps us improve)..."
               />
-              <p className="text-xs text-gray-400 mt-1">
-                {deleteReason.length}/500
-              </p>
             </div>
-            {deleteMsg && (
-              <p className="text-sm text-red-500 mb-3">{deleteMsg}</p>
-            )}
+            {deleteMsg && <p className="text-sm text-red-500 mb-3">{deleteMsg}</p>}
             <div className="flex gap-3">
               <button
-                onClick={() => setDeleteModalOpen(false)}
+                onClick={() => setDeleteModal(false)}
                 disabled={deleting}
-                className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2.5 rounded-lg transition disabled:opacity-50"
+                className="flex-1 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 font-medium py-2.5 rounded-lg disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
-                onClick={handleDeleteAccount}
+                onClick={requestDelete}
                 disabled={deleting}
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 rounded-lg transition disabled:opacity-50"
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 rounded-lg disabled:opacity-50"
               >
-                {deleting ? "Sending..." : "Yes, Request Deletion"}
+                {deleting ? "Scheduling..." : "Yes, Delete"}
               </button>
             </div>
           </div>
