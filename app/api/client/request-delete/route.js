@@ -17,7 +17,11 @@ function makeCancelToken() {
 export async function POST(request) {
   try {
     const ip = getIp(request);
-    const { allowed, resetAt } = rateLimit(`request-delete:${ip}`, 3, 60 * 60_000);
+    const { allowed, resetAt } = await rateLimit(
+      `request-delete:${ip}`,
+      3,
+      60 * 60_000
+    );
     if (!allowed) return rateLimitResponse(resetAt);
 
     const cookieStore = await cookies();
