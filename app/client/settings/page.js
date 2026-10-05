@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowser } from "@/lib/supabase-browser";
+import { useTheme } from "@/lib/theme";
 
 const EyeOpen = ({ className = "w-5 h-5" }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8">
@@ -12,6 +13,22 @@ const EyeOpen = ({ className = "w-5 h-5" }) => (
 const EyeOff = ({ className = "w-5 h-5" }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8">
     <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+  </svg>
+);
+
+const SunIcon = ({ className = "w-5 h-5" }) => (
+  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
+    <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+  </svg>
+);
+const MoonIcon = ({ className = "w-5 h-5" }) => (
+  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
+    <path d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+  </svg>
+);
+const MonitorIcon = ({ className = "w-5 h-5" }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
   </svg>
 );
 
@@ -33,6 +50,7 @@ export default function SettingsPage() {
   const [deleteMsg, setDeleteMsg] = useState("");
   const router = useRouter();
   const supabase = createSupabaseBrowser();
+  const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     fetch("/api/settings")
@@ -134,7 +152,7 @@ export default function SettingsPage() {
           <div className="h-8 w-32 bg-gray-200 dark:bg-gray-800 rounded animate-pulse mb-6"></div>
           <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
             <div className="flex border-b border-gray-200 dark:border-gray-800">
-              {[...Array(4)].map((_, i) => (
+              {[...Array(5)].map((_, i) => (
                 <div key={i} className="px-5 py-3">
                   <div className="h-4 w-20 bg-gray-200 dark:bg-gray-800 rounded animate-pulse"></div>
                 </div>
@@ -190,6 +208,7 @@ export default function SettingsPage() {
             {[
               { id: "privacy", label: "Privacy" },
               { id: "notifications", label: "Notifications" },
+              { id: "appearance", label: "Appearance" },
               { id: "security", label: "Security" },
               { id: "danger", label: "Danger Zone" },
             ].map((t) => (
@@ -265,6 +284,119 @@ export default function SettingsPage() {
                     className="w-5 h-5"
                   />
                 </label>
+              </div>
+            )}
+
+            {activeTab === "appearance" && (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="font-semibold text-gray-800 dark:text-gray-100 mb-1">
+                    Theme
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                    Choose how OKMADE looks to you. Your choice is saved to this
+                    browser and stays even after you log out.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setTheme("light")}
+                    className={`flex items-center gap-3 p-4 rounded-xl border-2 transition text-left ${
+                      theme === "light"
+                        ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20"
+                        : "border-gray-200 dark:border-gray-700 hover:border-amber-300 dark:hover:border-amber-700"
+                    }`}
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
+                      <SunIcon className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-gray-800 dark:text-gray-100">
+                        Light
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Bright and clean
+                      </p>
+                    </div>
+                    {theme === "light" && (
+                      <svg
+                        className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0"
+                        fill="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+                      </svg>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setTheme("dark")}
+                    className={`flex items-center gap-3 p-4 rounded-xl border-2 transition text-left ${
+                      theme === "dark"
+                        ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20"
+                        : "border-gray-200 dark:border-gray-700 hover:border-amber-300 dark:hover:border-amber-700"
+                    }`}
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-gray-800 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
+                      <MoonIcon className="w-6 h-6 text-amber-300" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-gray-800 dark:text-gray-100">
+                        Dark
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Easy on the eyes
+                      </p>
+                    </div>
+                    {theme === "dark" && (
+                      <svg
+                        className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0"
+                        fill="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+
+                <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <MonitorIcon className="w-5 h-5 text-gray-500 dark:text-gray-400 flex-shrink-0" />
+                    <p className="text-xs text-gray-600 dark:text-gray-400">
+                      This setting is saved in a cookie. It applies to every page
+                      — public, feed, dashboard — until you change it.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <h3 className="font-semibold text-gray-800 dark:text-gray-100 mb-2">
+                    Preview
+                  </h3>
+                  <div className="p-4 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center text-white font-bold text-sm">
+                        O
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">
+                          Preview
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          Example
+                        </p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-700 dark:text-gray-300">
+                      This is how text will look in{" "}
+                      <strong>{theme === "dark" ? "dark" : "light"}</strong> mode.
+                    </p>
+                  </div>
+                </div>
               </div>
             )}
 
