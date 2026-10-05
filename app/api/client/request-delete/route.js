@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 import { sendEmail } from "@/lib/send-email";
+import { rateLimit, getIp, rateLimitResponse } from "@/lib/rate-limit";
 
 const admin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -15,20 +16,30 @@ function makeCancelToken() {
 
 export async function POST(request) {
   try {
+    const ip = getIp(request);
+    const { allowed, resetAt } = rateLimit(`request-delete:${ip}`, 3, 60 * 60_000);
+    if (!allowed) return rateLimitResponse(resetAt);
+
     const cookieStore = await cookies();
     const sb = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
       {
         cookies: {
-          getAll() { return cookieStore.getAll(); },
+          getAll() {
+            return cookieStore.getAll();
+          },
           setAll() {},
         },
       }
     );
-    const { data: { user } } = await sb.auth.getUser();
+    const {
+      data: { user },
+    } = await sb.auth.getUser();
     if (!user) {
-      return new Response(JSON.stringify({ error: "Not logged in" }), { status: 401 });
+      return new Response(JSON.stringify({ error: "Not logged in" }), {
+        status: 401,
+      });
     }
 
     const body = await request.json().catch(() => ({}));
@@ -41,7 +52,9 @@ export async function POST(request) {
       .maybeSingle();
 
     if (!client) {
-      return new Response(JSON.stringify({ error: "Profile not found" }), { status: 404 });
+      return new Response(JSON.stringify({ error: "Profile not found" }), {
+        status: 404,
+      });
     }
 
     if (client.deletion_requested_at) {
@@ -66,10 +79,13 @@ export async function POST(request) {
       .eq("id", client.id);
 
     if (updateErr) {
-      return new Response(JSON.stringify({ error: updateErr.message }), { status: 500 });
+      return new Response(JSON.stringify({ error: updateErr.message }), {
+        status: 500,
+      });
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://okmade.vercel.app";
+    const baseUrl =
+      process.env.NEXT_PUBLIC_BASE_URL || "https://okmade.vercel.app";
     const cancelUrl = `${baseUrl}/cancel-delete?token=${cancelToken}`;
 
     const emailHtml = `
@@ -82,7 +98,10 @@ export async function POST(request) {
       Hi ${client.display_name || client.username}, we've received your request to delete your OKMADE account.
     </p>
     <p style="color:#4B5563;font-size:15px;line-height:1.6;">
-      Your account will be <strong>permanently deleted on ${scheduledFor.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</strong>.
+      Your account will be <strong>permanently deleted on ${scheduledFor.toLocaleDateString(
+        "en-GB",
+        { day: "numeric", month: "long", year: "numeric" }
+      )}</strong>.
     </p>
     <p style="color:#4B5563;font-size:15px;line-height:1.6;">
       Changed your mind? Click below to cancel. This link works until the deletion date.
@@ -111,6 +130,8 @@ export async function POST(request) {
       { status: 200 }
     );
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 500,
+    });
   }
 }
