@@ -8,6 +8,7 @@ import OfflineBanner from "./components/OfflineBanner";
 import OfflineQueueIndicator from "./components/OfflineQueueIndicator";
 import PromoBanner from "./components/PromoBanner";
 import ThemeInit from "./components/ThemeInit";
+import VisitTracker from "./components/VisitTracker";
 import { ThemeProvider } from "@/lib/theme";
 import { THEME_COOKIE, THEME_DEFAULT } from "@/lib/theme-constants";
 
@@ -61,6 +62,7 @@ export default async function RootLayout({ children }) {
       </head>
       <body className="bg-gray-50 dark:bg-gray-950">
         <ThemeProvider initialTheme={theme}>
+          <VisitTracker />
           <PromoBanner />
           <OfflineBanner />
           <PWASetup />
