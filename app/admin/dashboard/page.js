@@ -8,6 +8,8 @@ import TopBar from "./components/TopBar";
 import CommandPalette from "./components/CommandPalette";
 
 import OverviewTab from "./components/OverviewTab";
+import InboxTab from "./components/InboxTab";
+import AnalyticsTab from "./components/AnalyticsTab";
 import GenerateProjectTab from "./components/GenerateProjectTab";
 import UploadProgressTab from "./components/UploadProgressTab";
 import ManagePortfolioTab from "./components/ManagePortfolioTab";
@@ -19,9 +21,11 @@ import CategoriesTab from "./components/CategoriesTab";
 import UsersTab from "./components/UsersTab";
 import ReviewsTab from "./components/ReviewsTab";
 import CommentsTab from "./components/CommentsTab";
+import PostsTab from "./components/PostsTab";
 import DeleteRequestsTab from "./components/DeleteRequestsTab";
 import BroadcastTab from "./components/BroadcastTab";
 import ContentTab from "./components/ContentTab";
+import BrandingTab from "./components/BrandingTab";
 import SeoTab from "./components/SeoTab";
 import PromoBannerTab from "./components/PromoBannerTab";
 import SocialLinksTab from "./components/SocialLinksTab";
@@ -45,7 +49,6 @@ function DashboardInner() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
 
-  // Sync active tab with ?tab=
   useEffect(() => {
     const t = searchParams.get("tab");
     if (t && VALID_TABS.has(t)) {
@@ -55,7 +58,6 @@ function DashboardInner() {
     }
   }, [searchParams]);
 
-  // Load sidebar collapse preference
   useEffect(() => {
     if (typeof window === "undefined") return;
     const stored = localStorage.getItem("admin_sidebar_collapsed");
@@ -77,6 +79,10 @@ function DashboardInner() {
     switch (activeTab) {
       case "overview":
         return <OverviewTab />;
+      case "inbox":
+        return <InboxTab />;
+      case "analytics":
+        return <AnalyticsTab />;
       case "projects":
         return <GenerateProjectTab />;
       case "progress":
@@ -99,12 +105,16 @@ function DashboardInner() {
         return <ReviewsTab />;
       case "comments":
         return <CommentsTab />;
+      case "posts":
+        return <PostsTab />;
       case "delete-requests":
         return <DeleteRequestsTab />;
       case "broadcast":
         return <BroadcastTab />;
       case "content":
         return <ContentTab />;
+      case "branding":
+        return <BrandingTab />;
       case "seo":
         return <SeoTab />;
       case "promo-banners":
@@ -165,7 +175,13 @@ export default function AdminDashboard() {
   return (
     <ThemeProvider>
       <AuthGuard>
-        <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+        <Suspense
+          fallback={
+            <div className="min-h-screen flex items-center justify-center">
+              Loading...
+            </div>
+          }
+        >
           <DashboardInner />
         </Suspense>
       </AuthGuard>
