@@ -27,6 +27,24 @@ export async function POST(request) {
   }
 }
 
+export async function PUT(request) {
+  if (!(await isAdmin(request))) return unauthorized();
+  try {
+    const { order } = await request.json();
+    if (!Array.isArray(order)) return badRequest("order array required");
+
+    await Promise.all(
+      order.map(({ id, display_order }) =>
+        admin.from("product_images").update({ display_order }).eq("id", id)
+      )
+    );
+
+    return new Response(JSON.stringify({ success: true }), { status: 200 });
+  } catch (err) {
+    return serverError(err.message);
+  }
+}
+
 export async function DELETE(request) {
   if (!(await isAdmin(request))) return unauthorized();
   try {
