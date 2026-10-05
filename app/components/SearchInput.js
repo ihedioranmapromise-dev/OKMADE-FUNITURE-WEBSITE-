@@ -9,12 +9,14 @@ export default function SearchInput({
   debounceMs = 300,
   className = "",
   minCharsToSave = 3,
+  trackSection = null,
 }) {
   const [localValue, setLocalValue] = useState(value || "");
   const [recent, setRecent] = useState([]);
   const [focused, setFocused] = useState(false);
   const inputRef = useRef(null);
   const debounceRef = useRef(null);
+  const lastTracked = useRef("");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -39,11 +41,27 @@ export default function SearchInput({
     } catch {}
   };
 
+  const trackQuery = async (term) => {
+    if (!trackSection) return;
+    const t = term.trim().toLowerCase();
+    if (t.length < 2) return;
+    if (lastTracked.current === t) return;
+    lastTracked.current = t;
+    try {
+      await fetch("/api/search-track", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: term.trim(), section: trackSection }),
+      });
+    } catch {}
+  };
+
   const commitSearch = (term) => {
     const t = term.trim();
     if (t.length < minCharsToSave) return;
     const next = [t, ...recent.filter((r) => r !== t)].slice(0, 3);
     persist(next);
+    trackQuery(t);
   };
 
   const handleChange = (e) => {
@@ -62,6 +80,7 @@ export default function SearchInput({
     onChange?.(term);
     setFocused(false);
     inputRef.current?.blur();
+    if (term.trim().length >= 2) trackQuery(term);
   };
 
   const clearRecent = () => persist([]);
