@@ -1,5 +1,11 @@
 import { verifyAdminPassword, logActivity } from "@/lib/admin-auth";
 import { rateLimit, getIp, rateLimitResponse } from "@/lib/rate-limit";
+import { createClient } from "@supabase/supabase-js";
+
+const admin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 export async function POST(request) {
   try {
@@ -15,6 +21,11 @@ export async function POST(request) {
         action: "admin_login_rate_limited",
         target_type: "admin",
         details: { ip },
+      });
+      await admin.from("admin_inbox").insert({
+        type: "security",
+        title: "Admin login rate-limited",
+        body: `IP ${ip} was blocked after too many failed attempts.`,
       });
       return rateLimitResponse(resetAt);
     }
@@ -40,6 +51,12 @@ export async function POST(request) {
       action: "admin_login",
       target_type: "admin",
       details: { ip },
+    });
+
+    await admin.from("admin_inbox").insert({
+      type: "login",
+      title: "Admin login",
+      body: `Successful login from ${ip}`,
     });
 
     return new Response(JSON.stringify({ success: true }), { status: 200 });
