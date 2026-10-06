@@ -1,3 +1,4 @@
+import BackupSchedulePanel from "./BackupSchedulePanel";
 "use client";
 import { useEffect, useState } from "react";
 
@@ -97,6 +98,7 @@ export default function BackupTab() {
           </div>
         )}
       </div>
+                <BackupSchedulePanel />
     </div>
   );
 }
