@@ -22,6 +22,9 @@ import UsersTab from "./components/UsersTab";
 import ReviewsTab from "./components/ReviewsTab";
 import CommentsTab from "./components/CommentsTab";
 import PostsTab from "./components/PostsTab";
+import PendingPostsTab from "./components/PendingPostsTab";
+import ReportsTab from "./components/ReportsTab";
+import StoriesTab from "./components/StoriesTab";
 import DeleteRequestsTab from "./components/DeleteRequestsTab";
 import ReferralsTab from "./components/ReferralsTab";
 import BroadcastTab from "./components/BroadcastTab";
@@ -112,6 +115,12 @@ function DashboardInner() {
         return <CommentsTab />;
       case "posts":
         return <PostsTab />;
+      case "pending-posts":
+        return <PendingPostsTab />;
+      case "reports":
+        return <ReportsTab />;
+      case "stories":
+        return <StoriesTab />;
       case "delete-requests":
         return <DeleteRequestsTab />;
       case "referrals":
