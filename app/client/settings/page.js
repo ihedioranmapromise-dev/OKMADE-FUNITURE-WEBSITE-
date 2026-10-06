@@ -469,6 +469,22 @@ export default function SettingsPage() {
 
             {activeTab === "danger" && (
               <div className="space-y-4">
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                  <h3 className="font-semibold text-blue-800 dark:text-blue-300 mb-1">
+                    Download Your Data
+                  </h3>
+                  <p className="text-sm text-blue-700 dark:text-blue-400 mb-3">
+                    Get a copy of everything we have about you — profile, posts, comments,
+                    messages, and activity. The file is JSON, readable in any text editor.
+                  </p>
+                  <a
+                    href="/api/client/export-data"
+                    className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-medium transition"
+                  >
+                    Download My Data
+                  </a>
+                </div>
+
                 <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
                   <h3 className="font-semibold text-red-800 dark:text-red-300 mb-1">
                     Delete Account
