@@ -4,6 +4,7 @@ import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import { adminFetch } from "@/lib/admin-client";
 import { CloseIcon } from "@/lib/icons";
+import ImageReorderList from "@/app/components/ImageReorderList";
 
 const sb = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -16,6 +17,8 @@ export default function EditCatalog() {
   const [title, setTitle] = useState("");
   const [existingImages, setExistingImages] = useState([]);
   const [newImages, setNewImages] = useState([]);
+  const [orderDirty, setOrderDirty] = useState(false);
+  const [orderSaving, setOrderSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -40,6 +43,7 @@ export default function EditCatalog() {
     const data = await res.json();
     setTitle(data.title || "");
     setExistingImages(data.images || []);
+    setOrderDirty(false);
     setLoading(false);
   }
 
@@ -64,6 +68,30 @@ export default function EditCatalog() {
     setNewImages(updated);
   };
 
+  const moveUp = (idx) => {
+    if (idx === 0) return;
+    const next = [...existingImages];
+    [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+    setExistingImages(next);
+    setOrderDirty(true);
+  };
+
+  const moveDown = (idx) => {
+    if (idx === existingImages.length - 1) return;
+    const next = [...existingImages];
+    [next[idx + 1], next[idx]] = [next[idx], next[idx + 1]];
+    setExistingImages(next);
+    setOrderDirty(true);
+  };
+
+  const reorder = (from, to) => {
+    const next = [...existingImages];
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item);
+    setExistingImages(next);
+    setOrderDirty(true);
+  };
+
   const deleteExistingImage = async (imageId) => {
     if (!confirm("Delete this image?")) return;
     const res = await adminFetch(`/api/admin/catalog-images?id=${imageId}`, {
@@ -71,8 +99,29 @@ export default function EditCatalog() {
     });
     if (res.ok) {
       setExistingImages(existingImages.filter((i) => i.id !== imageId));
+      setOrderDirty(true);
     } else {
       alert("Delete failed.");
+    }
+  };
+
+  const saveOrder = async () => {
+    setOrderSaving(true);
+    const order = existingImages.map((img, idx) => ({
+      id: img.id,
+      display_order: idx,
+    }));
+    const res = await adminFetch("/api/admin/catalog-images", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ order }),
+    });
+    setOrderSaving(false);
+    if (res.ok) {
+      setOrderDirty(false);
+      setMessage("Order saved.");
+    } else {
+      setMessage("Failed to save order.");
     }
   };
 
@@ -112,6 +161,10 @@ export default function EditCatalog() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ catalog_id: id, images: uploaded }),
         });
+      }
+
+      if (orderDirty) {
+        await saveOrder();
       }
 
       setMessage("Catalog updated.");
@@ -167,34 +220,34 @@ export default function EditCatalog() {
           </div>
 
           <div className="bg-white dark:bg-gray-900 p-5 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-            <h2 className="font-semibold text-gray-800 dark:text-gray-100 mb-4">
-              Existing Images ({existingImages.length})
-            </h2>
-            {existingImages.length === 0 ? (
-              <p className="text-sm text-gray-500 dark:text-gray-400">No images.</p>
-            ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {existingImages.map((img) => (
-                  <div
-                    key={img.id}
-                    className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-2 bg-gray-50 dark:bg-gray-800"
-                  >
-                    <img
-                      src={img.image_url}
-                      className="w-full h-24 object-cover rounded"
-                      alt=""
-                    />
-                    <button
-                      type="button"
-                      onClick={() => deleteExistingImage(img.id)}
-                      className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-700"
-                    >
-                      <CloseIcon className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+            <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
+              <h2 className="font-semibold text-gray-800 dark:text-gray-100">
+                Existing Images ({existingImages.length})
+              </h2>
+              {orderDirty && (
+                <button
+                  type="button"
+                  onClick={saveOrder}
+                  disabled={orderSaving}
+                  className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-50"
+                >
+                  {orderSaving ? "Saving..." : "Save Order"}
+                </button>
+              )}
+            </div>
+
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3 hidden md:block">
+              Drag the ⋮⋮ handle or use the arrows to reorder.
+            </p>
+
+            <ImageReorderList
+              images={existingImages}
+              onMoveUp={moveUp}
+              onMoveDown={moveDown}
+              onReorder={reorder}
+              onDelete={deleteExistingImage}
+              emptyMessage="No images."
+            />
           </div>
 
           <div className="bg-white dark:bg-gray-900 p-5 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
