@@ -1,5 +1,4 @@
 "use client";
-// Sidebar v3 — cache-bust 2026-10-06
 import { AdminIconPaths } from "@/lib/admin-icons";
 
 export const TAB_GROUPS = [
@@ -35,6 +34,7 @@ export const TAB_GROUPS = [
       { id: "comments", label: "Comments" },
       { id: "posts", label: "Feed Posts" },
       { id: "delete-requests", label: "Delete Requests" },
+      { id: "referrals", label: "Referrals" },
     ],
   },
   {
@@ -45,6 +45,7 @@ export const TAB_GROUPS = [
       { id: "seo", label: "SEO" },
       { id: "promo-banners", label: "Promo Banners" },
       { id: "social-links", label: "Social Links" },
+      { id: "redirects", label: "Redirects" },
     ],
   },
   {
@@ -57,7 +58,10 @@ export const TAB_GROUPS = [
   {
     label: "System",
     items: [
+      { id: "security", label: "Security" },
+      { id: "error-log", label: "Error Log" },
       { id: "export", label: "Export" },
+      { id: "import", label: "Import CSV" },
       { id: "backup", label: "Backup" },
       { id: "activity", label: "Activity Log" },
       { id: "settings", label: "Settings" },
