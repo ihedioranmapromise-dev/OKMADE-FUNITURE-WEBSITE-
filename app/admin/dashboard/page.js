@@ -23,16 +23,21 @@ import ReviewsTab from "./components/ReviewsTab";
 import CommentsTab from "./components/CommentsTab";
 import PostsTab from "./components/PostsTab";
 import DeleteRequestsTab from "./components/DeleteRequestsTab";
+import ReferralsTab from "./components/ReferralsTab";
 import BroadcastTab from "./components/BroadcastTab";
 import ContentTab from "./components/ContentTab";
 import BrandingTab from "./components/BrandingTab";
 import SeoTab from "./components/SeoTab";
 import PromoBannerTab from "./components/PromoBannerTab";
 import SocialLinksTab from "./components/SocialLinksTab";
+import RedirectsTab from "./components/RedirectsTab";
 import TestEmailTab from "./components/TestEmailTab";
 import ExportTab from "./components/ExportTab";
+import ImportTab from "./components/ImportTab";
 import BackupTab from "./components/BackupTab";
 import ActivityTab from "./components/ActivityTab";
+import SecurityTab from "./components/SecurityTab";
+import ErrorLogTab from "./components/ErrorLogTab";
 import SettingsTab from "./components/SettingsTab";
 
 const VALID_TABS = new Set(
@@ -109,6 +114,8 @@ function DashboardInner() {
         return <PostsTab />;
       case "delete-requests":
         return <DeleteRequestsTab />;
+      case "referrals":
+        return <ReferralsTab />;
       case "broadcast":
         return <BroadcastTab />;
       case "content":
@@ -121,14 +128,22 @@ function DashboardInner() {
         return <PromoBannerTab />;
       case "social-links":
         return <SocialLinksTab />;
+      case "redirects":
+        return <RedirectsTab />;
       case "test-email":
         return <TestEmailTab />;
       case "export":
         return <ExportTab />;
+      case "import":
+        return <ImportTab />;
       case "backup":
         return <BackupTab />;
       case "activity":
         return <ActivityTab />;
+      case "security":
+        return <SecurityTab />;
+      case "error-log":
+        return <ErrorLogTab />;
       case "settings":
         return <SettingsTab />;
       default:
