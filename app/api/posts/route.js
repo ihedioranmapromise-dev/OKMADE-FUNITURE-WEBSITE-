@@ -1,4 +1,5 @@
-import { createSupabaseServer } from "@/lib/supabase-server";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 
 const admin = createClient(
@@ -6,135 +7,156 @@ const admin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// GET: feed (okmade + followed users + self)
+async function getClientUser() {
+  const cookieStore = await cookies();
+  const sb = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    {
+      cookies: {
+        getAll() { return cookieStore.getAll(); },
+        setAll() {},
+      },
+    }
+  );
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) return null;
+  const { data: client } = await admin
+    .from("clients")
+    .select("id, username, display_name, profile_pic, is_okmade, verified, suspended")
+    .eq("auth_id", user.id)
+    .maybeSingle();
+  return client;
+}
+
 export async function GET(request) {
   try {
-    const supabase = await createSupabaseServer();
-    const { data: { user } } = await supabase.auth.getUser();
-
     const { searchParams } = new URL(request.url);
-    const authorUsername = searchParams.get("author"); // optional – specific profile feed
+    const author = searchParams.get("author");
 
-    let authorIds = [];
-
-    if (authorUsername) {
-      // Specific author feed (public profile)
-      const { data: author } = await admin
-        .from("clients")
-        .select("id")
-        .eq("username", authorUsername)
-        .single();
-      if (!author) return new Response(JSON.stringify([]), { status: 200 });
-      authorIds = [author.id];
-    } else if (user) {
-      // Personalized feed: okmade + who user follows + self
-      const { data: me } = await admin
-        .from("clients")
-        .select("id")
-        .eq("auth_id", user.id)
-        .single();
-
-      const { data: okmade } = await admin
-        .from("clients")
-        .select("id")
-        .eq("is_okmade", true)
-        .single();
-
-      const { data: following } = await admin
-        .from("follows")
-        .select("following_id")
-        .eq("follower_id", me?.id);
-
-      authorIds = [
-        okmade?.id,
-        me?.id,
-        ...(following?.map((f) => f.following_id) || []),
-      ].filter(Boolean);
-    } else {
-      // Public homepage feed (no login): only OKMADE
-      const { data: okmade } = await admin
-        .from("clients")
-        .select("id")
-        .eq("is_okmade", true)
-        .single();
-      authorIds = [okmade?.id].filter(Boolean);
-    }
-
-    if (authorIds.length === 0) return new Response(JSON.stringify([]), { status: 200 });
-
-    const { data: posts, error } = await admin
+    let query = admin
       .from("posts")
       .select(`
-        id, author_id, content, image_urls, font_family, is_auto, auto_source,
-        created_at, updated_at,
-        clients:author_id (username, display_name, profile_pic, is_okmade)
+        id, author_id, content, image_urls, font_family, is_auto,
+        created_at, updated_at, requires_approval, approved,
+        clients:author_id (id, username, display_name, profile_pic, is_okmade, verified)
       `)
-      .in("author_id", authorIds)
+      .eq("status", "published")
+      .eq("approved", true)
       .order("created_at", { ascending: false })
-      .limit(30);
+      .limit(50);
 
-    if (error) throw error;
+    if (author) {
+      // Show own posts even if pending
+      query = admin
+        .from("posts")
+        .select(`
+          id, author_id, content, image_urls, font_family, is_auto,
+          created_at, updated_at, requires_approval, approved,
+          clients:author_id (id, username, display_name, profile_pic, is_okmade, verified)
+        `)
+        .eq("status", "published")
+        .order("created_at", { ascending: false })
+        .limit(50);
+    }
 
-    // Attach counts
-    const postsWithCounts = await Promise.all(
-      (posts || []).map(async (p) => {
-        const { data: reacts } = await admin
-          .from("post_reactions")
-          .select("reaction_type, user_id")
-          .eq("post_id", p.id);
+    const { data: posts } = await query;
+    const list = posts || [];
 
-        const { count: commentCount } = await admin
-          .from("post_comments")
-          .select("*", { count: "exact", head: true })
-          .eq("post_id", p.id);
+    if (list.length === 0) {
+      return new Response(JSON.stringify([]), { status: 200 });
+    }
 
-        return {
-          ...p,
-          reactions: reacts || [],
-          commentCount: commentCount || 0,
-        };
-      })
-    );
+    const ids = list.map((p) => p.id);
+    const [reactionsRes, commentsRes] = await Promise.all([
+      admin
+        .from("post_reactions")
+        .select("post_id, reaction_type, user_id")
+        .in("post_id", ids),
+      admin
+        .from("post_comments")
+        .select("post_id")
+        .in("post_id", ids),
+    ]);
 
-    return new Response(JSON.stringify(postsWithCounts), { status: 200 });
+    const reactionsByPost = {};
+    (reactionsRes.data || []).forEach((r) => {
+      if (!reactionsByPost[r.post_id]) reactionsByPost[r.post_id] = [];
+      reactionsByPost[r.post_id].push(r);
+    });
+
+    const commentCounts = {};
+    (commentsRes.data || []).forEach((c) => {
+      commentCounts[c.post_id] = (commentCounts[c.post_id] || 0) + 1;
+    });
+
+    const enriched = list.map((p) => ({
+      ...p,
+      reactions: reactionsByPost[p.id] || [],
+      commentCount: commentCounts[p.id] || 0,
+      edited_at:
+        p.updated_at && p.updated_at !== p.created_at ? p.updated_at : null,
+    }));
+
+    return new Response(JSON.stringify(enriched), { status: 200 });
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), { status: 500 });
   }
 }
 
-// POST: create a new post
 export async function POST(request) {
   try {
-    const supabase = await createSupabaseServer();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+    const client = await getClientUser();
+    if (!client) {
+      return new Response(JSON.stringify({ error: "Not logged in" }), { status: 401 });
+    }
 
     const { content, image_urls, font_family } = await request.json();
     if (!content?.trim() && (!image_urls || image_urls.length === 0)) {
       return new Response(JSON.stringify({ error: "Empty post" }), { status: 400 });
     }
 
-    const { data: me } = await admin
-      .from("clients")
-      .select("id")
-      .eq("auth_id", user.id)
-      .single();
-    if (!me) return new Response(JSON.stringify({ error: "Profile not found" }), { status: 404 });
+    // Check approval preference
+    const { data: settings } = await admin
+      .from("user_settings")
+      .select("auto_approve_posts")
+      .eq("user_id", client.id)
+      .maybeSingle();
+
+    const autoApprove = settings?.auto_approve_posts ?? true;
+    const isVerified = client.is_okmade || client.verified;
+    const requiresApproval = !autoApprove && !isVerified;
+    const approved = !requiresApproval;
 
     const { data, error } = await admin
       .from("posts")
-      .insert([{
-        author_id: me.id,
-        content: content?.trim() || null,
+      .insert({
+        author_id: client.id,
+        content: content?.trim() || "",
         image_urls: image_urls || [],
         font_family: font_family || "sans-serif",
         is_auto: false,
-      }])
+        status: "published",
+        requires_approval: requiresApproval,
+        approved,
+      })
       .select()
       .single();
 
-    if (error) throw error;
-    return new Response(JSON.stringify(data), { status: 201 });
+    if (error) {
+      return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+    }
+
+    if (requiresApproval) {
+      await admin.from("admin_inbox").insert({
+        type: "post_pending",
+        title: `Post pending approval from @${client.username}`,
+        body: content?.slice(0, 120) || "(image only)",
+        link: "/admin/dashboard?tab=pending-posts",
+      });
+    }
+
+    return new Response(JSON.stringify(data), { status: 200 });
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), { status: 500 });
   }
