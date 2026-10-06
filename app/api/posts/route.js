@@ -47,7 +47,6 @@ export async function GET(request) {
       .limit(50);
 
     if (author) {
-      // Show own posts even if pending
       query = admin
         .from("posts")
         .select(`
@@ -61,7 +60,25 @@ export async function GET(request) {
     }
 
     const { data: posts } = await query;
-    const list = posts || [];
+    let list = posts || [];
+
+    // Filter out muted/blocked users if I'm logged in and viewing the general feed
+    if (!author) {
+      const me = await getClientUser();
+      if (me) {
+        const [mutesRes, blocksRes] = await Promise.all([
+          admin.from("mutes").select("muted_id").eq("muter_id", me.id),
+          admin.from("blocks").select("blocked_id").eq("blocker_id", me.id),
+        ]);
+        const hideSet = new Set([
+          ...(mutesRes.data || []).map((m) => m.muted_id),
+          ...(blocksRes.data || []).map((b) => b.blocked_id),
+        ]);
+        if (hideSet.size > 0) {
+          list = list.filter((p) => !hideSet.has(p.author_id));
+        }
+      }
+    }
 
     if (list.length === 0) {
       return new Response(JSON.stringify([]), { status: 200 });
@@ -69,14 +86,8 @@ export async function GET(request) {
 
     const ids = list.map((p) => p.id);
     const [reactionsRes, commentsRes] = await Promise.all([
-      admin
-        .from("post_reactions")
-        .select("post_id, reaction_type, user_id")
-        .in("post_id", ids),
-      admin
-        .from("post_comments")
-        .select("post_id")
-        .in("post_id", ids),
+      admin.from("post_reactions").select("post_id, reaction_type, user_id").in("post_id", ids),
+      admin.from("post_comments").select("post_id").in("post_id", ids),
     ]);
 
     const reactionsByPost = {};
@@ -94,8 +105,7 @@ export async function GET(request) {
       ...p,
       reactions: reactionsByPost[p.id] || [],
       commentCount: commentCounts[p.id] || 0,
-      edited_at:
-        p.updated_at && p.updated_at !== p.created_at ? p.updated_at : null,
+      edited_at: p.updated_at && p.updated_at !== p.created_at ? p.updated_at : null,
     }));
 
     return new Response(JSON.stringify(enriched), { status: 200 });
@@ -110,13 +120,15 @@ export async function POST(request) {
     if (!client) {
       return new Response(JSON.stringify({ error: "Not logged in" }), { status: 401 });
     }
+    if (client.suspended) {
+      return new Response(JSON.stringify({ error: "Account suspended" }), { status: 403 });
+    }
 
     const { content, image_urls, font_family } = await request.json();
     if (!content?.trim() && (!image_urls || image_urls.length === 0)) {
       return new Response(JSON.stringify({ error: "Empty post" }), { status: 400 });
     }
 
-    // Check approval preference
     const { data: settings } = await admin
       .from("user_settings")
       .select("auto_approve_posts")
