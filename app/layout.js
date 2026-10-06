@@ -10,6 +10,8 @@ import PromoBanner from "./components/PromoBanner";
 import ThemeInit from "./components/ThemeInit";
 import VisitTracker from "./components/VisitTracker";
 import CookieConsent from "./components/CookieConsent";
+import PushNotificationPrompt from "./components/PushNotificationPrompt";
+import PWAUpdateBanner from "./components/PWAUpdateBanner";
 import { ThemeProvider } from "@/lib/theme";
 import { THEME_COOKIE, THEME_DEFAULT } from "@/lib/theme-constants";
 
@@ -71,6 +73,8 @@ export default async function RootLayout({ children }) {
           <InstallBanner />
           <OfflineQueueIndicator />
           <CookieConsent />
+          <PushNotificationPrompt />
+          <PWAUpdateBanner />
           {children}
         </ThemeProvider>
       </body>
