@@ -9,6 +9,7 @@ import OfflineQueueIndicator from "./components/OfflineQueueIndicator";
 import PromoBanner from "./components/PromoBanner";
 import ThemeInit from "./components/ThemeInit";
 import VisitTracker from "./components/VisitTracker";
+import CookieConsent from "./components/CookieConsent";
 import { ThemeProvider } from "@/lib/theme";
 import { THEME_COOKIE, THEME_DEFAULT } from "@/lib/theme-constants";
 
@@ -69,6 +70,7 @@ export default async function RootLayout({ children }) {
           <SplashScreen />
           <InstallBanner />
           <OfflineQueueIndicator />
+          <CookieConsent />
           {children}
         </ThemeProvider>
       </body>
