@@ -1,4 +1,5 @@
 "use client";
+// Sidebar v3 — cache-bust 2026-10-06
 import { AdminIconPaths } from "@/lib/admin-icons";
 
 export const TAB_GROUPS = [
@@ -64,27 +65,24 @@ export const TAB_GROUPS = [
   },
 ];
 
-function TabIcon({ id }) {
-  const path = AdminIconPaths[id];
-  if (!path) return null;
+function IconSvg({ path, className = "w-5 h-5 flex-shrink-0" }) {
   return (
     <svg
-      className="w-5 h-5 flex-shrink-0"
+      className={className}
       fill="none"
       stroke="currentColor"
       viewBox="0 0 24 24"
       strokeWidth="1.8"
     >
       <path strokeLinecap="round" strokeLinejoin="round" d={path} />
-      {id === "settings" && AdminIconPaths["settings-inner"] && (
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d={AdminIconPaths["settings-inner"]}
-        />
-      )}
     </svg>
   );
+}
+
+function TabIcon({ id }) {
+  const path = AdminIconPaths[id];
+  if (!path) return null;
+  return <IconSvg path={path} />;
 }
 
 export default function Sidebar({
@@ -105,7 +103,11 @@ export default function Sidebar({
           onClick={onMobileClose}
           className="flex items-center gap-2 overflow-hidden"
         >
-          <img src="/favicon.ico" alt="OKMADE" className="w-8 h-8 object-contain flex-shrink-0" />
+          <img
+            src="/favicon.ico"
+            alt="OKMADE"
+            className="w-8 h-8 object-contain flex-shrink-0"
+          />
           {!isCollapsed && (
             <span className="text-lg font-bold text-amber-800 dark:text-amber-300 font-['Dancing_Script',_cursive] whitespace-nowrap">
               OKMADE
@@ -118,7 +120,13 @@ export default function Sidebar({
           aria-label="Toggle sidebar"
           title={isCollapsed ? "Expand" : "Collapse"}
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            strokeWidth="2"
+          >
             {isCollapsed ? (
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
             ) : (
@@ -195,8 +203,12 @@ export default function Sidebar({
 
       <style jsx>{`
         @keyframes slideIn {
-          from { transform: translateX(-100%); }
-          to { transform: translateX(0); }
+          from {
+            transform: translateX(-100%);
+          }
+          to {
+            transform: translateX(0);
+          }
         }
       `}</style>
     </>
