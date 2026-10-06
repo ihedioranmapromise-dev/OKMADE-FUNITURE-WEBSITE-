@@ -31,12 +31,14 @@ export async function POST(request) {
       }
     );
 
-    const { data: { user } } = await sb.auth.getUser();
+    const {
+      data: { user },
+    } = await sb.auth.getUser();
     let reporterId = null;
     if (user) {
       const { data: client } = await admin
         .from("clients")
-        .select("id")
+        .select("id, username")
         .eq("auth_id", user.id)
         .maybeSingle();
       if (client) reporterId = client.id;
@@ -57,11 +59,25 @@ export async function POST(request) {
     });
 
     if (error) {
-      return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+      return new Response(JSON.stringify({ error: error.message }), {
+        status: 500,
+      });
     }
+
+    // Insert into admin inbox
+    await admin.from("admin_inbox").insert({
+      type: "report",
+      title: `New report: ${reason}`,
+      body:
+        (post_id ? `A post was reported.` : `A comment was reported.`) +
+        (details ? ` Details: "${String(details).slice(0, 120)}"` : ""),
+      link: "/admin/dashboard?tab=comments",
+    });
 
     return new Response(JSON.stringify({ success: true }), { status: 200 });
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 500,
+    });
   }
 }
