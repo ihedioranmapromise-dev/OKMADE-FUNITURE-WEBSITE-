@@ -15,6 +15,9 @@ const TEMPLATES = [
   { id: "projectComplete", label: "Project Complete" },
   { id: "okmadeAnnouncement", label: "OKMADE Announcement" },
   { id: "passwordChanged", label: "Password Changed" },
+  { id: "promoBanner", label: "Promo Banner" },
+  { id: "dataExportReady", label: "Data Export Ready" },
+  { id: "referralMilestone", label: "Referral Milestone" },
 ];
 
 export default function TestEmailTab() {
@@ -46,7 +49,7 @@ export default function TestEmailTab() {
       alert("Enter an email address first.");
       return;
     }
-    if (!confirm(`Send all 12 templates to ${to}?`)) return;
+    if (!confirm(`Send all ${TEMPLATES.length} templates to ${to}?`)) return;
     for (const t of TEMPLATES) {
       await sendOne(t.id);
     }
