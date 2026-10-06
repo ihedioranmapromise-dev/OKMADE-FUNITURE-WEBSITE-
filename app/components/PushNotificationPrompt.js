@@ -17,11 +17,9 @@ export default function PushNotificationPrompt() {
     const dismissed = localStorage.getItem(STORAGE_KEY);
     if (dismissed && Date.now() - parseInt(dismissed) < THIRTY_DAYS) return;
 
-    // Check if user is logged in
     const sb = createSupabaseBrowser();
     sb.auth.getUser().then(({ data: { user } }) => {
       if (!user) return;
-      // Check existing permission
       if (Notification.permission === "granted") return;
       if (Notification.permission === "denied") return;
       setTimeout(() => setShow(true), 6000);
@@ -44,17 +42,18 @@ export default function PushNotificationPrompt() {
         return;
       }
 
-      const registration = await navigator.serviceWorker.ready;
-      const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-      if (!vapidPublicKey) {
+      const keyRes = await fetch("/api/push/public-key");
+      const { key } = await keyRes.json();
+      if (!key) {
         setMessage("Push not configured yet.");
         setBusy(false);
         return;
       }
 
+      const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+        applicationServerKey: urlBase64ToUint8Array(key),
       });
 
       const res = await fetch("/api/push/subscribe", {
