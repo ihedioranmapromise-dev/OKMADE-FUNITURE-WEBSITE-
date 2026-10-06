@@ -13,6 +13,9 @@ import {
   projectCompleteEmail,
   okmadeAnnouncementEmail,
   passwordChangedEmail,
+  promoBannerEmail,
+  dataExportReadyEmail,
+  referralMilestoneEmail,
 } from "@/lib/email-templates";
 import { logActivity } from "@/lib/admin-auth";
 
@@ -29,6 +32,9 @@ const TEMPLATES = {
   projectComplete: () => projectCompleteEmail({ projectTitle: "Test Project", tokenString: "TESTTOKEN" }),
   okmadeAnnouncement: () => okmadeAnnouncementEmail({ title: "Test Announcement", body: "This is a test.", ctaUrl: "https://okmade.vercel.app" }),
   passwordChanged: () => passwordChangedEmail({ username: "testuser" }),
+  promoBanner: () => promoBannerEmail({ message: "🎉 20% off all showroom pieces this week!", ctaText: "Shop Now", ctaUrl: "https://okmade.vercel.app/showroom" }),
+  dataExportReady: () => dataExportReadyEmail({ username: "testuser", downloadUrl: "https://okmade.vercel.app/api/client/export-data" }),
+  referralMilestone: () => referralMilestoneEmail({ username: "testuser", count: 5 }),
 };
 
 export async function POST(request) {
