@@ -1,4 +1,5 @@
-import { createSupabaseServer } from "@/lib/supabase-server";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 
 const admin = createClient(
@@ -10,95 +11,135 @@ export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const username = searchParams.get("username");
-
-    const supabase = await createSupabaseServer();
-    const { data: { user } } = await supabase.auth.getUser();
+    if (!username) {
+      return new Response(JSON.stringify({ error: "username required" }), { status: 400 });
+    }
 
     const { data: target } = await admin
       .from("clients")
-      .select("id, followers_count:follows!following_id(count)")
+      .select("id, username")
       .eq("username", username)
-      .single();
-
-    // Follow count
-    const { count: followersCount } = await admin
-      .from("follows")
-      .select("*", { count: "exact", head: true })
-      .eq("following_id", target?.id);
-
-    const { count: followingCount } = await admin
-      .from("follows")
-      .select("*", { count: "exact", head: true })
-      .eq("follower_id", target?.id);
-
-    if (!user) {
-      return new Response(JSON.stringify({
-        isLoggedIn: false,
-        isFollowing: false,
-        friendStatus: "none",
-        followersCount: followersCount || 0,
-        followingCount: followingCount || 0,
-      }), { status: 200 });
+      .maybeSingle();
+    if (!target) {
+      return new Response(JSON.stringify({ error: "Not found" }), { status: 404 });
     }
 
-    const { data: me } = await admin.from("clients").select("id").eq("auth_id", user.id).single();
-    if (!me || !target) {
-      return new Response(JSON.stringify({
-        isLoggedIn: true,
-        isFollowing: false,
-        friendStatus: "none",
-        followersCount: followersCount || 0,
-        followingCount: followingCount || 0,
-      }), { status: 200 });
+    const cookieStore = await cookies();
+    const sb = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      {
+        cookies: {
+          getAll() { return cookieStore.getAll(); },
+          setAll() {},
+        },
+      }
+    );
+    const { data: { user } } = await sb.auth.getUser();
+
+    if (!user) {
+      const { count: followers } = await admin
+        .from("follows")
+        .select("*", { count: "exact", head: true })
+        .eq("following_id", target.id);
+      const { count: following } = await admin
+        .from("follows")
+        .select("*", { count: "exact", head: true })
+        .eq("follower_id", target.id);
+
+      return new Response(
+        JSON.stringify({
+          isLoggedIn: false,
+          isSelf: false,
+          isFollowing: false,
+          isBlocked: false,
+          isMuted: false,
+          friendStatus: "none",
+          followersCount: followers || 0,
+          followingCount: following || 0,
+        }),
+        { status: 200 }
+      );
+    }
+
+    const { data: me } = await admin
+      .from("clients")
+      .select("id")
+      .eq("auth_id", user.id)
+      .maybeSingle();
+    if (!me) {
+      return new Response(JSON.stringify({ error: "Profile not found" }), { status: 404 });
     }
 
     const isSelf = me.id === target.id;
 
-    const { data: followRow } = await admin
-      .from("follows")
-      .select("id")
-      .eq("follower_id", me.id)
-      .eq("following_id", target.id)
-      .single();
-
-    // Friend status
-    let friendStatus = "none";
-    let requestId = null;
-    let requestDirection = null;
-
-    if (!isSelf) {
-      const { data: friends } = await admin
-        .from("friends")
-        .select("id")
-        .or(`and(user_a.eq.${me.id},user_b.eq.${target.id}),and(user_a.eq.${target.id},user_b.eq.${me.id})`)
-        .single();
-      if (friends) friendStatus = "friends";
-      else {
-        const { data: req } = await admin
+    const [followRes, followersRes, followingRes, friendReqRes, friendRes, blockRes, muteRes] =
+      await Promise.all([
+        admin
+          .from("follows")
+          .select("id")
+          .eq("follower_id", me.id)
+          .eq("following_id", target.id)
+          .maybeSingle(),
+        admin
+          .from("follows")
+          .select("*", { count: "exact", head: true })
+          .eq("following_id", target.id),
+        admin
+          .from("follows")
+          .select("*", { count: "exact", head: true })
+          .eq("follower_id", target.id),
+        admin
           .from("friend_requests")
-          .select("id, sender_id")
-          .or(`and(sender_id.eq.${me.id},receiver_id.eq.${target.id}),and(sender_id.eq.${target.id},receiver_id.eq.${me.id})`)
-          .eq("status", "pending")
-          .single();
-        if (req) {
-          friendStatus = "pending";
-          requestId = req.id;
-          requestDirection = req.sender_id === me.id ? "sent" : "received";
-        }
-      }
+          .select("id, from_id, to_id")
+          .or(
+            `and(from_id.eq.${me.id},to_id.eq.${target.id}),and(from_id.eq.${target.id},to_id.eq.${me.id})`
+          )
+          .maybeSingle(),
+        admin
+          .from("friends")
+          .select("id")
+          .or(
+            `and(user_a.eq.${me.id},user_b.eq.${target.id}),and(user_a.eq.${target.id},user_b.eq.${me.id})`
+          )
+          .maybeSingle(),
+        admin
+          .from("blocks")
+          .select("id")
+          .eq("blocker_id", me.id)
+          .eq("blocked_id", target.id)
+          .maybeSingle(),
+        admin
+          .from("mutes")
+          .select("id")
+          .eq("muter_id", me.id)
+          .eq("muted_id", target.id)
+          .maybeSingle(),
+      ]);
+
+    let friendStatus = "none";
+    let requestDirection = null;
+    if (friendRes.data) friendStatus = "friends";
+    else if (friendReqRes.data) {
+      friendStatus = "pending";
+      requestDirection = friendReqRes.data.from_id === me.id ? "sent" : "received";
     }
 
-    return new Response(JSON.stringify({
-      isLoggedIn: true,
-      isSelf,
-      isFollowing: !!followRow,
-      friendStatus,
-      requestId,
-      requestDirection,
-      followersCount: followersCount || 0,
-      followingCount: followingCount || 0,
-      myClientId: me.id,
-    }), { status: 200 });
+    return new Response(
+      JSON.stringify({
+        isLoggedIn: true,
+        isSelf,
+        myClientId: me.id,
+        isFollowing: !!followRes.data,
+        isBlocked: !!blockRes.data,
+        isMuted: !!muteRes.data,
+        friendStatus,
+        requestDirection,
+        followersCount: followersRes.count || 0,
+        followingCount: followingRes.count || 0,
+      }),
+      { status: 200 }
+    );
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), { status: 500 });
   }
