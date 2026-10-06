@@ -69,4 +69,73 @@ export default function PendingPostsTab() {
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-8 text-center text-gray-500 dark:text-gray-400">
           No pending posts. All clear.
         </div>
-      )
+      ) : (
+        <div className="space-y-3">
+          {posts.map((p) => (
+            <div
+              key={p.id}
+              className="bg-white dark:bg-gray-900 rounded-xl border border-amber-200 dark:border-amber-800 p-4"
+            >
+              <div className="flex items-center gap-3 mb-3">
+                {p.clients?.profile_pic ? (
+                  <img
+                    src={p.clients.profile_pic}
+                    className="w-10 h-10 rounded-full object-cover"
+                    alt=""
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 flex items-center justify-center font-bold">
+                    {(p.clients?.display_name || "?").charAt(0)}
+                  </div>
+                )}
+                <div>
+                  <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                    {p.clients?.display_name || p.clients?.username}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    @{p.clients?.username} ·{" "}
+                    {new Date(p.created_at).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+
+              {p.content && (
+                <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap mb-3">
+                  {p.content}
+                </p>
+              )}
+
+              {p.image_urls?.length > 0 && (
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  {p.image_urls.slice(0, 4).map((url, i) => (
+                    <img
+                      key={i}
+                      src={url}
+                      className="w-full h-32 object-cover rounded-lg"
+                      alt=""
+                    />
+                  ))}
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => approve(p.id)}
+                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
+                >
+                  Approve
+                </button>
+                <button
+                  onClick={() => reject(p.id)}
+                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
+                >
+                  Reject &amp; Delete
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
