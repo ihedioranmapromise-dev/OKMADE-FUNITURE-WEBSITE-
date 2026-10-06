@@ -26,7 +26,6 @@ const VerifiedBadge = ({ isOkmade }) => (
     className={`w-5 h-5 inline-block ml-2 ${isOkmade ? "text-amber-500" : "text-blue-500"}`}
     viewBox="0 0 24 24"
     fill="currentColor"
-    aria-label="Verified"
   >
     <path d="M12 2l2.09 2.26 3.06-.46.63 3.02 2.81 1.31-1.24 2.83 1.24 2.83-2.81 1.31-.63 3.02-3.06-.46L12 20l-2.09-2.26-3.06.46-.63-3.02L3.41 13.87l1.24-2.83-1.24-2.83 2.81-1.31.63-3.02 3.06.46L12 2z" />
     <path d="M9.5 12.5l1.8 1.8 3.7-3.7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
@@ -153,6 +152,7 @@ export default function ClientPortfolio() {
   const [statusLoaded, setStatusLoaded] = useState(false);
   const [currentUserLoaded, setCurrentUserLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   useEffect(() => {
     async function fetchData() {
@@ -228,6 +228,40 @@ export default function ClientPortfolio() {
     else if (data.error) alert(data.error);
   };
 
+  const toggleBlock = async () => {
+    if (!status?.isLoggedIn) { window.location.href = "/client/login"; return; }
+    const isBlocked = status.isBlocked;
+    if (!confirm(isBlocked ? `Unblock @${username}?` : `Block @${username}? They won't be able to see your profile or message you.`)) return;
+    setBusy(true);
+    await fetch("/api/block", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, action: isBlocked ? "unblock" : "block" }),
+    });
+    await refreshStatus();
+    setBusy(false);
+    setMoreOpen(false);
+  };
+
+  const toggleMute = async () => {
+    if (!status?.isLoggedIn) { window.location.href = "/client/login"; return; }
+    const isMuted = status.isMuted;
+    setBusy(true);
+    await fetch("/api/mute", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, action: isMuted ? "unmute" : "mute" }),
+    });
+    await refreshStatus();
+    setBusy(false);
+    setMoreOpen(false);
+  };
+
+  const handleReport = () => {
+    setMoreOpen(false);
+    alert("To report this user, use the flag icon on any of their posts.");
+  };
+
   if (loading) {
     return (
       <>
@@ -261,10 +295,12 @@ export default function ClientPortfolio() {
 
   const buttonsReady = statusLoaded && currentUserLoaded;
   const isSelf = buttonsReady && ((currentUser && currentUser.username === client.username) || status?.isSelf);
-  const st = status || { isLoggedIn: false, isFollowing: false, friendStatus: "none", followersCount: 0, followingCount: 0 };
+  const st = status || { isLoggedIn: false, isFollowing: false, isBlocked: false, isMuted: false, friendStatus: "none", followersCount: 0, followingCount: 0 };
   const displayName = client.display_name || client.username;
   const profileUrl = typeof window !== "undefined" ? window.location.href : "";
   const recentProjects = projects.slice(0, 3);
+  const isBlockedByMe = st.isBlocked;
+  const isMutedByMe = st.isMuted;
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-950 pt-14 pb-8">
@@ -289,7 +325,7 @@ export default function ClientPortfolio() {
               )}
             </div>
 
-            <div className="pb-2 flex gap-2 flex-wrap">
+            <div className="pb-2 flex gap-2 flex-wrap items-center">
               {!buttonsReady ? (
                 <>
                   <div className="h-9 w-24 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse"></div>
@@ -309,14 +345,52 @@ export default function ClientPortfolio() {
                       {st.requestDirection === "sent" ? "Request Sent" : "Respond in Requests"}
                     </button>
                   ) : (
-                    <button onClick={handleFriend} disabled={busy} className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition disabled:opacity-50">+ Add Friend</button>
+                    <button onClick={handleFriend} disabled={busy || isBlockedByMe} className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition disabled:opacity-50">+ Add Friend</button>
                   )}
-                  <button onClick={handleFollow} disabled={busy} className={`px-4 py-2 rounded-lg text-sm font-semibold transition border ${st.isFollowing ? "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700" : "bg-white dark:bg-gray-900 border-amber-500 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20"}`}>
+                  <button onClick={handleFollow} disabled={busy || isBlockedByMe} className={`px-4 py-2 rounded-lg text-sm font-semibold transition border ${st.isFollowing ? "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700" : "bg-white dark:bg-gray-900 border-amber-500 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20"} disabled:opacity-50`}>
                     {st.isFollowing ? "Following" : "+ Follow"}
                   </button>
-                  {st.friendStatus === "friends" && (
+                  {st.friendStatus === "friends" && !isBlockedByMe && (
                     <button onClick={handleMessage} disabled={busy} className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 px-4 py-2 rounded-lg text-sm font-semibold transition disabled:opacity-50">💬 Message</button>
                   )}
+
+                  <div className="relative">
+                    <button
+                      onClick={() => setMoreOpen(!moreOpen)}
+                      className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 p-2 rounded-lg transition"
+                      aria-label="More options"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v.01M12 12v.01M12 19v.01" />
+                      </svg>
+                    </button>
+                    {moreOpen && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={() => setMoreOpen(false)} />
+                        <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-50 overflow-hidden">
+                          <button
+                            onClick={toggleMute}
+                            className="w-full text-left px-4 py-3 hover:bg-amber-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm"
+                          >
+                            {isMutedByMe ? "Unmute" : "Mute"} @{username}
+                          </button>
+                          <button
+                            onClick={handleReport}
+                            className="w-full text-left px-4 py-3 hover:bg-amber-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm"
+                          >
+                            Report
+                          </button>
+                          <div className="border-t border-gray-100 dark:border-gray-800" />
+                          <button
+                            onClick={toggleBlock}
+                            className="w-full text-left px-4 py-3 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 text-sm"
+                          >
+                            {isBlockedByMe ? "Unblock" : "Block"} @{username}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </>
               )}
             </div>
@@ -326,6 +400,16 @@ export default function ClientPortfolio() {
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 flex items-center">
               {displayName}
               {(client.is_okmade || client.verified) && <VerifiedBadge isOkmade={client.is_okmade} />}
+              {isBlockedByMe && (
+                <span className="ml-3 text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 px-2 py-1 rounded-full font-normal">
+                  Blocked
+                </span>
+              )}
+              {isMutedByMe && !isBlockedByMe && (
+                <span className="ml-3 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-2 py-1 rounded-full font-normal">
+                  Muted
+                </span>
+              )}
             </h1>
             <p className="text-sm text-gray-600 dark:text-gray-400">
               @{client.username}
@@ -343,12 +427,7 @@ export default function ClientPortfolio() {
             {client.work_address && <span className="flex items-center gap-1"><LocationIcon className="w-3 h-3" /> {client.work_address}</span>}
             {client.calling_phone && <span className="flex items-center gap-1"><PhoneIcon className="w-3 h-3" /> {client.calling_phone}</span>}
             {client.age && <span>Age: {client.age}</span>}
-            <ShareMenu
-              url={profileUrl}
-              title={`${displayName} on OKMADE`}
-              text={`Check out ${displayName} on OKMADE`}
-              iconOnly
-            />
+            <ShareMenu url={profileUrl} title={`${displayName} on OKMADE`} text={`Check out ${displayName} on OKMADE`} iconOnly />
           </div>
 
           {(client.whatsapp_url || client.facebook_url || client.tiktok_url || client.instagram_url) && (
@@ -377,7 +456,18 @@ export default function ClientPortfolio() {
           )}
         </div>
 
-        {recentProjects.length > 0 && (
+        {isBlockedByMe && (
+          <div className="mx-4 md:mx-6 mt-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 text-center">
+            <p className="text-sm text-red-700 dark:text-red-300 font-medium">
+              You blocked @{client.username}. Their posts are hidden.
+            </p>
+            <button onClick={toggleBlock} className="mt-2 text-xs text-red-700 dark:text-red-300 underline">
+              Unblock
+            </button>
+          </div>
+        )}
+
+        {recentProjects.length > 0 && !isBlockedByMe && (
           <div className="mt-4 mb-4 px-4 md:px-6">
             <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-3">Recent Projects</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -391,35 +481,37 @@ export default function ClientPortfolio() {
           </div>
         )}
 
-        <div className="mt-4 mb-8 px-4 md:px-6">
-          <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-3">Posts</h2>
-          {loadingFeed ? (
-            <div className="space-y-4">
-              {[...Array(2)].map((_, i) => (
-                <div key={i} className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-4 space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse"></div>
-                    <div className="h-4 w-32 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
+        {!isBlockedByMe && (
+          <div className="mt-4 mb-8 px-4 md:px-6">
+            <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-3">Posts</h2>
+            {loadingFeed ? (
+              <div className="space-y-4">
+                {[...Array(2)].map((_, i) => (
+                  <div key={i} className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-4 space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse"></div>
+                      <div className="h-4 w-32 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
+                    </div>
+                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4 animate-pulse"></div>
+                    <div className="h-48 bg-gray-100 dark:bg-gray-800 rounded animate-pulse"></div>
                   </div>
-                  <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4 animate-pulse"></div>
-                  <div className="h-48 bg-gray-100 dark:bg-gray-800 rounded animate-pulse"></div>
-                </div>
-              ))}
-            </div>
-          ) : feed.length === 0 ? (
-            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-8 text-center text-gray-500 dark:text-gray-400">
-              No posts yet.
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {feed.map((post) => (
-                <PostCard key={post.id} post={post} currentUserId={currentUser?.id || null} />
-              ))}
-            </div>
-          )}
-        </div>
+                ))}
+              </div>
+            ) : feed.length === 0 ? (
+              <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-8 text-center text-gray-500 dark:text-gray-400">
+                No posts yet.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {feed.map((post) => (
+                  <PostCard key={post.id} post={post} currentUserId={currentUser?.id || null} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
-        {projects.length > 3 && (
+        {projects.length > 3 && !isBlockedByMe && (
           <div className="px-4 md:px-6">
             <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-3">All Completed Projects</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
