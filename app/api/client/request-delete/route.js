@@ -88,6 +88,17 @@ export async function POST(request) {
       });
     }
 
+    // Insert into admin inbox
+    await admin.from("admin_inbox").insert({
+      type: "delete_request",
+      title: `Deletion requested by @${client.username}`,
+      body:
+        `${client.display_name || client.username} scheduled account deletion for ` +
+        `${scheduledFor.toLocaleDateString("en-GB")}.` +
+        (reason ? ` Reason: "${reason.slice(0, 120)}"` : ""),
+      link: "/admin/dashboard?tab=delete-requests",
+    });
+
     const baseUrl =
       process.env.NEXT_PUBLIC_BASE_URL || "https://okmade.vercel.app";
     const cancelUrl = `${baseUrl}/cancel-delete?token=${cancelToken}`;
