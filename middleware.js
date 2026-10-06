@@ -4,17 +4,17 @@ import { isCrossOrigin } from "@/lib/csrf";
 
 const IP_CACHE_MS = 60_000;
 const SUSPENSION_CACHE_MS = 60_000;
+const REDIRECT_CACHE_MS = 300_000;
 
 const ipCache = new Map();
 const suspensionCache = new Map();
+const redirectCache = new Map();
 
 async function isIpBlocked(ip) {
   if (!ip || ip === "unknown") return false;
 
   const cached = ipCache.get(ip);
-  if (cached && Date.now() - cached.at < IP_CACHE_MS) {
-    return cached.blocked;
-  }
+  if (cached && Date.now() - cached.at < IP_CACHE_MS) return cached.blocked;
 
   try {
     const res = await fetch(
@@ -41,9 +41,7 @@ async function isSuspended(authId) {
   if (!authId) return false;
 
   const cached = suspensionCache.get(authId);
-  if (cached && Date.now() - cached.at < SUSPENSION_CACHE_MS) {
-    return cached.suspended;
-  }
+  if (cached && Date.now() - cached.at < SUSPENSION_CACHE_MS) return cached.suspended;
 
   try {
     const res = await fetch(
@@ -64,11 +62,35 @@ async function isSuspended(authId) {
   }
 }
 
+async function checkRedirect(path) {
+  const cached = redirectCache.get(path);
+  if (cached && Date.now() - cached.at < REDIRECT_CACHE_MS) return cached.match;
+
+  try {
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/redirects?select=to_path,permanent&from_path=eq.${encodeURIComponent(
+        path
+      )}&active=eq.true&limit=1`,
+      {
+        headers: {
+          apikey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+      }
+    );
+    const data = await res.json();
+    const match = Array.isArray(data) && data[0] ? data[0] : null;
+    redirectCache.set(path, { match, at: Date.now() });
+    return match;
+  } catch {
+    return null;
+  }
+}
+
 export async function middleware(request) {
   const path = request.nextUrl.pathname;
   const isApi = path.startsWith("/api");
 
-  // === CSRF for API routes only ===
   if (isApi) {
     if (isCrossOrigin(request)) {
       return new NextResponse(
@@ -79,7 +101,19 @@ export async function middleware(request) {
     return NextResponse.next();
   }
 
-  // === Page routes: full pipeline ===
+  // Check redirects (skip for already-redirected and static paths)
+  if (!path.startsWith("/_next") && !path.startsWith("/admin")) {
+    const redirect = await checkRedirect(path);
+    if (redirect && redirect.to_path) {
+      const url = request.nextUrl.clone();
+      if (redirect.to_path.startsWith("http")) {
+        return NextResponse.redirect(redirect.to_path, redirect.permanent ? 308 : 307);
+      }
+      url.pathname = redirect.to_path;
+      return NextResponse.redirect(url, redirect.permanent ? 308 : 307);
+    }
+  }
+
   let response = NextResponse.next({ request });
 
   const ip =
@@ -102,9 +136,7 @@ export async function middleware(request) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     {
       cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
+        getAll() { return request.cookies.getAll(); },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
@@ -118,9 +150,7 @@ export async function middleware(request) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
 
   const protectedPaths = [
     "/client/dashboard",
