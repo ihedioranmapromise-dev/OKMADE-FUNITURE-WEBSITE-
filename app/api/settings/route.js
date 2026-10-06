@@ -1,4 +1,5 @@
-import { createSupabaseServer } from "@/lib/supabase-server";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 
 const admin = createClient(
@@ -6,26 +7,57 @@ const admin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-export async function GET() {
+async function getMe() {
+  const cookieStore = await cookies();
+  const sb = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    {
+      cookies: {
+        getAll() { return cookieStore.getAll(); },
+        setAll() {},
+      },
+    }
+  );
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) return null;
+  const { data: client } = await admin
+    .from("clients")
+    .select("id")
+    .eq("auth_id", user.id)
+    .maybeSingle();
+  return client;
+}
+
+export async function GET(request) {
   try {
-    const supabase = await createSupabaseServer();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+    const me = await getMe();
+    if (!me) return new Response(JSON.stringify({ error: "Not logged in" }), { status: 401 });
 
-    const { data: me } = await admin.from("clients").select("id").eq("auth_id", user.id).single();
-    if (!me) return new Response(JSON.stringify({ error: "Profile not found" }), { status: 404 });
+    const { data } = await admin
+      .from("user_settings")
+      .select("*")
+      .eq("user_id", me.id)
+      .maybeSingle();
 
-    const { data: settings } = await admin.from("user_settings").select("*").eq("user_id", me.id).single();
-    if (!settings) {
-      // Create defaults
-      const { data: newSettings } = await admin
+    if (!data) {
+      // Create default row
+      const { data: created } = await admin
         .from("user_settings")
-        .insert([{ user_id: me.id }])
+        .insert({
+          user_id: me.id,
+          post_visibility: "public",
+          message_permission: "friends",
+          email_notifications: true,
+          push_notifications: true,
+          auto_approve_posts: true,
+        })
         .select()
         .single();
-      return new Response(JSON.stringify(newSettings), { status: 200 });
+      return new Response(JSON.stringify(created || {}), { status: 200 });
     }
-    return new Response(JSON.stringify(settings), { status: 200 });
+
+    return new Response(JSON.stringify(data), { status: 200 });
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), { status: 500 });
   }
@@ -33,28 +65,38 @@ export async function GET() {
 
 export async function PUT(request) {
   try {
-    const supabase = await createSupabaseServer();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+    const me = await getMe();
+    if (!me) return new Response(JSON.stringify({ error: "Not logged in" }), { status: 401 });
 
     const body = await request.json();
-    const { post_visibility, message_permission, email_notifications, push_notifications } = body;
+    const allowed = [
+      "post_visibility",
+      "message_permission",
+      "email_notifications",
+      "push_notifications",
+      "auto_approve_posts",
+    ];
+    const updates = {};
+    allowed.forEach((k) => {
+      if (body[k] !== undefined) updates[k] = body[k];
+    });
+    if (Object.keys(updates).length === 0) {
+      return new Response(JSON.stringify({ error: "Nothing to update" }), { status: 400 });
+    }
+    updates.updated_at = new Date().toISOString();
 
-    const { data: me } = await admin.from("clients").select("id").eq("auth_id", user.id).single();
-    if (!me) return new Response(JSON.stringify({ error: "Not found" }), { status: 404 });
-
-    const { error } = await admin
+    const { data: existing } = await admin
       .from("user_settings")
-      .upsert({
-        user_id: me.id,
-        post_visibility: post_visibility || "public",
-        message_permission: message_permission || "friends",
-        email_notifications: email_notifications ?? true,
-        push_notifications: push_notifications ?? true,
-        updated_at: new Date().toISOString(),
-      });
+      .select("id")
+      .eq("user_id", me.id)
+      .maybeSingle();
 
-    if (error) throw error;
+    if (existing) {
+      await admin.from("user_settings").update(updates).eq("id", existing.id);
+    } else {
+      await admin.from("user_settings").insert({ user_id: me.id, ...updates });
+    }
+
     return new Response(JSON.stringify({ success: true }), { status: 200 });
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), { status: 500 });
