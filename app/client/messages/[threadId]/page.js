@@ -17,6 +17,13 @@ const REACTIONS = [
   { type: "angry", emoji: "😡" },
 ];
 
+const DISAPPEAR_OPTIONS = [
+  { label: "Off", value: null },
+  { label: "1 hour", value: 3600 },
+  { label: "24 hours", value: 86400 },
+  { label: "7 days", value: 604800 },
+];
+
 async function uploadChatImage(supabase, userId, file) {
   const ext = file.name.split(".").pop();
   const path = `chat/${userId}_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
@@ -57,6 +64,8 @@ export default function ThreadPage() {
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [confirmBlock, setConfirmBlock] = useState(false);
+  const [disappearMenuOpen, setDisappearMenuOpen] = useState(false);
+  const [pinnedMessage, setPinnedMessage] = useState(null);
   const bottomRef = useRef(null);
   const firstUnreadRef = useRef(null);
   const hasScrolledToUnread = useRef(false);
@@ -122,6 +131,17 @@ export default function ThreadPage() {
       bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages, data]);
+
+  useEffect(() => {
+    if (!data || !data.thread || !data.messages) return;
+    const pid = data.thread.pinned_message_id;
+    if (pid) {
+      const found = data.messages.find((m) => m.id === pid);
+      setPinnedMessage(found || null);
+    } else {
+      setPinnedMessage(null);
+    }
+  }, [data]);
 
   const notifyTyping = async () => {
     const now = Date.now();
@@ -261,7 +281,6 @@ export default function ThreadPage() {
     setReactFor(null);
     setMenuFor(null);
 
-    // Optimistic
     setMessages((prev) =>
       prev.map((m) => {
         if (m.id !== messageId) return m;
@@ -327,6 +346,39 @@ export default function ThreadPage() {
     if (res.ok) {
       router.push("/client/messages");
     }
+  };
+
+  const pinMessage = async (messageId) => {
+    await fetch("/api/messages/thread-action", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ thread_id: threadId, action: "pin_message", message_id: messageId }),
+    });
+    setMenuFor(null);
+    loadThread(false);
+  };
+
+  const unpinMessage = async () => {
+    await fetch("/api/messages/thread-action", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ thread_id: threadId, action: "unpin_message" }),
+    });
+    setPinnedMessage(null);
+  };
+
+  const setDisappearMode = async (seconds) => {
+    await fetch("/api/messages/thread-action", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        thread_id: threadId,
+        action: seconds ? "disappear_on" : "disappear_off",
+        seconds,
+      }),
+    });
+    setDisappearMenuOpen(false);
+    loadThread(false);
   };
 
   const runSearch = async (q) => {
@@ -434,6 +486,16 @@ export default function ThreadPage() {
             </p>
           </div>
           <button
+            onClick={() => setDisappearMenuOpen(!disappearMenuOpen)}
+            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition text-gray-600 dark:text-gray-300"
+            aria-label="Disappearing messages"
+            title="Disappearing messages"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </button>
+          <button
             onClick={() => setSearchOpen(true)}
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition text-gray-600 dark:text-gray-300"
             aria-label="Search in conversation"
@@ -453,6 +515,50 @@ export default function ThreadPage() {
           </button>
         </div>
       </div>
+
+      {disappearMenuOpen && (
+        <div className="sticky top-14 z-20 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
+          <div className="max-w-2xl mx-auto px-4 py-2 flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-gray-500 dark:text-gray-400">Disappearing messages:</span>
+            {DISAPPEAR_OPTIONS.map((o) => (
+              <button
+                key={o.label}
+                onClick={() => setDisappearMode(o.value)}
+                className={`text-xs px-3 py-1 rounded-full ${
+                  (data.thread?.disappear_after_seconds || null) === o.value
+                    ? "bg-amber-600 text-white"
+                    : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300"
+                }`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {pinnedMessage && (
+        <div className="bg-amber-100 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-800">
+          <div className="max-w-2xl mx-auto px-4 py-2 flex items-center gap-2">
+            <span className="text-amber-700 dark:text-amber-400 text-xs font-bold">📌 Pinned</span>
+            <p className="text-xs text-gray-700 dark:text-gray-300 truncate flex-1">
+              {pinnedMessage.content || "📷 Photo"}
+            </p>
+            <button
+              onClick={() => jumpToMessage(pinnedMessage.id)}
+              className="text-xs text-amber-700 dark:text-amber-400 hover:underline"
+            >
+              View
+            </button>
+            <button
+              onClick={unpinMessage}
+              className="text-xs text-amber-700 dark:text-amber-400 hover:underline"
+            >
+              Unpin
+            </button>
+          </div>
+        </div>
+      )}
 
       {searchOpen && (
         <div className="sticky top-14 z-10 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
@@ -691,6 +797,7 @@ export default function ThreadPage() {
               const m = messages.find((x) => x.id === menuFor);
               if (!m) return null;
               const mine = m.sender_id === data.my_id;
+              const isPinnedMsg = data.thread?.pinned_message_id === m.id;
               return (
                 <div className="space-y-2">
                   <button
@@ -710,6 +817,12 @@ export default function ThreadPage() {
                     className="w-full text-left px-4 py-3 hover:bg-amber-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg font-medium"
                   >
                     Reply
+                  </button>
+                  <button
+                    onClick={() => pinMessage(m.id)}
+                    className="w-full text-left px-4 py-3 hover:bg-amber-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg font-medium"
+                  >
+                    {isPinnedMsg ? "Unpin message" : "Pin message"}
                   </button>
                   {mine ? (
                     <button
