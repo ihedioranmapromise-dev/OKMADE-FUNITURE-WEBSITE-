@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { adminFetch } from "@/lib/admin-client";
+import { createSupabaseBrowser } from "@/lib/supabase-browser";
 import AutoPostModal from "@/app/components/AutoPostModal";
 import { CloseIcon } from "@/lib/icons";
 
@@ -114,12 +115,7 @@ export default function GenerateProjectTab() {
     setUploading(true);
     setMessage("");
     try {
-      // Upload images first
-      const { createClient } = await import("@supabase/supabase-js");
-      const sb = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-      );
+      const sb = createSupabaseBrowser();
 
       const uploadedImages = [];
       for (let i = 0; i < imageData.length; i++) {
@@ -172,7 +168,6 @@ export default function GenerateProjectTab() {
         setMessage(`Project created. Token: ${data.token_string}`);
       }
 
-      // Open auto-post modal
       const cityPart = city ? ` in ${city}` : "";
       setAutoPostData({
         type: "project",
@@ -182,7 +177,6 @@ export default function GenerateProjectTab() {
       });
       setAutoPostOpen(true);
 
-      // Reset
       setClientName("");
       setClientContact("");
       setClientAddress("");
