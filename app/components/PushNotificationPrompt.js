@@ -17,13 +17,27 @@ export default function PushNotificationPrompt() {
     const dismissed = localStorage.getItem(STORAGE_KEY);
     if (dismissed && Date.now() - parseInt(dismissed) < THIRTY_DAYS) return;
 
+    if (Notification.permission === "granted") return;
+    if (Notification.permission === "denied") return;
+
+    let cancelled = false;
+
     const sb = createSupabaseBrowser();
     sb.auth.getUser().then(({ data: { user } }) => {
+      if (cancelled) return;
       if (!user) return;
-      if (Notification.permission === "granted") return;
-      if (Notification.permission === "denied") return;
-      setTimeout(() => setShow(true), 6000);
+      setTimeout(() => {
+        if (cancelled) return;
+        // Re-check dismissal in case user dismissed in another tab
+        const freshDismissed = localStorage.getItem(STORAGE_KEY);
+        if (freshDismissed && Date.now() - parseInt(freshDismissed) < THIRTY_DAYS) return;
+        setShow(true);
+      }, 6000);
     });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const dismiss = () => {
