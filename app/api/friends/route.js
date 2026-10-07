@@ -13,8 +13,19 @@ async function userWantsEmails(clientId) {
     .from("user_settings")
     .select("email_notifications")
     .eq("user_id", clientId)
-    .single();
+    .maybeSingle();
   return data?.email_notifications ?? true;
+}
+
+async function isBlockedEitherWay(a, b) {
+  const { data } = await admin
+    .from("blocks")
+    .select("id")
+    .or(
+      `and(blocker_id.eq.${a},blocked_id.eq.${b}),and(blocker_id.eq.${b},blocked_id.eq.${a})`
+    )
+    .maybeSingle();
+  return !!data;
 }
 
 export async function POST(request) {
@@ -39,11 +50,16 @@ export async function POST(request) {
         .single();
       if (!target) return new Response(JSON.stringify({ error: "User not found" }), { status: 404 });
       if (target.id === me.id) return new Response(JSON.stringify({ error: "Cannot add yourself" }), { status: 400 });
+      if (await isBlockedEitherWay(me.id, target.id)) {
+        return new Response(JSON.stringify({ error: "Cannot send friend request" }), { status: 403 });
+      }
 
+      const [a, b] = [me.id, target.id].sort();
       const { data: alreadyFriends } = await admin
         .from("friends")
         .select("id")
-        .or(`and(user_a.eq.${me.id},user_b.eq.${target.id}),and(user_a.eq.${target.id},user_b.eq.${me.id})`)
+        .eq("user_a", a)
+        .eq("user_b", b)
         .maybeSingle();
       if (alreadyFriends) return new Response(JSON.stringify({ error: "Already friends" }), { status: 400 });
 
@@ -62,7 +78,6 @@ export async function POST(request) {
         status: "pending",
       }]);
 
-      // Email the receiver
       if (target.email && (await userWantsEmails(target.id))) {
         const tpl = friendRequestEmail({
           senderName: me.display_name || me.username,
@@ -89,7 +104,6 @@ export async function POST(request) {
         const [a, b] = [req.sender_id, req.receiver_id].sort();
         await admin.from("friends").insert([{ user_a: a, user_b: b }]);
 
-        // Email the original sender
         const { data: sender } = await admin
           .from("clients")
           .select("email")
@@ -122,37 +136,8 @@ export async function GET(request) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
 
-    const { searchParams } = new URL(request.url);
-    const statusWith = searchParams.get("with");
-
     const { data: me } = await admin.from("clients").select("id").eq("auth_id", user.id).single();
-    if (!me) return new Response(JSON.stringify({ error: "Not found" }), { status: 404 });
-
-    if (statusWith) {
-      const { data: target } = await admin.from("clients").select("id").eq("username", statusWith).single();
-      if (!target) return new Response(JSON.stringify({ status: "none" }), { status: 200 });
-
-      const { data: friends } = await admin
-        .from("friends")
-        .select("id")
-        .or(`and(user_a.eq.${me.id},user_b.eq.${target.id}),and(user_a.eq.${target.id},user_b.eq.${me.id})`)
-        .maybeSingle();
-      if (friends) return new Response(JSON.stringify({ status: "friends" }), { status: 200 });
-
-      const { data: req } = await admin
-        .from("friend_requests")
-        .select("id, sender_id, receiver_id, status")
-        .or(`and(sender_id.eq.${me.id},receiver_id.eq.${target.id}),and(sender_id.eq.${target.id},receiver_id.eq.${me.id})`)
-        .eq("status", "pending")
-        .maybeSingle();
-
-      if (req) {
-        const direction = req.sender_id === me.id ? "sent" : "received";
-        return new Response(JSON.stringify({ status: "pending", direction, request_id: req.id }), { status: 200 });
-      }
-
-      return new Response(JSON.stringify({ status: "none" }), { status: 200 });
-    }
+    if (!me) return new Response(JSON.stringify([]), { status: 200 });
 
     const { data: incoming } = await admin
       .from("friend_requests")
