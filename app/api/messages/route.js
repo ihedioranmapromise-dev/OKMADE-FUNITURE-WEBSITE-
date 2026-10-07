@@ -34,6 +34,15 @@ export async function GET() {
 
     const threadsWithUsers = await Promise.all(
       (threads || []).map(async (t) => {
+        if (t.is_group) {
+          const { count: unread } = await admin
+            .from("messages")
+            .select("*", { count: "exact", head: true })
+            .eq("thread_id", t.id)
+            .eq("receiver_id", me.id)
+            .is("read_at", null);
+          return { ...t, other: null, unread: unread || 0 };
+        }
         const otherId = t.user_a === me.id ? t.user_b : t.user_a;
         const [otherRes, unreadRes] = await Promise.all([
           admin.from("clients").select("username, display_name, profile_pic").eq("id", otherId).maybeSingle(),
@@ -60,9 +69,9 @@ export async function POST(request) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
 
-    const { username } = await request.json();
-    const { data: me } = await admin.from("clients").select("id").eq("auth_id", user.id).single();
-    const { data: other } = await admin.from("clients").select("id").eq("username", username).single();
+    const { username, first_message } = await request.json();
+    const { data: me } = await admin.from("clients").select("id, username, display_name").eq("auth_id", user.id).single();
+    const { data: other } = await admin.from("clients").select("id, username, display_name").eq("username", username).single();
 
     if (!me || !other) return new Response(JSON.stringify({ error: "User not found" }), { status: 404 });
     if (me.id === other.id) return new Response(JSON.stringify({ error: "Cannot message yourself" }), { status: 400 });
@@ -78,8 +87,55 @@ export async function POST(request) {
       .eq("user_a", a)
       .eq("user_b", b)
       .maybeSingle();
-    if (!friends) return new Response(JSON.stringify({ error: "You must be friends to message" }), { status: 403 });
 
+    // Not friends → create a message request instead of a thread
+    if (!friends) {
+      const { data: existingRequest } = await admin
+        .from("message_requests")
+        .select("id, status")
+        .eq("from_id", me.id)
+        .eq("to_id", other.id)
+        .maybeSingle();
+
+      if (existingRequest) {
+        if (existingRequest.status === "pending") {
+          return new Response(
+            JSON.stringify({ request_sent: true, message: "Your message request is pending." }),
+            { status: 200 }
+          );
+        }
+        if (existingRequest.status === "declined") {
+          return new Response(
+            JSON.stringify({ error: "This user declined your request." }),
+            { status: 403 }
+          );
+        }
+      }
+
+      await admin.from("message_requests").insert({
+        from_id: me.id,
+        to_id: other.id,
+        first_message: (first_message || "").slice(0, 500) || null,
+        status: "pending",
+      });
+
+      await admin.from("admin_inbox").insert({
+        type: "message_request",
+        title: `Message request from @${me.username}`,
+        body: first_message ? String(first_message).slice(0, 200) : "(no message)",
+        link: "/admin/dashboard?tab=message-requests",
+      });
+
+      return new Response(
+        JSON.stringify({
+          request_sent: true,
+          message: "Message request sent. They'll need to accept before you can chat.",
+        }),
+        { status: 200 }
+      );
+    }
+
+    // Friends → create or find thread as before
     const { data: existing } = await admin
       .from("message_threads")
       .select("id")
