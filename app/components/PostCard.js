@@ -41,10 +41,19 @@ function timeAgo(dateStr) {
   });
 }
 
+const getViewerId = () => {
+  if (typeof window === "undefined") return "anonymous";
+  let id = localStorage.getItem("okmade_viewer_id");
+  if (!id) {
+    id = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15);
+    localStorage.setItem("okmade_viewer_id", id);
+  }
+  return id;
+};
+
 export default function PostCard({
   post,
   currentUserId,
-  currentUserIsOkmade = false,
   onUpdate,
   showFullComments = false,
 }) {
@@ -63,6 +72,8 @@ export default function PostCard({
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(post.content || "");
   const [editSaving, setEditSaving] = useState(false);
+  const [localCommentCount, setLocalCommentCount] = useState(post.commentCount || 0);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const author = post.clients || {};
   const fullName = author.display_name || author.username || "User";
@@ -88,7 +99,7 @@ export default function PostCard({
       enqueue({
         url: `/api/posts/${post.id}/react`,
         method: "POST",
-        body: { reaction_type: type },
+        body: { reaction_type: type, viewer_id: getViewerId() },
         label: "Reaction",
       });
       return;
@@ -98,7 +109,7 @@ export default function PostCard({
       await fetchWithRetry(`/api/posts/${post.id}/react`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reaction_type: type }),
+        body: JSON.stringify({ reaction_type: type, viewer_id: getViewerId() }),
       });
       onUpdate?.();
     } catch {}
@@ -127,6 +138,9 @@ export default function PostCard({
     setCommentText("");
     setReplyingTo(null);
 
+    // Optimistic comment count
+    setLocalCommentCount((c) => c + 1);
+
     if (!navigator.onLine) {
       enqueue({
         url: `/api/posts/${post.id}/comment`,
@@ -136,6 +150,7 @@ export default function PostCard({
           author_name: name || undefined,
           author_email: email || undefined,
           parent_id: parentId,
+          viewer_id: getViewerId(),
         },
         label: "Comment",
       });
@@ -153,12 +168,14 @@ export default function PostCard({
           author_name: name || undefined,
           author_email: email || undefined,
           parent_id: parentId,
+          viewer_id: getViewerId(),
         }),
       });
       if (res.ok) {
         const newComment = await res.json();
-        setComments([...comments, newComment]);
+        setComments((prev) => [...prev, newComment]);
       } else {
+        setLocalCommentCount((c) => Math.max(0, c - 1));
         throw new Error();
       }
     } catch {
@@ -170,6 +187,7 @@ export default function PostCard({
           author_name: name || undefined,
           author_email: email || undefined,
           parent_id: parentId,
+          viewer_id: getViewerId(),
         },
         label: "Comment",
       });
@@ -197,6 +215,7 @@ export default function PostCard({
       if (res.ok) {
         setContent(editText.trim());
         setEditing(false);
+        setMenuOpen(false);
       } else {
         alert("Save failed.");
       }
@@ -212,7 +231,10 @@ export default function PostCard({
 
   const imageCount = post.image_urls?.length || 0;
   const singleImage = imageCount === 1;
-  const postUrl = typeof window !== "undefined" ? `${window.location.origin}/client/${author.username}` : "";
+  const postUrl =
+    typeof window !== "undefined" && author.username
+      ? `${window.location.origin}/client/${author.username}`
+      : "";
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
@@ -262,12 +284,10 @@ export default function PostCard({
             text={content ? content.slice(0, 100) : "Check this on OKMADE"}
             iconOnly
           />
-          {isMine || currentUserIsOkmade ? (
+          {isMine && (
             <div className="relative">
               <button
-                onClick={() => {
-                  if (isMine) setEditing(!editing);
-                }}
+                onClick={() => setMenuOpen(!menuOpen)}
                 className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition text-gray-500 dark:text-gray-400"
                 aria-label="Options"
               >
@@ -275,8 +295,33 @@ export default function PostCard({
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v.01M12 12v.01M12 19v.01" />
                 </svg>
               </button>
+              {menuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+                  <div className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-50 overflow-hidden">
+                    <button
+                      onClick={() => {
+                        setEditing(true);
+                        setMenuOpen(false);
+                      }}
+                      className="w-full text-left px-4 py-2.5 hover:bg-amber-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm"
+                    >
+                      Edit post
+                    </button>
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false);
+                        handleDelete();
+                      }}
+                      className="w-full text-left px-4 py-2.5 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 text-sm border-t border-gray-100 dark:border-gray-800"
+                    >
+                      Delete post
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
-          ) : null}
+          )}
         </div>
       </div>
 
@@ -305,12 +350,6 @@ export default function PostCard({
               className="bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 px-3 py-1.5 rounded-lg text-sm"
             >
               Cancel
-            </button>
-            <button
-              onClick={handleDelete}
-              className="ml-auto bg-red-100 dark:bg-red-900/20 hover:bg-red-200 dark:hover:bg-red-900/30 text-red-700 dark:text-red-400 px-3 py-1.5 rounded-lg text-sm"
-            >
-              Delete
             </button>
           </div>
         </div>
@@ -355,7 +394,7 @@ export default function PostCard({
       )}
 
       {/* Counts bar */}
-      {(totalReactions > 0 || post.commentCount > 0) && (
+      {(totalReactions > 0 || localCommentCount > 0) && (
         <div className="px-4 py-2 flex justify-between text-xs text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-800">
           <span className="flex items-center gap-1">
             {Object.entries(reactionCounts).map(([type]) => {
@@ -371,7 +410,7 @@ export default function PostCard({
             }}
             className="hover:underline"
           >
-            {post.commentCount} comments
+            {localCommentCount} comments
           </button>
         </div>
       )}
