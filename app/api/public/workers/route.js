@@ -8,9 +8,11 @@ const supabase = createClient(
 export async function GET() {
   try {
     const { data, error } = await supabase
-      .from("public_client_profiles")
-      .select("*")
-      .order("display_name", { ascending: true });
+      .from("clients")
+      .select(
+        "id, username, display_name, first_name, last_name, bio, skill, profile_pic, cover_photo, work_address, calling_phone, age, whatsapp_url, facebook_url, tiktok_url, instagram_url, twitter_url, is_okmade, verified"
+      )
+      .order("display_name", { ascending: true, nullsFirst: false });
 
     if (error) throw error;
 
