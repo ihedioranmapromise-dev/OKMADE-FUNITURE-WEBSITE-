@@ -38,15 +38,10 @@ export async function GET(request) {
     const { data: { user } } = await sb.auth.getUser();
 
     if (!user) {
-      const { count: followers } = await admin
-        .from("follows")
-        .select("*", { count: "exact", head: true })
-        .eq("following_id", target.id);
-      const { count: following } = await admin
-        .from("follows")
-        .select("*", { count: "exact", head: true })
-        .eq("follower_id", target.id);
-
+      const [followersRes, followingRes] = await Promise.all([
+        admin.from("follows").select("*", { count: "exact", head: true }).eq("following_id", target.id),
+        admin.from("follows").select("*", { count: "exact", head: true }).eq("follower_id", target.id),
+      ]);
       return new Response(
         JSON.stringify({
           isLoggedIn: false,
@@ -55,8 +50,8 @@ export async function GET(request) {
           isBlocked: false,
           isMuted: false,
           friendStatus: "none",
-          followersCount: followers || 0,
-          followingCount: following || 0,
+          followersCount: followersRes.count || 0,
+          followingCount: followingRes.count || 0,
         }),
         { status: 200 }
       );
@@ -73,48 +68,24 @@ export async function GET(request) {
 
     const isSelf = me.id === target.id;
 
+    const [a, b] = [me.id, target.id].sort();
+
     const [followRes, followersRes, followingRes, friendReqRes, friendRes, blockRes, muteRes] =
       await Promise.all([
-        admin
-          .from("follows")
-          .select("id")
-          .eq("follower_id", me.id)
-          .eq("following_id", target.id)
-          .maybeSingle(),
-        admin
-          .from("follows")
-          .select("*", { count: "exact", head: true })
-          .eq("following_id", target.id),
-        admin
-          .from("follows")
-          .select("*", { count: "exact", head: true })
-          .eq("follower_id", target.id),
+        admin.from("follows").select("id").eq("follower_id", me.id).eq("following_id", target.id).maybeSingle(),
+        admin.from("follows").select("*", { count: "exact", head: true }).eq("following_id", target.id),
+        admin.from("follows").select("*", { count: "exact", head: true }).eq("follower_id", target.id),
         admin
           .from("friend_requests")
-          .select("id, from_id, to_id")
+          .select("id, sender_id, receiver_id, status")
+          .eq("status", "pending")
           .or(
-            `and(from_id.eq.${me.id},to_id.eq.${target.id}),and(from_id.eq.${target.id},to_id.eq.${me.id})`
+            `and(sender_id.eq.${me.id},receiver_id.eq.${target.id}),and(sender_id.eq.${target.id},receiver_id.eq.${me.id})`
           )
           .maybeSingle(),
-        admin
-          .from("friends")
-          .select("id")
-          .or(
-            `and(user_a.eq.${me.id},user_b.eq.${target.id}),and(user_a.eq.${target.id},user_b.eq.${me.id})`
-          )
-          .maybeSingle(),
-        admin
-          .from("blocks")
-          .select("id")
-          .eq("blocker_id", me.id)
-          .eq("blocked_id", target.id)
-          .maybeSingle(),
-        admin
-          .from("mutes")
-          .select("id")
-          .eq("muter_id", me.id)
-          .eq("muted_id", target.id)
-          .maybeSingle(),
+        admin.from("friends").select("id").eq("user_a", a).eq("user_b", b).maybeSingle(),
+        admin.from("blocks").select("id").eq("blocker_id", me.id).eq("blocked_id", target.id).maybeSingle(),
+        admin.from("mutes").select("id").eq("muter_id", me.id).eq("muted_id", target.id).maybeSingle(),
       ]);
 
     let friendStatus = "none";
@@ -122,7 +93,7 @@ export async function GET(request) {
     if (friendRes.data) friendStatus = "friends";
     else if (friendReqRes.data) {
       friendStatus = "pending";
-      requestDirection = friendReqRes.data.from_id === me.id ? "sent" : "received";
+      requestDirection = friendReqRes.data.sender_id === me.id ? "sent" : "received";
     }
 
     return new Response(
