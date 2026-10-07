@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
+import { createSupabaseBrowser } from "@/lib/supabase-browser";
 import { useParams } from "next/navigation";
 import Image from "next/image";
 import { LocationIcon, ClockIcon } from "@/lib/icons";
@@ -9,10 +9,7 @@ import ShareMenu from "@/app/components/ShareMenu";
 import { fetchWithRetry } from "@/lib/fetch-with-retry";
 import { enqueue } from "@/lib/offline-queue";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+const supabase = createSupabaseBrowser();
 
 const BLUR =
   "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxIDEiPjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9IiNmZWYzYzciLz48L3N2Zz4=";
