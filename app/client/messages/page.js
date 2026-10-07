@@ -15,25 +15,26 @@ export default function MessagesListPage() {
   const router = useRouter();
   const supabase = createSupabaseBrowser();
 
-  useEffect(() => {
-    async function load() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.push("/client/login"); return; }
-      const { data: myClient } = await supabase
-        .from("clients")
-        .select("id")
-        .eq("auth_id", user.id)
-        .maybeSingle();
-      setMe(myClient || null);
+  const load = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { router.push("/client/login"); return; }
+    const { data: myClient } = await supabase
+      .from("clients")
+      .select("id")
+      .eq("auth_id", user.id)
+      .maybeSingle();
+    setMe(myClient || null);
 
-      const res = await fetch("/api/messages");
-      if (res.status === 401) { router.push("/client/login"); return; }
-      if (res.ok) {
-        const data = await res.json();
-        setThreads(Array.isArray(data) ? data : []);
-      }
-      setLoading(false);
+    const res = await fetch("/api/messages");
+    if (res.status === 401) { router.push("/client/login"); return; }
+    if (res.ok) {
+      const data = await res.json();
+      setThreads(Array.isArray(data) ? data : []);
     }
+    setLoading(false);
+  };
+
+  useEffect(() => {
     load();
   }, []);
 
@@ -67,8 +68,7 @@ export default function MessagesListPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ thread_id: thread.id, action }),
     });
-    const res = await fetch("/api/messages");
-    if (res.ok) setThreads(await res.json());
+    load();
   };
 
   if (loading) {
@@ -191,14 +191,12 @@ export default function MessagesListPage() {
                   <button
                     onClick={() => threadAction(t, isPinned(t) ? "unpin" : "pin")}
                     className="text-xs text-gray-500 dark:text-gray-400 hover:text-amber-600 px-2 py-1"
-                    title={isPinned(t) ? "Unpin" : "Pin"}
                   >
                     {isPinned(t) ? "Unpin" : "Pin"}
                   </button>
                   <button
                     onClick={() => threadAction(t, isArchived(t) ? "unarchive" : "archive")}
                     className="text-xs text-gray-500 dark:text-gray-400 hover:text-amber-600 px-2 py-1"
-                    title={isArchived(t) ? "Unarchive" : "Archive"}
                   >
                     {isArchived(t) ? "Restore" : "Archive"}
                   </button>
