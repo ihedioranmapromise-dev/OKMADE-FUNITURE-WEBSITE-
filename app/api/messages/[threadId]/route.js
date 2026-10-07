@@ -55,6 +55,14 @@ export async function GET(request, { params }) {
       .eq("thread_id", threadId)
       .order("created_at", { ascending: true });
 
+    // Mark delivered for messages addressed to me that aren't delivered yet
+    await admin
+      .from("messages")
+      .update({ delivered_at: new Date().toISOString() })
+      .eq("thread_id", threadId)
+      .eq("receiver_id", me.id)
+      .is("delivered_at", null);
+
     const { searchParams } = new URL(request.url);
     const shouldMarkRead = searchParams.get("mark_read") === "1";
     if (shouldMarkRead) {
@@ -72,8 +80,16 @@ export async function GET(request, { params }) {
       .eq("id", otherId)
       .maybeSingle();
 
+    // Hide deleted messages' content but keep placeholder
+    const cleaned = (messages || []).map((m) => {
+      if (m.deleted_at) {
+        return { ...m, content: "", deleted: true };
+      }
+      return m;
+    });
+
     return new Response(
-      JSON.stringify({ thread, other, messages: messages || [], my_id: me.id }),
+      JSON.stringify({ thread, other, messages: cleaned, my_id: me.id }),
       { status: 200 }
     );
   } catch (err) {
@@ -88,8 +104,13 @@ export async function POST(request, { params }) {
     if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
 
     const { threadId } = params;
-    const { content } = await request.json();
-    if (!content?.trim()) return new Response(JSON.stringify({ error: "Empty message" }), { status: 400 });
+    const { content, image_url } = await request.json();
+
+    const hasText = content && content.trim();
+    const hasImage = image_url && image_url.trim();
+    if (!hasText && !hasImage) {
+      return new Response(JSON.stringify({ error: "Empty message" }), { status: 400 });
+    }
 
     const { data: me } = await admin
       .from("clients")
@@ -109,24 +130,29 @@ export async function POST(request, { params }) {
       return new Response(JSON.stringify({ error: "Cannot send" }), { status: 403 });
     }
 
+    const insertBody = {
+      thread_id: threadId,
+      sender_id: me.id,
+      receiver_id: receiverId,
+      content: hasText ? content.trim() : "",
+      image_url: hasImage ? image_url.trim() : null,
+    };
+
     const { data: msg, error } = await admin
       .from("messages")
-      .insert([{
-        thread_id: threadId,
-        sender_id: me.id,
-        receiver_id: receiverId,
-        content: content.trim(),
-      }])
+      .insert([insertBody])
       .select()
       .single();
 
     if (error) throw error;
 
+    const preview = hasText ? content.trim().slice(0, 80) : "📷 Photo";
+
     await admin
       .from("message_threads")
       .update({
         last_message_at: new Date().toISOString(),
-        last_message_preview: content.trim().slice(0, 80),
+        last_message_preview: preview,
         last_message_sender: me.id,
       })
       .eq("id", threadId);
@@ -148,7 +174,7 @@ export async function POST(request, { params }) {
       const tpl = newMessageEmail({
         senderName: me.display_name || me.username,
         senderUsername: me.username,
-        preview: content.trim().slice(0, 200),
+        preview,
         threadId,
       });
       await sendEmail({ to: receiver.email, subject: tpl.subject, html: tpl.html });
