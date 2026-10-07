@@ -1,8 +1,7 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowser } from "@/lib/supabase-browser";
-import { useTheme } from "@/lib/theme";
 
 const EyeOpen = ({ className = "w-5 h-5" }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8">
@@ -16,559 +15,415 @@ const EyeOff = ({ className = "w-5 h-5" }) => (
   </svg>
 );
 
-const SunIcon = ({ className = "w-5 h-5" }) => (
-  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
-    <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+const UserIcon = () => (<svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" /></svg>);
+const ContactIcon = () => (<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>);
+const SocialIcon = () => (<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>);
+const LockIcon = () => (<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>);
+const CameraIcon = ({ className = "w-4 h-4" }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
   </svg>
 );
-const MoonIcon = ({ className = "w-5 h-5" }) => (
-  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
-    <path d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-  </svg>
-);
-const MonitorIcon = ({ className = "w-5 h-5" }) => (
-  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+const CoverIcon = ({ className = "w-4 h-4" }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
   </svg>
 );
 
-export default function SettingsPage() {
-  const [settings, setSettings] = useState(null);
+async function uploadWithRetry(supabase, bucket, path, file, retries = 3) {
+  let lastErr;
+  for (let i = 0; i <= retries; i++) {
+    const { error } = await supabase.storage
+      .from(bucket)
+      .upload(path, file, { cacheControl: "31536000", upsert: true });
+    if (!error) return { ok: true };
+    lastErr = error;
+    await new Promise((r) => setTimeout(r, 500 * Math.pow(2, i)));
+  }
+  return { ok: false, error: lastErr };
+}
+
+export default function ClientProfile() {
+  const [client, setClient] = useState(null);
+  const [authEmail, setAuthEmail] = useState("");
+  const [activeTab, setActiveTab] = useState("personal");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingPic, setUploadingPic] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
   const [message, setMessage] = useState("");
-  const [activeTab, setActiveTab] = useState("privacy");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showNew, setShowNew] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [passwordMsg, setPasswordMsg] = useState("");
-  const [pendingDelete, setPendingDelete] = useState(null);
-  const [deleteModal, setDeleteModal] = useState(false);
-  const [deleteReason, setDeleteReason] = useState("");
-  const [deleting, setDeleting] = useState(false);
-  const [deleteMsg, setDeleteMsg] = useState("");
+  const [profilePicPreview, setProfilePicPreview] = useState("");
+  const [coverPreview, setCoverPreview] = useState("");
+  const fileInputRef = useRef(null);
+  const coverInputRef = useRef(null);
   const router = useRouter();
   const supabase = createSupabaseBrowser();
-  const { theme, setTheme } = useTheme();
+
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [username, setUsername] = useState("");
+  const [age, setAge] = useState("");
+  const [skill, setSkill] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [callingPhone, setCallingPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [workAddress, setWorkAddress] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [bio, setBio] = useState("");
+  const [whatsappUrl, setWhatsappUrl] = useState("");
+  const [facebookUrl, setFacebookUrl] = useState("");
+  const [tiktokUrl, setTiktokUrl] = useState("");
+  const [instagramUrl, setInstagramUrl] = useState("");
+  const [twitterUrl, setTwitterUrl] = useState("");
+
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
 
   useEffect(() => {
-    fetch("/api/settings")
-      .then((r) => {
-        if (r.status === 401) {
-          router.push("/client/login");
-          return null;
-        }
-        return r.json();
-      })
-      .then((data) => {
-        if (data) setSettings(data);
-        setLoading(false);
-      });
-    fetch("/api/client/delete-status")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (d?.pending) setPendingDelete(d);
-      })
-      .catch(() => {});
-  }, []);
+    async function load() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { router.push("/client/login"); return; }
+      setAuthEmail(user.email || "");
 
-  const handleSave = async (updates) => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("*")
+        .eq("auth_id", user.id)
+        .maybeSingle();
+
+      if (error || !data) {
+        setMessage("Could not load your profile.");
+        setLoading(false);
+        return;
+      }
+
+      setClient(data);
+      setFirstName(data.first_name || "");
+      setLastName(data.last_name || "");
+      setUsername(data.username || "");
+      setAge(data.age || "");
+      setSkill(data.skill || "");
+      setPhoneNumber(data.phone_number || data.phone || "");
+      setCallingPhone(data.calling_phone || "");
+      setEmail(data.email || user.email || "");
+      setWorkAddress(data.work_address || "");
+      setDisplayName(data.display_name || "");
+      setBio(data.bio || "");
+      setWhatsappUrl(data.whatsapp_url || "");
+      setFacebookUrl(data.facebook_url || "");
+      setTiktokUrl(data.tiktok_url || "");
+      setInstagramUrl(data.instagram_url || "");
+      setTwitterUrl(data.twitter_url || "");
+      setProfilePicPreview(data.profile_pic || "");
+      setCoverPreview(data.cover_photo || "");
+      setLoading(false);
+    }
+    load();
+  }, [router, supabase]);
+
+  const handleProfilePicUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !client) return;
+    setUploadingPic(true);
+    setMessage("");
+    try {
+      const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+      const fileName = `${client.id}/${Date.now()}.${ext}`;
+      const result = await uploadWithRetry(supabase, "profile-pics", fileName, file);
+      if (!result.ok) throw new Error(result.error?.message || "Upload failed after retries");
+      const { data: urlData } = supabase.storage.from("profile-pics").getPublicUrl(fileName);
+
+      const { error: updateError } = await supabase
+        .from("clients")
+        .update({ profile_pic: urlData.publicUrl })
+        .eq("id", client.id);
+      if (updateError) throw updateError;
+
+      setProfilePicPreview(urlData.publicUrl);
+      setMessage("Profile picture updated!");
+    } catch (err) {
+      setMessage("Error uploading picture: " + err.message);
+    } finally {
+      setUploadingPic(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleCoverUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !client) return;
+    setUploadingCover(true);
+    setMessage("");
+    try {
+      const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+      const fileName = `${client.id}/${Date.now()}.${ext}`;
+      const result = await uploadWithRetry(supabase, "cover-photos", fileName, file);
+      if (!result.ok) throw new Error(result.error?.message || "Upload failed after retries");
+      const { data: urlData } = supabase.storage.from("cover-photos").getPublicUrl(fileName);
+
+      const { error: updateError } = await supabase
+        .from("clients")
+        .update({ cover_photo: urlData.publicUrl })
+        .eq("id", client.id);
+      if (updateError) throw updateError;
+
+      setCoverPreview(urlData.publicUrl);
+      setMessage("Cover photo updated!");
+    } catch (err) {
+      setMessage("Error uploading cover: " + err.message);
+    } finally {
+      setUploadingCover(false);
+      if (coverInputRef.current) coverInputRef.current.value = "";
+    }
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!client) return;
     setSaving(true);
     setMessage("");
-    const res = await fetch("/api/settings", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...settings, ...updates }),
-    });
-    if (res.ok) {
-      setSettings({ ...settings, ...updates });
-      setMessage("Settings saved.");
-    } else {
-      setMessage("Error saving settings.");
-    }
-    setSaving(false);
-  };
-
-  const handleChangePassword = async (e) => {
-    e.preventDefault();
-    if (newPassword !== confirmPassword) {
-      setPasswordMsg("Passwords do not match.");
-      return;
-    }
-    if (newPassword.length < 6) {
-      setPasswordMsg("Minimum 6 characters.");
-      return;
-    }
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
-    if (error) setPasswordMsg("Error: " + error.message);
-    else {
-      setPasswordMsg("Password updated.");
-      setNewPassword("");
-      setConfirmPassword("");
-    }
-  };
-
-  const requestDelete = async () => {
-    setDeleting(true);
-    setDeleteMsg("");
     try {
-      const res = await fetch("/api/client/request-delete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason: deleteReason }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || "Failed");
-      setDeleteModal(false);
-      setPendingDelete({ pending: true, scheduled_for: data.scheduled_for });
-      await supabase.auth.signOut();
-      router.push("/client/login?deletion=scheduled");
-    } catch (err) {
-      setDeleteMsg("Error: " + err.message);
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  const cancelDelete = async () => {
-    setDeleting(true);
-    try {
-      const res = await fetch("/api/client/cancel-delete", { method: "POST" });
-      if (!res.ok) throw new Error("Failed to cancel");
-      setPendingDelete(null);
-      setMessage("Deletion cancelled. Your account is safe.");
+      const { error } = await supabase
+        .from("clients")
+        .update({
+          first_name: firstName,
+          last_name: lastName,
+          username,
+          age: age ? parseInt(age) : null,
+          skill: skill || null,
+          phone_number: phoneNumber || null,
+          calling_phone: callingPhone || null,
+          email: email || null,
+          work_address: workAddress || null,
+          display_name: displayName || null,
+          bio: bio || null,
+          whatsapp_url: whatsappUrl || null,
+          facebook_url: facebookUrl || null,
+          tiktok_url: tiktokUrl || null,
+          instagram_url: instagramUrl || null,
+          twitter_url: twitterUrl || null,
+        })
+        .eq("id", client.id);
+      if (error) throw error;
+      setMessage("Profile updated successfully!");
     } catch (err) {
       setMessage("Error: " + err.message);
     } finally {
-      setDeleting(false);
+      setSaving(false);
+    }
+  };
+
+  const handlePasswordChange = async (e) => {
+    e.preventDefault();
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPasswordMessage("Please fill all password fields.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordMessage("New passwords do not match.");
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordMessage("Password must be at least 6 characters.");
+      return;
+    }
+    if (currentPassword === newPassword) {
+      setPasswordMessage("New password must be different from current.");
+      return;
+    }
+    setChangingPassword(true);
+    setPasswordMessage("");
+    try {
+      const { error: reauthError } = await supabase.auth.signInWithPassword({
+        email: authEmail,
+        password: currentPassword,
+      });
+      if (reauthError) throw new Error("Current password is incorrect.");
+
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+
+      setPasswordMessage("Password updated successfully!");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err) {
+      setPasswordMessage("Error: " + err.message);
+    } finally {
+      setChangingPassword(false);
     }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-100 dark:bg-gray-950 py-8 px-4">
-        <div className="max-w-3xl mx-auto">
-          <div className="h-8 w-32 bg-gray-200 dark:bg-gray-800 rounded animate-pulse mb-6"></div>
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
-            <div className="flex border-b border-gray-200 dark:border-gray-800">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="px-5 py-3">
-                  <div className="h-4 w-20 bg-gray-200 dark:bg-gray-800 rounded animate-pulse"></div>
-                </div>
-              ))}
-            </div>
-            <div className="p-6 space-y-6">
-              {[...Array(2)].map((_, i) => (
-                <div key={i} className="space-y-2">
-                  <div className="h-4 bg-gray-200 dark:bg-gray-800 rounded w-1/3 animate-pulse"></div>
-                  <div className="h-12 bg-gray-100 dark:bg-gray-800 rounded animate-pulse"></div>
-                </div>
-              ))}
-            </div>
-          </div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-amber-50 to-white dark:from-gray-950 dark:to-gray-900">
+        <div className="text-amber-600 dark:text-amber-400 animate-pulse">
+          Loading profile...
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-950 py-8 px-4">
-      <div className="max-w-3xl mx-auto">
-        <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6">
-          Settings
-        </h1>
+  if (!client) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-amber-50 to-white dark:from-gray-950 dark:to-gray-900">
+        <div className="text-red-600 dark:text-red-400">{message || "Profile not found."}</div>
+      </div>
+    );
+  }
 
-        {pendingDelete?.pending && (
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 mb-6">
-            <h3 className="font-semibold text-red-800 dark:text-red-300 mb-1">
-              Account scheduled for deletion
-            </h3>
-            <p className="text-sm text-red-700 dark:text-red-400 mb-3">
-              Your account will be permanently deleted on{" "}
-              <strong>
-                {pendingDelete.scheduled_for
-                  ? new Date(pendingDelete.scheduled_for).toLocaleDateString()
-                  : "7 days from request"}
-              </strong>
-              . You can cancel anytime before then.
-            </p>
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-amber-50 to-white dark:from-gray-950 dark:to-gray-900 py-8 px-4">
+      <div className="max-w-2xl mx-auto bg-white dark:bg-gray-900 rounded-2xl shadow-xl p-6 md:p-8">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold text-amber-800 dark:text-amber-400">Edit Profile</h1>
+          <a href="/client/dashboard" className="text-sm text-amber-600 dark:text-amber-400 hover:underline">← Dashboard</a>
+        </div>
+
+        {/* Cover photo */}
+        <div className="relative w-full h-32 md:h-40 rounded-xl overflow-hidden mb-6 bg-gradient-to-r from-amber-700 to-stone-700 dark:from-gray-800 dark:to-gray-900">
+          {coverPreview && (
+            <img src={coverPreview} alt="Cover" className="w-full h-full object-cover" />
+          )}
+          <button
+            type="button"
+            onClick={() => coverInputRef.current?.click()}
+            className="absolute bottom-2 right-2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full flex items-center justify-center transition"
+            aria-label="Change cover photo"
+          >
+            <CoverIcon className="w-4 h-4" />
+          </button>
+          <input ref={coverInputRef} type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" />
+          {uploadingCover && (
+            <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white text-sm">
+              Uploading cover...
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col items-center mb-6">
+          <div className="relative">
+            {profilePicPreview ? (
+              <img src={profilePicPreview} className="w-24 h-24 rounded-full object-cover border-4 border-amber-200 dark:border-amber-800" alt="Profile" />
+            ) : (
+              <div className="w-24 h-24 rounded-full bg-gray-200 dark:bg-gray-800 flex items-center justify-center text-gray-400 border-4 border-amber-200 dark:border-amber-800">
+                <UserIcon />
+              </div>
+            )}
             <button
-              onClick={cancelDelete}
-              disabled={deleting}
-              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="absolute bottom-0 right-0 bg-amber-600 text-white p-1.5 rounded-full w-8 h-8 flex items-center justify-center hover:bg-amber-700 transition"
+              aria-label="Change profile picture"
             >
-              {deleting ? "Cancelling..." : "Cancel Deletion"}
+              <CameraIcon className="w-4 h-4" />
             </button>
+            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleProfilePicUpload} className="hidden" />
           </div>
+          {uploadingPic && <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Uploading...</p>}
+        </div>
+
+        <div className="flex border-b border-gray-200 dark:border-gray-800 mb-6 overflow-x-auto">
+          {[
+            { id: "personal", label: "Personal", icon: <UserIcon /> },
+            { id: "contact", label: "Contact", icon: <ContactIcon /> },
+            { id: "social", label: "Profile & Social", icon: <SocialIcon /> },
+            { id: "security", label: "Security", icon: <LockIcon /> },
+          ].map((tab) => (
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition whitespace-nowrap ${activeTab === tab.id ? "border-amber-600 text-amber-700 dark:text-amber-400" : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"}`}>
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {activeTab !== "security" && (
+          <form onSubmit={handleSave}>
+            {activeTab === "personal" && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300">First Name *</label><input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100" required /></div>
+                  <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Last Name *</label><input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100" required /></div>
+                </div>
+                <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Username *</label><input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100" required /></div>
+                <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Age</label><input type="number" value={age} onChange={(e) => setAge(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Skill / Trade</label><input type="text" value={skill} onChange={(e) => setSkill(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100" /></div>
+              </div>
+            )}
+
+            {activeTab === "contact" && (
+              <div className="space-y-4">
+                <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone Number *</label><input type="text" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100" required /></div>
+                <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Calling Phone</label><input type="text" value={callingPhone} onChange={(e) => setCallingPhone(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email (contact)</label><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100" /><p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Login email: {authEmail}</p></div>
+                <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Work Address</label><textarea value={workAddress} onChange={(e) => setWorkAddress(e.target.value)} rows="2" className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100" /></div>
+              </div>
+            )}
+
+            {activeTab === "social" && (
+              <div className="space-y-4">
+                <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Display Name</label><input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Bio</label><textarea value={bio} onChange={(e) => setBio(e.target.value)} rows="3" className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100" /></div>
+                <hr className="my-2 border-gray-200 dark:border-gray-800" />
+                <h3 className="font-semibold text-gray-700 dark:text-gray-300">Social Links</h3>
+                <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300">WhatsApp URL</label><input type="text" value={whatsappUrl} onChange={(e) => setWhatsappUrl(e.target.value)} placeholder="https://wa.me/2348123456789" className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Facebook URL</label><input type="text" value={facebookUrl} onChange={(e) => setFacebookUrl(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300">X (Twitter) URL</label><input type="text" value={twitterUrl} onChange={(e) => setTwitterUrl(e.target.value)} placeholder="https://x.com/yourhandle" className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300">TikTok URL</label><input type="text" value={tiktokUrl} onChange={(e) => setTiktokUrl(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Instagram URL</label><input type="text" value={instagramUrl} onChange={(e) => setInstagramUrl(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100" /></div>
+              </div>
+            )}
+
+            <button type="submit" disabled={saving} className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 rounded-lg transition disabled:opacity-50 mt-6">
+              {saving ? "Saving..." : "Save Changes"}
+            </button>
+            {message && <p className={`text-center text-sm mt-2 ${message.includes("Error") ? "text-red-500" : "text-green-600 dark:text-green-400"}`}>{message}</p>}
+          </form>
         )}
 
-        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
-          <div className="flex border-b border-gray-200 dark:border-gray-800 overflow-x-auto">
-            {[
-              { id: "privacy", label: "Privacy" },
-              { id: "notifications", label: "Notifications" },
-              { id: "appearance", label: "Appearance" },
-              { id: "security", label: "Security" },
-              { id: "danger", label: "Danger Zone" },
-            ].map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setActiveTab(t.id)}
-                className={`px-5 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition ${
-                  activeTab === t.id
-                    ? "border-amber-600 text-amber-700 dark:text-amber-400"
-                    : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="p-6">
-            {activeTab === "privacy" && (
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Who can see your posts
-                  </label>
-                  <select
-                    value={settings?.post_visibility || "public"}
-                    onChange={(e) => handleSave({ post_visibility: e.target.value })}
-                    className="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
-                  >
-                    <option value="public">Public — Anyone can see</option>
-                    <option value="friends">Friends only</option>
-                    <option value="private">Only me</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Who can message you
-                  </label>
-                  <select
-                    value={settings?.message_permission || "friends"}
-                    onChange={(e) => handleSave({ message_permission: e.target.value })}
-                    className="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
-                  >
-                    <option value="everyone">Everyone</option>
-                    <option value="friends">Friends only</option>
-                    <option value="nobody">Nobody</option>
-                  </select>
-                </div>
-              </div>
-            )}
-
-            {activeTab === "notifications" && (
-              <div className="space-y-4">
-                <label className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg cursor-pointer">
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Email notifications
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={settings?.email_notifications ?? true}
-                    onChange={(e) => handleSave({ email_notifications: e.target.checked })}
-                    className="w-5 h-5"
-                  />
-                </label>
-                <label className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg cursor-pointer">
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Push notifications
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={settings?.push_notifications ?? true}
-                    onChange={(e) => handleSave({ push_notifications: e.target.checked })}
-                    className="w-5 h-5"
-                  />
-                </label>
-              </div>
-            )}
-
-            {activeTab === "appearance" && (
-              <div className="space-y-4">
-                <div>
-                  <h3 className="font-semibold text-gray-800 dark:text-gray-100 mb-1">
-                    Theme
-                  </h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                    Choose how OKMADE looks to you. Your choice is saved to this
-                    browser and stays even after you log out.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setTheme("light")}
-                    className={`flex items-center gap-3 p-4 rounded-xl border-2 transition text-left ${
-                      theme === "light"
-                        ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20"
-                        : "border-gray-200 dark:border-gray-700 hover:border-amber-300 dark:hover:border-amber-700"
-                    }`}
-                  >
-                    <div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
-                      <SunIcon className="w-6 h-6 text-amber-600 dark:text-amber-400" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-semibold text-gray-800 dark:text-gray-100">
-                        Light
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        Bright and clean
-                      </p>
-                    </div>
-                    {theme === "light" && (
-                      <svg
-                        className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0"
-                        fill="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
-                      </svg>
-                    )}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setTheme("dark")}
-                    className={`flex items-center gap-3 p-4 rounded-xl border-2 transition text-left ${
-                      theme === "dark"
-                        ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20"
-                        : "border-gray-200 dark:border-gray-700 hover:border-amber-300 dark:hover:border-amber-700"
-                    }`}
-                  >
-                    <div className="w-10 h-10 rounded-lg bg-gray-800 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
-                      <MoonIcon className="w-6 h-6 text-amber-300" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-semibold text-gray-800 dark:text-gray-100">
-                        Dark
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        Easy on the eyes
-                      </p>
-                    </div>
-                    {theme === "dark" && (
-                      <svg
-                        className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0"
-                        fill="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
-                      </svg>
-                    )}
-                  </button>
-                </div>
-
-                <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <MonitorIcon className="w-5 h-5 text-gray-500 dark:text-gray-400 flex-shrink-0" />
-                    <p className="text-xs text-gray-600 dark:text-gray-400">
-                      This setting is saved in a cookie. It applies to every page
-                      — public, feed, dashboard — until you change it.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="pt-2">
-                  <h3 className="font-semibold text-gray-800 dark:text-gray-100 mb-2">
-                    Preview
-                  </h3>
-                  <div className="p-4 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center text-white font-bold text-sm">
-                        O
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">
-                          Preview
-                        </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          Example
-                        </p>
-                      </div>
-                    </div>
-                    <p className="text-sm text-gray-700 dark:text-gray-300">
-                      This is how text will look in{" "}
-                      <strong>{theme === "dark" ? "dark" : "light"}</strong> mode.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeTab === "security" && (
-              <form onSubmit={handleChangePassword} className="space-y-4">
-                <h3 className="font-semibold text-gray-800 dark:text-gray-100">
-                  Change Password
-                </h3>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    New Password
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showNew ? "text" : "password"}
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      className="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg pr-12 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
-                      required
-                    />
-                    <button
-                      type="button"
-                      className="absolute inset-y-0 right-3 flex items-center text-gray-500 dark:text-gray-400 hover:text-amber-600 transition"
-                      onClick={() => setShowNew(!showNew)}
-                      aria-label={showNew ? "Hide" : "Show"}
-                    >
-                      {showNew ? <EyeOff /> : <EyeOpen />}
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Confirm New Password
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showConfirm ? "text" : "password"}
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg pr-12 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
-                      required
-                    />
-                    <button
-                      type="button"
-                      className="absolute inset-y-0 right-3 flex items-center text-gray-500 dark:text-gray-400 hover:text-amber-600 transition"
-                      onClick={() => setShowConfirm(!showConfirm)}
-                      aria-label={showConfirm ? "Hide" : "Show"}
-                    >
-                      {showConfirm ? <EyeOff /> : <EyeOpen />}
-                    </button>
-                  </div>
-                </div>
-                <button
-                  type="submit"
-                  className="bg-amber-600 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-amber-700 transition"
-                >
-                  Update Password
+        {activeTab === "security" && (
+          <form onSubmit={handlePasswordChange} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Current Password</label>
+              <div className="relative">
+                <input type={showCurrent ? "text" : "password"} value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg pr-12 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100" required />
+                <button type="button" className="absolute inset-y-0 right-3 flex items-center text-gray-500 dark:text-gray-400 hover:text-amber-600 transition" onClick={() => setShowCurrent(!showCurrent)} aria-label={showCurrent ? "Hide" : "Show"}>
+                  {showCurrent ? <EyeOff /> : <EyeOpen />}
                 </button>
-                {passwordMsg && (
-                  <p
-                    className={`text-sm ${
-                      passwordMsg.includes("Error") ? "text-red-500" : "text-green-600 dark:text-green-400"
-                    }`}
-                  >
-                    {passwordMsg}
-                  </p>
-                )}
-              </form>
-            )}
-
-            {activeTab === "danger" && (
-              <div className="space-y-4">
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                  <h3 className="font-semibold text-blue-800 dark:text-blue-300 mb-1">
-                    Download Your Data
-                  </h3>
-                  <p className="text-sm text-blue-700 dark:text-blue-400 mb-3">
-                    Get a copy of everything we have about you — profile, posts, comments,
-                    messages, and activity. The file is JSON, readable in any text editor.
-                  </p>
-                  <a
-                    href="/api/client/export-data"
-                    className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-medium transition"
-                  >
-                    Download My Data
-                  </a>
-                </div>
-
-                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-                  <h3 className="font-semibold text-red-800 dark:text-red-300 mb-1">
-                    Delete Account
-                  </h3>
-                  <p className="text-sm text-red-700 dark:text-red-400 mb-3">
-                    Permanently delete your account, posts, and data. You'll be logged
-                    out immediately. You have 7 days to cancel by clicking the link in
-                    the email we'll send you.
-                  </p>
-                  <button
-                    onClick={() => setDeleteModal(true)}
-                    disabled={!!pendingDelete?.pending}
-                    className="bg-red-600 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-red-700 transition disabled:opacity-50"
-                  >
-                    {pendingDelete?.pending ? "Already Scheduled" : "Request Account Deletion"}
-                  </button>
-                </div>
               </div>
-            )}
-
-            {message && (
-              <p className="mt-4 text-sm text-green-600 dark:text-green-400">{message}</p>
-            )}
-          </div>
-        </div>
-
-        <a
-          href="/client/dashboard"
-          className="inline-block mt-6 text-sm text-amber-600 dark:text-amber-400 hover:underline"
-        >
-          ← Back to Dashboard
-        </a>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">New Password</label>
+              <div className="relative">
+                <input type={showNew ? "text" : "password"} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg pr-12 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100" required />
+                <button type="button" className="absolute inset-y-0 right-3 flex items-center text-gray-500 dark:text-gray-400 hover:text-amber-600 transition" onClick={() => setShowNew(!showNew)} aria-label={showNew ? "Hide" : "Show"}>
+                  {showNew ? <EyeOff /> : <EyeOpen />}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Confirm New Password</label>
+              <div className="relative">
+                <input type={showConfirm ? "text" : "password"} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg pr-12 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100" required />
+                <button type="button" className="absolute inset-y-0 right-3 flex items-center text-gray-500 dark:text-gray-400 hover:text-amber-600 transition" onClick={() => setShowConfirm(!showConfirm)} aria-label={showConfirm ? "Hide" : "Show"}>
+                  {showConfirm ? <EyeOff /> : <EyeOpen />}
+                </button>
+              </div>
+            </div>
+            <button type="submit" disabled={changingPassword} className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 rounded-lg transition disabled:opacity-50">
+              {changingPassword ? "Updating..." : "Update Password"}
+            </button>
+            {passwordMessage && <p className={`text-center text-sm ${passwordMessage.includes("Error") ? "text-red-500" : "text-green-600 dark:text-green-400"}`}>{passwordMessage}</p>}
+          </form>
+        )}
       </div>
-
-      {deleteModal && (
-        <div
-          className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4"
-          onClick={() => !deleting && setDeleteModal(false)}
-        >
-          <div
-            className="bg-white dark:bg-gray-900 rounded-2xl p-6 max-w-md w-full shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-lg font-bold text-red-800 dark:text-red-300 mb-2">
-              Delete your account?
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              You'll be logged out immediately. After 7 days, everything is
-              permanently deleted. You'll get an email with a cancel link —
-              use it if you change your mind.
-            </p>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Reason (optional)
-              </label>
-              <textarea
-                value={deleteReason}
-                onChange={(e) => setDeleteReason(e.target.value)}
-                rows="3"
-                maxLength={500}
-                className="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
-                placeholder="Tell us why you're leaving (helps us improve)..."
-              />
-            </div>
-            {deleteMsg && <p className="text-sm text-red-500 mb-3">{deleteMsg}</p>}
-            <div className="flex gap-3">
-              <button
-                onClick={() => setDeleteModal(false)}
-                disabled={deleting}
-                className="flex-1 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 font-medium py-2.5 rounded-lg disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={requestDelete}
-                disabled={deleting}
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 rounded-lg disabled:opacity-50"
-              >
-                {deleting ? "Scheduling..." : "Yes, Delete"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
