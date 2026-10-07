@@ -12,7 +12,7 @@ export async function GET(request, { params }) {
     const { data: client, error: clientError } = await supabase
       .from("clients")
       .select(
-        "id, username, display_name, first_name, last_name, bio, skill, profile_pic, cover_photo, work_address, calling_phone, age, whatsapp_url, facebook_url, tiktok_url, instagram_url, is_okmade, verified"
+        "id, username, display_name, first_name, last_name, bio, skill, profile_pic, cover_photo, work_address, calling_phone, age, whatsapp_url, facebook_url, tiktok_url, instagram_url, twitter_url, is_okmade, verified"
       )
       .eq("username", username)
       .maybeSingle();
