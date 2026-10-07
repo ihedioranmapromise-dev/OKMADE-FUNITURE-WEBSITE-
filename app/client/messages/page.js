@@ -119,9 +119,17 @@ export default function MessagesListPage() {
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-950 py-8 px-4">
       <div className="max-w-2xl mx-auto">
-        <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-4">
-          Messages
-        </h1>
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-100">
+            Messages
+          </h1>
+          <a
+            href="/client/messages/new-group"
+            className="bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold px-3 py-2 rounded-lg transition"
+          >
+            + New Group
+          </a>
+        </div>
 
         <div className="relative mb-4">
           <input
