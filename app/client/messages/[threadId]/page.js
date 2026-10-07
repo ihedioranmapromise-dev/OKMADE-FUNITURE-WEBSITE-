@@ -425,4 +425,473 @@ export default function ThreadPage() {
           <div className="flex-1 min-w-0">
             <a
               href={`/client/${other?.username}`}
-              className="font-sem
+              className="font-semibold text-gray-800 dark:text-gray-200 text-sm hover:underline truncate block"
+            >
+              {other?.display_name || other?.username}
+            </a>
+            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+              {otherTyping ? "typing..." : other?.skill || ""}
+            </p>
+          </div>
+          <button
+            onClick={() => setSearchOpen(true)}
+            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition text-gray-600 dark:text-gray-300"
+            aria-label="Search in conversation"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </button>
+          <button
+            onClick={() => setConfirmBlock(true)}
+            className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400"
+            aria-label="Block user"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {searchOpen && (
+        <div className="sticky top-14 z-10 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
+          <div className="max-w-2xl mx-auto px-4 py-3">
+            <div className="relative">
+              <input
+                autoFocus
+                type="text"
+                value={searchQuery}
+                onChange={(e) => runSearch(e.target.value)}
+                placeholder="Search messages in this chat..."
+                className="w-full p-3 pl-10 pr-10 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
+              />
+              <svg className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <button
+                onClick={() => {
+                  setSearchOpen(false);
+                  setSearchQuery("");
+                  setSearchResults([]);
+                }}
+                className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              >
+                ✕
+              </button>
+            </div>
+            {searchQuery.trim().length >= 2 && (
+              <div className="mt-2 max-h-64 overflow-y-auto">
+                {searching ? (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 py-3 text-center">
+                    Searching...
+                  </p>
+                ) : searchResults.length === 0 ? (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 py-3 text-center">
+                    No matches.
+                  </p>
+                ) : (
+                  <div className="space-y-1">
+                    {searchResults.map((r) => (
+                      <button
+                        key={r.id}
+                        onClick={() => jumpToMessage(r.id)}
+                        className="w-full text-left p-3 hover:bg-amber-50 dark:hover:bg-gray-800 rounded-lg transition"
+                      >
+                        <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-2">
+                          {r.content}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {new Date(r.created_at).toLocaleString()}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4"
+          onClick={() => setLightbox(null)}
+        >
+          <img src={lightbox} alt="" className="max-w-full max-h-full object-contain" />
+          <button
+            className="absolute top-4 right-4 text-white text-3xl"
+            onClick={() => setLightbox(null)}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-2xl mx-auto px-4 py-6 space-y-3">
+          {messages.length === 0 ? (
+            <p className="text-center text-gray-500 dark:text-gray-400 text-sm py-8">
+              No messages yet. Say hello 👋
+            </p>
+          ) : (
+            messages.map((m) => {
+              const mine = m.sender_id === data.my_id;
+              const isFirstUnread = m.id === firstUnreadId;
+              const reactionCounts = (m.reactions || []).reduce((acc, r) => {
+                acc[r.reaction_type] = (acc[r.reaction_type] || 0) + 1;
+                return acc;
+              }, {});
+              const myReaction = (m.reactions || []).find((r) => r.user_id === data.my_id);
+              return (
+                <div key={m.id} id={`msg-${m.id}`} className="transition">
+                  {isFirstUnread && (
+                    <div ref={firstUnreadRef} className="flex items-center gap-2 my-3">
+                      <div className="flex-1 h-px bg-amber-300 dark:bg-amber-700" />
+                      <span className="text-xs text-amber-700 dark:text-amber-400 font-medium">
+                        Unread
+                      </span>
+                      <div className="flex-1 h-px bg-amber-300 dark:bg-amber-700" />
+                    </div>
+                  )}
+                  <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                    <div className="relative max-w-[75%]">
+                      {m.reply_to && (
+                        <div
+                          className={`text-xs px-3 py-1.5 mb-1 rounded-lg border-l-4 ${
+                            mine
+                              ? "bg-amber-700/30 border-amber-300 text-amber-100"
+                              : "bg-gray-200 dark:bg-gray-800 border-amber-500 text-gray-600 dark:text-gray-400"
+                          }`}
+                        >
+                          <p className="truncate">{m.reply_to.content}</p>
+                        </div>
+                      )}
+                      <div
+                        className={`rounded-2xl px-4 py-2 ${
+                          mine
+                            ? "bg-amber-600 text-white"
+                            : "bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-800 dark:text-gray-200"
+                        } ${m.pending ? "opacity-70" : ""} ${
+                          m.deleted ? "italic opacity-60" : ""
+                        }`}
+                      >
+                        {m.deleted ? (
+                          <p className="text-sm">This message was deleted</p>
+                        ) : (
+                          <>
+                            {m.image_url && (
+                              <img
+                                src={m.image_url}
+                                alt=""
+                                className="rounded-lg mb-2 max-h-64 object-cover cursor-pointer"
+                                onClick={() => setLightbox(m.image_url)}
+                              />
+                            )}
+                            {m.content && (
+                              <p className="text-sm break-words whitespace-pre-wrap">
+                                {m.content}
+                              </p>
+                            )}
+                          </>
+                        )}
+                        <p
+                          className={`text-xs mt-1 ${
+                            mine ? "text-amber-100" : "text-gray-400"
+                          }`}
+                        >
+                          {new Date(m.created_at).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                          {mine && !m.deleted && ` · ${getStatusIcon(m)}`}
+                        </p>
+                        {Object.keys(reactionCounts).length > 0 && (
+                          <div className="flex gap-1 mt-1 flex-wrap">
+                            {Object.entries(reactionCounts).map(([type, count]) => {
+                              const emoji = REACTIONS.find((r) => r.type === type)?.emoji;
+                              return (
+                                <span
+                                  key={type}
+                                  className={`text-xs px-1.5 py-0.5 rounded-full ${
+                                    mine
+                                      ? "bg-white/20"
+                                      : "bg-gray-100 dark:bg-gray-800"
+                                  }`}
+                                >
+                                  {emoji} {count > 1 && count}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                      {!m.pending && !m.deleted && (
+                        <button
+                          onDoubleClick={() => setReactFor(m.id)}
+                          onClick={() => setMenuFor(m.id)}
+                          className={`absolute top-1 ${
+                            mine ? "-left-8" : "-right-8"
+                          } p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200`}
+                          aria-label="Message options"
+                        >
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+                          </svg>
+                        </button>
+                      )}
+                      {myReaction && !m.deleted && (
+                        <span
+                          className={`absolute -bottom-1 ${
+                            mine ? "left-1" : "right-1"
+                          } text-xs bg-white dark:bg-gray-800 rounded-full w-5 h-5 flex items-center justify-center shadow`}
+                        >
+                          {REACTIONS.find((r) => r.type === myReaction.reaction_type)?.emoji}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+          <div ref={bottomRef} />
+        </div>
+      </div>
+
+      {reactFor && (
+        <div className="fixed inset-0 z-[90]" onClick={() => setReactFor(null)}>
+          <div className="absolute inset-0 bg-black/20" />
+          <div
+            className="absolute bottom-24 left-1/2 -translate-x-1/2 bg-white dark:bg-gray-900 rounded-full shadow-xl px-3 py-2 flex gap-1"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {REACTIONS.map((r) => (
+              <button
+                key={r.type}
+                onClick={() => handleReact(reactFor, r.type)}
+                className="text-2xl hover:scale-125 transition-transform p-1"
+              >
+                {r.emoji}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {menuFor && (
+        <div className="fixed inset-0 z-[90]" onClick={() => setMenuFor(null)}>
+          <div className="absolute inset-0 bg-black/40" />
+          <div
+            className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-900 rounded-t-2xl p-4 pb-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {(() => {
+              const m = messages.find((x) => x.id === menuFor);
+              if (!m) return null;
+              const mine = m.sender_id === data.my_id;
+              return (
+                <div className="space-y-2">
+                  <button
+                    onClick={() => {
+                      setReactFor(m.id);
+                      setMenuFor(null);
+                    }}
+                    className="w-full text-left px-4 py-3 hover:bg-amber-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg font-medium"
+                  >
+                    React
+                  </button>
+                  <button
+                    onClick={() => {
+                      setReplyTo(m);
+                      setMenuFor(null);
+                    }}
+                    className="w-full text-left px-4 py-3 hover:bg-amber-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg font-medium"
+                  >
+                    Reply
+                  </button>
+                  {mine ? (
+                    <button
+                      onClick={() => handleDelete(m.id)}
+                      className="w-full text-left px-4 py-3 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg font-medium"
+                    >
+                      Delete message
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setReportFor(m);
+                        setMenuFor(null);
+                      }}
+                      className="w-full text-left px-4 py-3 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg font-medium"
+                    >
+                      Report message
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setMenuFor(null)}
+                    className="w-full text-center px-4 py-3 text-gray-600 dark:text-gray-400 rounded-lg"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {reportFor && (
+        <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4" onClick={() => setReportFor(null)}>
+          <div
+            className="bg-white dark:bg-gray-900 rounded-2xl max-w-md w-full p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-bold text-gray-800 dark:text-gray-100 mb-3">
+              Report message
+            </h3>
+            <div className="space-y-2 mb-3">
+              {["Spam or scam", "Harassment", "Inappropriate content", "Other"].map((r) => (
+                <label
+                  key={r}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer text-sm ${
+                    reportReason === r
+                      ? "bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700"
+                      : "bg-gray-50 dark:bg-gray-800"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    checked={reportReason === r}
+                    onChange={() => setReportReason(r)}
+                  />
+                  {r}
+                </label>
+              ))}
+            </div>
+            <textarea
+              value={reportDetails}
+              onChange={(e) => setReportDetails(e.target.value)}
+              rows="2"
+              placeholder="Details (optional)"
+              className="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 mb-3"
+            />
+            {reportMsg && (
+              <p
+                className={`text-sm mb-3 ${
+                  reportMsg.includes("Error") ? "text-red-500" : "text-green-600 dark:text-green-400"
+                }`}
+              >
+                {reportMsg}
+              </p>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setReportFor(null)}
+                className="flex-1 bg-gray-200 dark:bg-gray-800 text-gray-800 dark:text-gray-200 font-medium py-2.5 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleReport}
+                disabled={reportSending || !reportReason}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 rounded-lg disabled:opacity-50"
+              >
+                {reportSending ? "..." : "Submit"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmBlock && (
+        <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4" onClick={() => setConfirmBlock(false)}>
+          <div
+            className="bg-white dark:bg-gray-900 rounded-2xl max-w-sm w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-red-800 dark:text-red-300 mb-2">
+              Block @{other?.username}?
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">
+              They won't be able to message you, see your profile, or find you. Any friendship will be removed.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmBlock(false)}
+                className="flex-1 bg-gray-200 dark:bg-gray-800 text-gray-800 dark:text-gray-200 font-medium py-2.5 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBlock}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 rounded-lg"
+              >
+                Yes, Block
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {localMessage && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border-t border-amber-100 dark:border-amber-800 text-xs text-amber-700 dark:text-amber-300 text-center py-1.5">
+          {localMessage}
+        </div>
+      )}
+
+      {replyTo && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border-t border-amber-200 dark:border-amber-800 px-4 py-2 flex items-center gap-2">
+          <div className="flex-1 min-w-0 border-l-4 border-amber-500 pl-2">
+            <p className="text-xs text-amber-700 dark:text-amber-400 font-semibold">
+              Replying to {replyTo.sender_id === data.my_id ? "yourself" : other?.display_name || "them"}
+            </p>
+            <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+              {replyTo.content || "📷 Photo"}
+            </p>
+          </div>
+          <button
+            onClick={() => setReplyTo(null)}
+            className="text-gray-500 dark:text-gray-400 p-1"
+            aria-label="Cancel reply"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      <div className="sticky bottom-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
+        <form onSubmit={handleFormSubmit} className="max-w-2xl mx-auto px-4 py-3 flex gap-2 items-center">
+          <label className="cursor-pointer p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition text-gray-600 dark:text-gray-400">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageSelect}
+              disabled={uploading}
+            />
+          </label>
+          <input
+            type="text"
+            value={content}
+            onChange={handleContentChange}
+            placeholder={uploading ? "Uploading image..." : "Type a message..."}
+            className="flex-1 p-3 border border-gray-300 dark:border-gray-700 rounded-full text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
+            disabled={sending || uploading}
+          />
+          <button
+            type="submit"
+            disabled={sending || uploading || !content.trim()}
+            className="bg-amber-600 hover:bg-amber-700 text-white px-5 py-3 rounded-full font-semibold text-sm disabled:opacity-50 transition"
+          >
+            Send
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
