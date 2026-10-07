@@ -50,6 +50,7 @@ export default function Navbar() {
   const { theme, toggle } = useTheme();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [profile, setProfile] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
@@ -62,11 +63,11 @@ export default function Navbar() {
 
     async function loadProfile() {
       const { data: { user } } = await supabase.auth.getUser();
+      if (!mounted) return;
       if (!user) {
-        if (mounted) {
-          setProfile(null);
-          setUnreadMessages(0);
-        }
+        setProfile(null);
+        setUnreadMessages(0);
+        setAuthChecked(true);
         return;
       }
       const { data } = await supabase
@@ -74,8 +75,10 @@ export default function Navbar() {
         .select("username, profile_pic, display_name, is_okmade, verified")
         .eq("auth_id", user.id)
         .maybeSingle();
-      if (mounted) setProfile(data || null);
-      if (mounted) loadUnread();
+      if (!mounted) return;
+      setProfile(data || null);
+      setAuthChecked(true);
+      loadUnread();
     }
 
     async function loadUnread() {
@@ -94,7 +97,6 @@ export default function Navbar() {
       loadProfile();
     });
 
-    // Refresh unread every 60s and on window focus
     const interval = setInterval(() => {
       if (mounted) loadUnread();
     }, 60_000);
@@ -163,7 +165,9 @@ export default function Navbar() {
               </a>
             ))}
 
-            {profile ? (
+            {!authChecked ? (
+              <div className="w-9 h-9 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
+            ) : profile ? (
               <>
                 <a
                   href="/client/messages"
@@ -284,7 +288,9 @@ export default function Navbar() {
               </a>
             ))}
 
-            {profile ? (
+            {!authChecked ? (
+              <div className="h-10 w-full bg-gray-100 dark:bg-gray-800 rounded-lg animate-pulse" />
+            ) : profile ? (
               <>
                 <div className="border-t border-gray-100 dark:border-gray-800 pt-4 mt-1" />
                 <a
