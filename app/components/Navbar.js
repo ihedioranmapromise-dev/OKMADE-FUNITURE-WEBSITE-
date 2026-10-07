@@ -24,6 +24,11 @@ const DashboardIcon = ({ className = "w-4 h-4" }) => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm10 0a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zm0 6a1 1 0 011-1h4a1 1 0 011 1v8a1 1 0 01-1 1h-4a1 1 0 01-1-1v-8zM4 14a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1v-5z" />
   </svg>
 );
+const MessageIcon = ({ className = "w-5 h-5" }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+  </svg>
+);
 const LogoutIcon = ({ className = "w-4 h-4" }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8">
     <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -47,6 +52,7 @@ export default function Navbar() {
   const [profile, setProfile] = useState(null);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [unreadMessages, setUnreadMessages] = useState(0);
   const avatarMenuRef = useRef(null);
   const isHome = pathname === "/";
 
@@ -57,7 +63,10 @@ export default function Navbar() {
     async function loadProfile() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        if (mounted) setProfile(null);
+        if (mounted) {
+          setProfile(null);
+          setUnreadMessages(0);
+        }
         return;
       }
       const { data } = await supabase
@@ -66,6 +75,17 @@ export default function Navbar() {
         .eq("auth_id", user.id)
         .maybeSingle();
       if (mounted) setProfile(data || null);
+      if (mounted) loadUnread();
+    }
+
+    async function loadUnread() {
+      try {
+        const res = await fetch("/api/messages/unread-count");
+        if (res.ok && mounted) {
+          const d = await res.json();
+          setUnreadMessages(d.count || 0);
+        }
+      } catch {}
     }
 
     loadProfile();
@@ -74,11 +94,23 @@ export default function Navbar() {
       loadProfile();
     });
 
+    // Refresh unread every 60s and on window focus
+    const interval = setInterval(() => {
+      if (mounted) loadUnread();
+    }, 60_000);
+
+    function onFocus() {
+      if (mounted) loadUnread();
+    }
+    window.addEventListener("focus", onFocus);
+
     return () => {
       mounted = false;
       subscription.unsubscribe();
+      clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
     };
-  }, []);
+  }, [pathname]);
 
   useEffect(() => {
     function handleClick(e) {
@@ -124,7 +156,7 @@ export default function Navbar() {
             <span>OKMADE</span>
           </a>
 
-          <div className="hidden md:flex gap-8 text-gray-700 dark:text-gray-300 font-medium items-center">
+          <div className="hidden md:flex gap-6 text-gray-700 dark:text-gray-300 font-medium items-center">
             {navLinks.map((link) => (
               <a key={link.href} href={link.href} className="hover:text-amber-700 dark:hover:text-amber-400 transition">
                 {link.label}
@@ -132,64 +164,92 @@ export default function Navbar() {
             ))}
 
             {profile ? (
-              <div className="relative" ref={avatarMenuRef}>
-                <button
-                  onClick={() => setAvatarMenuOpen(!avatarMenuOpen)}
-                  className="flex items-center gap-2 hover:opacity-90 transition"
-                  aria-label="Account menu"
+              <>
+                <a
+                  href="/client/messages"
+                  className="relative p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition text-gray-600 dark:text-gray-300"
+                  aria-label="Messages"
+                  title="Messages"
                 >
-                  {profile.profile_pic ? (
-                    <img
-                      src={profile.profile_pic}
-                      alt={profile.display_name || profile.username}
-                      className="w-9 h-9 rounded-full object-cover ring-2 ring-amber-200 dark:ring-amber-700"
-                    />
-                  ) : (
-                    <div className="w-9 h-9 rounded-full bg-amber-600 text-white flex items-center justify-center font-semibold text-sm">
-                      {(profile.display_name || profile.username || "?").charAt(0).toUpperCase()}
+                  <MessageIcon />
+                  {unreadMessages > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 bg-red-600 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                      {unreadMessages > 9 ? "9+" : unreadMessages}
+                    </span>
+                  )}
+                </a>
+
+                <div className="relative" ref={avatarMenuRef}>
+                  <button
+                    onClick={() => setAvatarMenuOpen(!avatarMenuOpen)}
+                    className="flex items-center gap-2 hover:opacity-90 transition"
+                    aria-label="Account menu"
+                  >
+                    {profile.profile_pic ? (
+                      <img
+                        src={profile.profile_pic}
+                        alt={profile.display_name || profile.username}
+                        className="w-9 h-9 rounded-full object-cover ring-2 ring-amber-200 dark:ring-amber-700"
+                      />
+                    ) : (
+                      <div className="w-9 h-9 rounded-full bg-amber-600 text-white flex items-center justify-center font-semibold text-sm">
+                        {(profile.display_name || profile.username || "?").charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <svg className="w-3 h-3 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {avatarMenuOpen && (
+                    <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-100 dark:border-gray-800 overflow-hidden z-50">
+                      <a
+                        href="/feed"
+                        onClick={() => setAvatarMenuOpen(false)}
+                        className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm"
+                      >
+                        <FeedIcon /> Public Feed
+                      </a>
+                      <a
+                        href="/client/dashboard"
+                        onClick={() => setAvatarMenuOpen(false)}
+                        className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm"
+                      >
+                        <DashboardIcon /> Dashboard
+                      </a>
+                      <a
+                        href="/client/messages"
+                        onClick={() => setAvatarMenuOpen(false)}
+                        className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm"
+                      >
+                        <MessageIcon className="w-4 h-4" /> Messages
+                        {unreadMessages > 0 && (
+                          <span className="ml-auto bg-red-600 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                            {unreadMessages > 9 ? "9+" : unreadMessages}
+                          </span>
+                        )}
+                      </a>
+                      <button
+                        onClick={toggle}
+                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-amber-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm text-left"
+                      >
+                        {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+                        {theme === "dark" ? "Light mode" : "Dark mode"}
+                      </button>
+                      <div className="border-t border-gray-100 dark:border-gray-800" />
+                      <button
+                        onClick={() => {
+                          setAvatarMenuOpen(false);
+                          setShowLogoutConfirm(true);
+                        }}
+                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 text-sm text-left"
+                      >
+                        <LogoutIcon /> Logout
+                      </button>
                     </div>
                   )}
-                  <svg className="w-3 h-3 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-
-                {avatarMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-100 dark:border-gray-800 overflow-hidden z-50">
-                    <a
-                      href="/feed"
-                      onClick={() => setAvatarMenuOpen(false)}
-                      className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm"
-                    >
-                      <FeedIcon /> Public Feed
-                    </a>
-                    <a
-                      href="/client/dashboard"
-                      onClick={() => setAvatarMenuOpen(false)}
-                      className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm"
-                    >
-                      <DashboardIcon /> Dashboard
-                    </a>
-                    <button
-                      onClick={toggle}
-                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-amber-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm text-left"
-                    >
-                      {theme === "dark" ? <SunIcon /> : <MoonIcon />}
-                      {theme === "dark" ? "Light mode" : "Dark mode"}
-                    </button>
-                    <div className="border-t border-gray-100 dark:border-gray-800" />
-                    <button
-                      onClick={() => {
-                        setAvatarMenuOpen(false);
-                        setShowLogoutConfirm(true);
-                      }}
-                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 text-sm text-left"
-                    >
-                      <LogoutIcon /> Logout
-                    </button>
-                  </div>
-                )}
-              </div>
+                </div>
+              </>
             ) : (
               <a href="/client/login" className="hover:text-amber-700 dark:hover:text-amber-400 transition">
                 Login
@@ -198,11 +258,16 @@ export default function Navbar() {
           </div>
 
           <button
-            className="md:hidden text-2xl text-gray-700 dark:text-gray-300"
+            className="md:hidden text-2xl text-gray-700 dark:text-gray-300 relative"
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             aria-label="Menu"
           >
             <MenuIcon isOpen={isMenuOpen} />
+            {profile && unreadMessages > 0 && !isMenuOpen && (
+              <span className="absolute top-1 right-1 bg-red-600 text-white text-[9px] font-bold rounded-full min-w-[16px] h-[16px] flex items-center justify-center px-1">
+                {unreadMessages > 9 ? "9+" : unreadMessages}
+              </span>
+            )}
           </button>
         </div>
 
@@ -235,6 +300,18 @@ export default function Navbar() {
                   className="flex items-center gap-3 hover:text-amber-700 dark:hover:text-amber-400"
                 >
                   <DashboardIcon /> Dashboard
+                </a>
+                <a
+                  href="/client/messages"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="flex items-center gap-3 hover:text-amber-700 dark:hover:text-amber-400"
+                >
+                  <MessageIcon className="w-4 h-4" /> Messages
+                  {unreadMessages > 0 && (
+                    <span className="ml-auto bg-red-600 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                      {unreadMessages > 9 ? "9+" : unreadMessages}
+                    </span>
+                  )}
                 </a>
                 <button
                   onClick={toggle}
