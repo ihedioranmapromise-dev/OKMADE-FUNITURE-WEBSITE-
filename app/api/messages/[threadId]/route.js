@@ -13,8 +13,19 @@ async function userWantsEmails(clientId) {
     .from("user_settings")
     .select("email_notifications")
     .eq("user_id", clientId)
-    .single();
+    .maybeSingle();
   return data?.email_notifications ?? true;
+}
+
+async function isBlockedEitherWay(a, b) {
+  const { data } = await admin
+    .from("blocks")
+    .select("id")
+    .or(
+      `and(blocker_id.eq.${a},blocked_id.eq.${b}),and(blocker_id.eq.${b},blocked_id.eq.${a})`
+    )
+    .maybeSingle();
+  return !!data;
 }
 
 export async function GET(request, { params }) {
@@ -33,27 +44,38 @@ export async function GET(request, { params }) {
       return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403 });
     }
 
+    const otherId = thread.user_a === me.id ? thread.user_b : thread.user_a;
+    if (await isBlockedEitherWay(me.id, otherId)) {
+      return new Response(JSON.stringify({ error: "Blocked", isBlocked: true }), { status: 403 });
+    }
+
     const { data: messages } = await admin
       .from("messages")
       .select("*")
       .eq("thread_id", threadId)
       .order("created_at", { ascending: true });
 
-    await admin
-      .from("messages")
-      .update({ read_at: new Date().toISOString() })
-      .eq("thread_id", threadId)
-      .eq("receiver_id", me.id)
-      .is("read_at", null);
+    const { searchParams } = new URL(request.url);
+    const shouldMarkRead = searchParams.get("mark_read") === "1";
+    if (shouldMarkRead) {
+      await admin
+        .from("messages")
+        .update({ read_at: new Date().toISOString() })
+        .eq("thread_id", threadId)
+        .eq("receiver_id", me.id)
+        .is("read_at", null);
+    }
 
-    const otherId = thread.user_a === me.id ? thread.user_b : thread.user_a;
     const { data: other } = await admin
       .from("clients")
       .select("username, display_name, profile_pic, skill")
       .eq("id", otherId)
-      .single();
+      .maybeSingle();
 
-    return new Response(JSON.stringify({ thread, other, messages: messages || [], my_id: me.id }), { status: 200 });
+    return new Response(
+      JSON.stringify({ thread, other, messages: messages || [], my_id: me.id }),
+      { status: 200 }
+    );
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), { status: 500 });
   }
@@ -83,6 +105,9 @@ export async function POST(request, { params }) {
     }
 
     const receiverId = thread.user_a === me.id ? thread.user_b : thread.user_a;
+    if (await isBlockedEitherWay(me.id, receiverId)) {
+      return new Response(JSON.stringify({ error: "Cannot send" }), { status: 403 });
+    }
 
     const { data: msg, error } = await admin
       .from("messages")
@@ -113,7 +138,6 @@ export async function POST(request, { params }) {
       target_url: `/client/messages/${threadId}`,
     }]);
 
-    // Email the receiver
     const { data: receiver } = await admin
       .from("clients")
       .select("email")
