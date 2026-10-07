@@ -13,7 +13,7 @@ async function userWantsEmails(clientId) {
     .from("user_settings")
     .select("email_notifications")
     .eq("user_id", clientId)
-    .single();
+    .maybeSingle();
   return data?.email_notifications ?? true;
 }
 
@@ -23,13 +23,35 @@ export async function POST(request, { params }) {
     const { data: { user } } = await supabase.auth.getUser();
 
     const { id } = params;
-    const { reaction_type } = await request.json();
+    const body = await request.json();
+    const { reaction_type, viewer_id } = body;
 
     if (!["like", "love", "haha", "wow", "sad", "angry"].includes(reaction_type)) {
       return new Response(JSON.stringify({ error: "Invalid reaction" }), { status: 400 });
     }
 
-    const userId = user ? user.id : (request.headers.get("x-guest-id") || "guest");
+    const { data: post } = await admin
+      .from("posts")
+      .select("author_id, status, approved")
+      .eq("id", id)
+      .maybeSingle();
+    if (!post) return new Response(JSON.stringify({ error: "Post not found" }), { status: 404 });
+    if (post.status !== "published" || post.approved === false) {
+      return new Response(JSON.stringify({ error: "Post not available" }), { status: 403 });
+    }
+
+    let userId;
+    if (user) {
+      const { data: me } = await admin
+        .from("clients")
+        .select("id")
+        .eq("auth_id", user.id)
+        .maybeSingle();
+      if (!me) return new Response(JSON.stringify({ error: "Profile not found" }), { status: 404 });
+      userId = me.id;
+    } else {
+      userId = viewer_id ? `guest:${String(viewer_id).slice(0, 40)}` : "guest:anonymous";
+    }
 
     const { data: existing } = await admin
       .from("post_reactions")
@@ -54,28 +76,27 @@ export async function POST(request, { params }) {
       reaction_type,
     }]);
 
-    // Only send email to post author (skip if self)
-    if (user) {
+    if (user && post.author_id) {
       const { data: me } = await admin
         .from("clients")
         .select("id, display_name, username")
         .eq("auth_id", user.id)
         .single();
 
-      const { data: post } = await admin
-        .from("posts")
-        .select("author_id, clients:author_id (email)")
-        .eq("id", id)
-        .single();
+      if (post.author_id !== me?.id) {
+        const { data: author } = await admin
+          .from("clients")
+          .select("email")
+          .eq("id", post.author_id)
+          .maybeSingle();
 
-      if (post && post.author_id !== me?.id && post.clients?.email) {
-        if (await userWantsEmails(post.author_id)) {
+        if (author?.email && (await userWantsEmails(post.author_id))) {
           const tpl = postReactionEmail({
             reactorName: me?.display_name || me?.username || "Someone",
             reactionType: reaction_type,
             postId: id,
           });
-          await sendEmail({ to: post.clients.email, subject: tpl.subject, html: tpl.html });
+          await sendEmail({ to: author.email, subject: tpl.subject, html: tpl.html });
         }
       }
     }
