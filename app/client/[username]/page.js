@@ -487,4 +487,60 @@ export default function ClientPortfolio() {
             <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-3">Recent Projects</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {recentProjects.map((p) => (
-                <a key={p.id} href
+                <a key={p.id} href={`/workspace/${p.token_string || p.id}`} className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-3 hover:shadow-md transition">
+                  <p className="font-semibold text-gray-800 dark:text-gray-200 text-sm truncate">{p.work_description || "Project"}</p>
+                  {p.city && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{p.city}</p>}
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!isBlockedByMe && (
+          <div className="mt-4 mb-8 px-4 md:px-6">
+            <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-3">Posts</h2>
+            {loadingFeed ? (
+              <div className="space-y-4">
+                {[...Array(2)].map((_, i) => (
+                  <div key={i} className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-4 space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse"></div>
+                      <div className="h-4 w-32 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
+                    </div>
+                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4 animate-pulse"></div>
+                    <div className="h-48 bg-gray-100 dark:bg-gray-800 rounded animate-pulse"></div>
+                  </div>
+                ))}
+              </div>
+            ) : feed.length === 0 ? (
+              <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-8 text-center text-gray-500 dark:text-gray-400">
+                No posts yet.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {feed.map((post) => (
+                  <PostCard key={post.id} post={post} currentUserId={currentUser?.id || null} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {projects.length > 3 && !isBlockedByMe && (
+          <div className="px-4 md:px-6">
+            <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-3">All Completed Projects</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {projects.map((project) => (
+                <a key={project.id} href={`/workspace/${project.token_string || project.id}`} className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-4 hover:shadow-md transition">
+                  <p className="font-semibold text-gray-800 dark:text-gray-200">{project.work_description || "Completed Project"}</p>
+                  {project.city && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{project.city}</p>}
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Completed: {new Date(project.created_at).toLocaleDateString()}</p>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
