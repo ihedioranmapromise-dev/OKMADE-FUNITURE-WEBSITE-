@@ -46,7 +46,6 @@ export default function SettingsPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [passwordMsg, setPasswordMsg] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
-  const [authEmail, setAuthEmail] = useState("");
   const [pendingDelete, setPendingDelete] = useState(null);
   const [deleteModal, setDeleteModal] = useState(false);
   const [deleteReason, setDeleteReason] = useState("");
@@ -75,9 +74,6 @@ export default function SettingsPage() {
         if (d?.pending) setPendingDelete(d);
       })
       .catch(() => {});
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user?.email) setAuthEmail(user.email);
-    });
   }, []);
 
   const handleSave = async (updates) => {
@@ -118,13 +114,10 @@ export default function SettingsPage() {
     setChangingPassword(true);
     setPasswordMsg("");
     try {
-      const { error: reauthError } = await supabase.auth.signInWithPassword({
-        email: authEmail,
-        password: currentPassword,
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+        current_password: currentPassword,
       });
-      if (reauthError) throw new Error("Current password is incorrect.");
-
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
 
       setPasswordMsg("Password updated.");
