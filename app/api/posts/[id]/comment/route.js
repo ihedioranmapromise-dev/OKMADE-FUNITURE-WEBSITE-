@@ -13,7 +13,7 @@ async function userWantsEmails(clientId) {
     .from("user_settings")
     .select("email_notifications")
     .eq("user_id", clientId)
-    .single();
+    .maybeSingle();
   return data?.email_notifications ?? true;
 }
 
@@ -21,18 +21,34 @@ export async function POST(request, { params }) {
   try {
     const { id } = params;
     const body = await request.json();
-    const { content, author_name, author_email, parent_id } = body;
+    const { content, author_name, author_email, parent_id, viewer_id } = body;
 
     if (!content?.trim()) {
       return new Response(JSON.stringify({ error: "Empty comment" }), { status: 400 });
     }
 
+    const { data: post } = await admin
+      .from("posts")
+      .select("id, author_id, status, approved")
+      .eq("id", id)
+      .maybeSingle();
+    if (!post) return new Response(JSON.stringify({ error: "Post not found" }), { status: 404 });
+    if (post.status !== "published" || post.approved === false) {
+      return new Response(JSON.stringify({ error: "Post not available" }), { status: 403 });
+    }
+
     const supabase = await createSupabaseServer();
     const { data: { user } } = await supabase.auth.getUser();
+
+    const ip =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      request.headers.get("x-real-ip") ||
+      null;
 
     let authorId = null;
     let finalName = author_name;
     let isGuest = true;
+    let guestId = null;
 
     if (user) {
       const { data: me } = await admin
@@ -45,6 +61,8 @@ export async function POST(request, { params }) {
         finalName = me.display_name || me.username;
         isGuest = false;
       }
+    } else if (viewer_id) {
+      guestId = String(viewer_id).slice(0, 40);
     }
 
     if (!finalName?.trim()) {
@@ -60,6 +78,8 @@ export async function POST(request, { params }) {
         author_name: finalName,
         author_email: author_email || null,
         is_guest: isGuest,
+        guest_id: guestId,
+        ip,
         content: content.trim(),
       }])
       .select()
@@ -67,58 +87,55 @@ export async function POST(request, { params }) {
 
     if (error) throw error;
 
-    // Fetch the post to know its author
-    const { data: post } = await admin
-      .from("posts")
-      .select("author_id, clients:author_id (email, username, display_name)")
-      .eq("id", id)
-      .single();
+    if (parent_id) {
+      const { data: parent } = await admin
+        .from("post_comments")
+        .select("author_id, author_name")
+        .eq("id", parent_id)
+        .maybeSingle();
 
-    // Send emails
-    if (post) {
-      // If this is a reply to another comment
-      if (parent_id) {
-        const { data: parent } = await admin
-          .from("post_comments")
-          .select("author_id, author_name, clients:author_id (email)")
-          .eq("id", parent_id)
-          .single();
+      if (parent?.author_id && parent.author_id !== authorId) {
+        const { data: parentClient } = await admin
+          .from("clients")
+          .select("email")
+          .eq("id", parent.author_id)
+          .maybeSingle();
 
-        if (parent?.author_id && parent.author_id !== authorId && parent.clients?.email) {
-          if (await userWantsEmails(parent.author_id)) {
-            const tpl = commentReplyEmail({
-              replierName: finalName,
-              replierUsername: user?.user_metadata?.username || "guest",
-              preview: content.trim().slice(0, 200),
-              postId: id,
-            });
-            await sendEmail({ to: parent.clients.email, subject: tpl.subject, html: tpl.html });
-          }
-        }
-      } else {
-        // Top-level comment → notify post author
-        if (post.author_id && post.author_id !== authorId && post.clients?.email) {
-          if (await userWantsEmails(post.author_id)) {
-            const tpl = newCommentEmail({
-              commenterName: finalName,
-              commenterUsername: user?.user_metadata?.username || "guest",
-              preview: content.trim().slice(0, 200),
-              postId: id,
-            });
-            await sendEmail({ to: post.clients.email, subject: tpl.subject, html: tpl.html });
-          }
+        if (parentClient?.email && (await userWantsEmails(parent.author_id))) {
+          const tpl = commentReplyEmail({
+            replierName: finalName,
+            replierUsername: user?.user_metadata?.username || "guest",
+            preview: content.trim().slice(0, 200),
+            postId: id,
+          });
+          await sendEmail({ to: parentClient.email, subject: tpl.subject, html: tpl.html });
         }
       }
+    } else if (post.author_id && post.author_id !== authorId) {
+      const { data: author } = await admin
+        .from("clients")
+        .select("email")
+        .eq("id", post.author_id)
+        .maybeSingle();
 
-      // In-app notification
-      if (post.author_id && post.author_id !== authorId) {
-        await admin.from("notifications").insert([{
-          client_id: post.author_id,
-          type: "new_comment",
-          message: `${finalName} commented on your post.`,
-          target_url: `/client/posts/${id}`,
-        }]);
+      if (author?.email && (await userWantsEmails(post.author_id))) {
+        const tpl = newCommentEmail({
+          commenterName: finalName,
+          commenterUsername: user?.user_metadata?.username || "guest",
+          preview: content.trim().slice(0, 200),
+          postId: id,
+        });
+        await sendEmail({ to: author.email, subject: tpl.subject, html: tpl.html });
       }
+    }
+
+    if (post.author_id && post.author_id !== authorId) {
+      await admin.from("notifications").insert([{
+        client_id: post.author_id,
+        type: "new_comment",
+        message: `${finalName} commented on your post.`,
+        target_url: `/client/posts/${id}`,
+      }]);
     }
 
     return new Response(JSON.stringify(data), { status: 201 });
