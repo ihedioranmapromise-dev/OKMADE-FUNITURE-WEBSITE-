@@ -19,15 +19,13 @@ export const metadata = {
   title: "OKMADE Furniture",
   description: "Custom furniture and showroom – handcrafted pieces for modern living.",
   manifest: "/manifest.json",
-  icons: {
-    icon: "/favicon.ico",
-    shortcut: "/favicon.ico",
-    apple: "/icon-192.png",
-  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
     title: "OKMADE",
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
   },
 };
 
