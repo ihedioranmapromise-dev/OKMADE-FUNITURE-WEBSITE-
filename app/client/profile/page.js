@@ -241,13 +241,10 @@ export default function ClientProfile() {
     setChangingPassword(true);
     setPasswordMessage("");
     try {
-      const { error: reauthError } = await supabase.auth.signInWithPassword({
-        email: authEmail,
-        password: currentPassword,
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+        current_password: currentPassword,
       });
-      if (reauthError) throw new Error("Current password is incorrect.");
-
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
 
       setPasswordMessage("Password updated successfully!");
@@ -287,7 +284,6 @@ export default function ClientProfile() {
           <a href="/client/dashboard" className="text-sm text-amber-600 dark:text-amber-400 hover:underline">← Dashboard</a>
         </div>
 
-        {/* Cover photo */}
         <div className="relative w-full h-32 md:h-40 rounded-xl overflow-hidden mb-6 bg-gradient-to-r from-amber-700 to-stone-700 dark:from-gray-800 dark:to-gray-900">
           {coverPreview && (
             <img src={coverPreview} alt="Cover" className="w-full h-full object-cover" />
