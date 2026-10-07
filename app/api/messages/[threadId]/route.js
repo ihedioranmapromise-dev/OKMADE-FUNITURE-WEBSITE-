@@ -55,7 +55,7 @@ export async function GET(request, { params }) {
       .eq("thread_id", threadId)
       .order("created_at", { ascending: true });
 
-    // Mark delivered for messages addressed to me that aren't delivered yet
+    // Mark delivered
     await admin
       .from("messages")
       .update({ delivered_at: new Date().toISOString() })
@@ -80,16 +80,50 @@ export async function GET(request, { params }) {
       .eq("id", otherId)
       .maybeSingle();
 
-    // Hide deleted messages' content but keep placeholder
     const cleaned = (messages || []).map((m) => {
-      if (m.deleted_at) {
-        return { ...m, content: "", deleted: true };
-      }
+      if (m.deleted_at) return { ...m, content: "", deleted: true };
       return m;
     });
 
+    // Fetch reactions for all messages in this thread
+    const msgIds = cleaned.map((m) => m.id).filter(Boolean);
+    let reactionsByMessage = {};
+    if (msgIds.length > 0) {
+      const { data: reactions } = await admin
+        .from("message_reactions")
+        .select("message_id, user_id, reaction_type")
+        .in("message_id", msgIds);
+      (reactions || []).forEach((r) => {
+        if (!reactionsByMessage[r.message_id]) reactionsByMessage[r.message_id] = [];
+        reactionsByMessage[r.message_id].push(r);
+      });
+    }
+
+    // Attach reply previews
+    const replyIds = cleaned.map((m) => m.reply_to_id).filter(Boolean);
+    let repliesById = {};
+    if (replyIds.length > 0) {
+      const { data: originals } = await admin
+        .from("messages")
+        .select("id, content, sender_id, deleted_at")
+        .in("id", replyIds);
+      (originals || []).forEach((o) => {
+        repliesById[o.id] = {
+          id: o.id,
+          content: o.deleted_at ? "Deleted message" : o.content,
+          sender_id: o.sender_id,
+        };
+      });
+    }
+
+    const enriched = cleaned.map((m) => ({
+      ...m,
+      reactions: reactionsByMessage[m.id] || [],
+      reply_to: m.reply_to_id ? repliesById[m.reply_to_id] || null : null,
+    }));
+
     return new Response(
-      JSON.stringify({ thread, other, messages: cleaned, my_id: me.id }),
+      JSON.stringify({ thread, other, messages: enriched, my_id: me.id }),
       { status: 200 }
     );
   } catch (err) {
@@ -104,7 +138,7 @@ export async function POST(request, { params }) {
     if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
 
     const { threadId } = params;
-    const { content, image_url } = await request.json();
+    const { content, image_url, reply_to_id } = await request.json();
 
     const hasText = content && content.trim();
     const hasImage = image_url && image_url.trim();
@@ -130,12 +164,24 @@ export async function POST(request, { params }) {
       return new Response(JSON.stringify({ error: "Cannot send" }), { status: 403 });
     }
 
+    // If reply_to_id given, verify it belongs to this thread
+    let safeReplyTo = null;
+    if (reply_to_id) {
+      const { data: orig } = await admin
+        .from("messages")
+        .select("id, thread_id")
+        .eq("id", reply_to_id)
+        .maybeSingle();
+      if (orig && orig.thread_id === threadId) safeReplyTo = reply_to_id;
+    }
+
     const insertBody = {
       thread_id: threadId,
       sender_id: me.id,
       receiver_id: receiverId,
       content: hasText ? content.trim() : "",
       image_url: hasImage ? image_url.trim() : null,
+      reply_to_id: safeReplyTo,
     };
 
     const { data: msg, error } = await admin
