@@ -860,9 +860,6 @@ export default function Home() {
           <a href="/faq" className="text-gray-400 hover:text-white transition">
             FAQ
           </a>
-          <a href="/admin/login" className="text-gray-400 hover:text-white transition">
-            Admin
-          </a>
         </p>
       </footer>
     </div>
