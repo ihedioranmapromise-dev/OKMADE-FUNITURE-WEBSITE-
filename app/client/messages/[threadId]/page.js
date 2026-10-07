@@ -804,4 +804,241 @@ export default function ThreadPage() {
         <div className="fixed inset-0 z-[90]" onClick={() => setReactFor(null)}>
           <div className="absolute inset-0 bg-black/20" />
           <div
-            className="absolute bottom-24 left-1/2 -translate-x-1/2 bg-white dark:bg-gray-900 rounded-full shadow-xl px-3 py-2 flex
+            className="absolute bottom-24 left-1/2 -translate-x-1/2 bg-white dark:bg-gray-900 rounded-full shadow-xl px-3 py-2 flex gap-1"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {REACTIONS.map((r) => (
+              <button
+                key={r.type}
+                onClick={() => handleReact(reactFor, r.type)}
+                className="text-2xl hover:scale-125 transition-transform p-1"
+              >
+                {r.emoji}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {menuFor && (
+        <div className="fixed inset-0 z-[90]" onClick={() => setMenuFor(null)}>
+          <div className="absolute inset-0 bg-black/40" />
+          <div
+            className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-900 rounded-t-2xl p-4 pb-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {(() => {
+              const m = messages.find((x) => x.id === menuFor);
+              if (!m) return null;
+              const mine = m.sender_id === data.my_id;
+              const isPinnedMsg = data.thread?.pinned_message_id === m.id;
+              return (
+                <div className="space-y-2">
+                  <button
+                    onClick={() => {
+                      setReactFor(m.id);
+                      setMenuFor(null);
+                    }}
+                    className="w-full text-left px-4 py-3 hover:bg-amber-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg font-medium"
+                  >
+                    React
+                  </button>
+                  <button
+                    onClick={() => {
+                      setReplyTo(m);
+                      setMenuFor(null);
+                    }}
+                    className="w-full text-left px-4 py-3 hover:bg-amber-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg font-medium"
+                  >
+                    Reply
+                  </button>
+                  <button
+                    onClick={() => pinMessage(m.id)}
+                    className="w-full text-left px-4 py-3 hover:bg-amber-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg font-medium"
+                  >
+                    {isPinnedMsg ? "Unpin message" : "Pin message"}
+                  </button>
+                  {mine ? (
+                    <button
+                      onClick={() => handleDelete(m.id)}
+                      className="w-full text-left px-4 py-3 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg font-medium"
+                    >
+                      Delete message
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setReportFor(m);
+                        setMenuFor(null);
+                      }}
+                      className="w-full text-left px-4 py-3 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg font-medium"
+                    >
+                      Report message
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setMenuFor(null)}
+                    className="w-full text-center px-4 py-3 text-gray-600 dark:text-gray-400 rounded-lg"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {reportFor && (
+        <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4" onClick={() => setReportFor(null)}>
+          <div
+            className="bg-white dark:bg-gray-900 rounded-2xl max-w-md w-full p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-bold text-gray-800 dark:text-gray-100 mb-3">
+              Report message
+            </h3>
+            <div className="space-y-2 mb-3">
+              {["Spam or scam", "Harassment", "Inappropriate content", "Other"].map((r) => (
+                <label
+                  key={r}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer text-sm ${
+                    reportReason === r
+                      ? "bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700"
+                      : "bg-gray-50 dark:bg-gray-800"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    checked={reportReason === r}
+                    onChange={() => setReportReason(r)}
+                  />
+                  {r}
+                </label>
+              ))}
+            </div>
+            <textarea
+              value={reportDetails}
+              onChange={(e) => setReportDetails(e.target.value)}
+              rows="2"
+              placeholder="Details (optional)"
+              className="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 mb-3"
+            />
+            {reportMsg && (
+              <p
+                className={`text-sm mb-3 ${
+                  reportMsg.includes("Error") ? "text-red-500" : "text-green-600 dark:text-green-400"
+                }`}
+              >
+                {reportMsg}
+              </p>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setReportFor(null)}
+                className="flex-1 bg-gray-200 dark:bg-gray-800 text-gray-800 dark:text-gray-200 font-medium py-2.5 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleReport}
+                disabled={reportSending || !reportReason}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 rounded-lg disabled:opacity-50"
+              >
+                {reportSending ? "..." : "Submit"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmBlock && (
+        <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4" onClick={() => setConfirmBlock(false)}>
+          <div
+            className="bg-white dark:bg-gray-900 rounded-2xl max-w-sm w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-red-800 dark:text-red-300 mb-2">
+              Block @{other?.username}?
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">
+              They won't be able to message you, see your profile, or find you. Any friendship will be removed.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmBlock(false)}
+                className="flex-1 bg-gray-200 dark:bg-gray-800 text-gray-800 dark:text-gray-200 font-medium py-2.5 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBlock}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 rounded-lg"
+              >
+                Yes, Block
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {localMessage && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border-t border-amber-100 dark:border-amber-800 text-xs text-amber-700 dark:text-amber-300 text-center py-1.5">
+          {localMessage}
+        </div>
+      )}
+
+      {replyTo && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border-t border-amber-200 dark:border-amber-800 px-4 py-2 flex items-center gap-2">
+          <div className="flex-1 min-w-0 border-l-4 border-amber-500 pl-2">
+            <p className="text-xs text-amber-700 dark:text-amber-400 font-semibold">
+              Replying to {replyTo.sender_id === data.my_id ? "yourself" : other?.display_name || "them"}
+            </p>
+            <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+              {replyTo.content || "📷 Photo"}
+            </p>
+          </div>
+          <button
+            onClick={() => setReplyTo(null)}
+            className="text-gray-500 dark:text-gray-400 p-1"
+            aria-label="Cancel reply"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      <div className="sticky bottom-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
+        <form onSubmit={handleFormSubmit} className="max-w-2xl mx-auto px-4 py-3 flex gap-2 items-center">
+          <label className="cursor-pointer p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition text-gray-600 dark:text-gray-400">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageSelect}
+              disabled={uploading}
+            />
+          </label>
+          <input
+            type="text"
+            value={content}
+            onChange={handleContentChange}
+            placeholder={uploading ? "Uploading image..." : "Type a message..."}
+            className="flex-1 p-3 border border-gray-300 dark:border-gray-700 rounded-full text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
+            disabled={sending || uploading}
+          />
+          <button
+            type="submit"
+            disabled={sending || uploading || !content.trim()}
+            className="bg-amber-600 hover:bg-amber-700 text-white px-5 py-3 rounded-full font-semibold text-sm disabled:opacity-50 transition"
+          >
+            Send
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
