@@ -19,12 +19,23 @@ const UserIcon = () => (<svg className="w-5 h-5" fill="currentColor" viewBox="0 
 const ContactIcon = () => (<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>);
 const SocialIcon = () => (<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>);
 const LockIcon = () => (<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>);
+const CameraIcon = ({ className = "w-4 h-4" }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+  </svg>
+);
+const CoverIcon = ({ className = "w-4 h-4" }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+  </svg>
+);
 
-async function uploadWithRetry(supabase, path, file, retries = 3) {
+async function uploadWithRetry(supabase, bucket, path, file, retries = 3) {
   let lastErr;
   for (let i = 0; i <= retries; i++) {
     const { error } = await supabase.storage
-      .from("profile-pics")
+      .from(bucket)
       .upload(path, file, { cacheControl: "31536000", upsert: true });
     if (!error) return { ok: true };
     lastErr = error;
@@ -40,9 +51,12 @@ export default function ClientProfile() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingPic, setUploadingPic] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
   const [message, setMessage] = useState("");
   const [profilePicPreview, setProfilePicPreview] = useState("");
+  const [coverPreview, setCoverPreview] = useState("");
   const fileInputRef = useRef(null);
+  const coverInputRef = useRef(null);
   const router = useRouter();
   const supabase = createSupabaseBrowser();
 
@@ -61,9 +75,12 @@ export default function ClientProfile() {
   const [facebookUrl, setFacebookUrl] = useState("");
   const [tiktokUrl, setTiktokUrl] = useState("");
   const [instagramUrl, setInstagramUrl] = useState("");
+  const [twitterUrl, setTwitterUrl] = useState("");
 
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState("");
@@ -103,7 +120,9 @@ export default function ClientProfile() {
       setFacebookUrl(data.facebook_url || "");
       setTiktokUrl(data.tiktok_url || "");
       setInstagramUrl(data.instagram_url || "");
+      setTwitterUrl(data.twitter_url || "");
       setProfilePicPreview(data.profile_pic || "");
+      setCoverPreview(data.cover_photo || "");
       setLoading(false);
     }
     load();
@@ -115,10 +134,10 @@ export default function ClientProfile() {
     setUploadingPic(true);
     setMessage("");
     try {
-      const ext = file.name.split(".").pop();
-      const fileName = `profiles/${client.id}_${Date.now()}.${ext}`;
-      const result = await uploadWithRetry(supabase, fileName, file);
-      if (!result.ok) throw new Error("Upload failed after retries");
+      const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+      const fileName = `${client.id}/${Date.now()}.${ext}`;
+      const result = await uploadWithRetry(supabase, "profile-pics", fileName, file);
+      if (!result.ok) throw new Error(result.error?.message || "Upload failed after retries");
       const { data: urlData } = supabase.storage.from("profile-pics").getPublicUrl(fileName);
 
       const { error: updateError } = await supabase
@@ -133,6 +152,35 @@ export default function ClientProfile() {
       setMessage("Error uploading picture: " + err.message);
     } finally {
       setUploadingPic(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleCoverUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !client) return;
+    setUploadingCover(true);
+    setMessage("");
+    try {
+      const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+      const fileName = `${client.id}/${Date.now()}.${ext}`;
+      const result = await uploadWithRetry(supabase, "cover-photos", fileName, file);
+      if (!result.ok) throw new Error(result.error?.message || "Upload failed after retries");
+      const { data: urlData } = supabase.storage.from("cover-photos").getPublicUrl(fileName);
+
+      const { error: updateError } = await supabase
+        .from("clients")
+        .update({ cover_photo: urlData.publicUrl })
+        .eq("id", client.id);
+      if (updateError) throw updateError;
+
+      setCoverPreview(urlData.publicUrl);
+      setMessage("Cover photo updated!");
+    } catch (err) {
+      setMessage("Error uploading cover: " + err.message);
+    } finally {
+      setUploadingCover(false);
+      if (coverInputRef.current) coverInputRef.current.value = "";
     }
   };
 
@@ -160,6 +208,7 @@ export default function ClientProfile() {
           facebook_url: facebookUrl || null,
           tiktok_url: tiktokUrl || null,
           instagram_url: instagramUrl || null,
+          twitter_url: twitterUrl || null,
         })
         .eq("id", client.id);
       if (error) throw error;
@@ -173,24 +222,36 @@ export default function ClientProfile() {
 
   const handlePasswordChange = async (e) => {
     e.preventDefault();
-    if (!newPassword || !confirmPassword) {
-      setPasswordMessage("Please fill both password fields.");
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPasswordMessage("Please fill all password fields.");
       return;
     }
     if (newPassword !== confirmPassword) {
-      setPasswordMessage("Passwords do not match.");
+      setPasswordMessage("New passwords do not match.");
       return;
     }
     if (newPassword.length < 6) {
       setPasswordMessage("Password must be at least 6 characters.");
       return;
     }
+    if (currentPassword === newPassword) {
+      setPasswordMessage("New password must be different from current.");
+      return;
+    }
     setChangingPassword(true);
     setPasswordMessage("");
     try {
+      const { error: reauthError } = await supabase.auth.signInWithPassword({
+        email: authEmail,
+        password: currentPassword,
+      });
+      if (reauthError) throw new Error("Current password is incorrect.");
+
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
+
       setPasswordMessage("Password updated successfully!");
+      setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
     } catch (err) {
@@ -226,12 +287,35 @@ export default function ClientProfile() {
           <a href="/client/dashboard" className="text-sm text-amber-600 dark:text-amber-400 hover:underline">← Dashboard</a>
         </div>
 
+        {/* Cover photo */}
+        <div className="relative w-full h-32 md:h-40 rounded-xl overflow-hidden mb-6 bg-gradient-to-r from-amber-700 to-stone-700 dark:from-gray-800 dark:to-gray-900">
+          {coverPreview && (
+            <img src={coverPreview} alt="Cover" className="w-full h-full object-cover" />
+          )}
+          <button
+            type="button"
+            onClick={() => coverInputRef.current?.click()}
+            className="absolute bottom-2 right-2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full flex items-center justify-center transition"
+            aria-label="Change cover photo"
+          >
+            <CoverIcon className="w-4 h-4" />
+          </button>
+          <input ref={coverInputRef} type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" />
+          {uploadingCover && (
+            <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white text-sm">
+              Uploading cover...
+            </div>
+          )}
+        </div>
+
         <div className="flex flex-col items-center mb-6">
           <div className="relative">
             {profilePicPreview ? (
               <img src={profilePicPreview} className="w-24 h-24 rounded-full object-cover border-4 border-amber-200 dark:border-amber-800" alt="Profile" />
             ) : (
-              <div className="w-24 h-24 rounded-full bg-gray-200 dark:bg-gray-800 flex items-center justify-center text-gray-400 text-3xl border-4 border-amber-200 dark:border-amber-800">👤</div>
+              <div className="w-24 h-24 rounded-full bg-gray-200 dark:bg-gray-800 flex items-center justify-center text-gray-400 border-4 border-amber-200 dark:border-amber-800">
+                <UserIcon />
+              </div>
             )}
             <button
               type="button"
@@ -239,7 +323,7 @@ export default function ClientProfile() {
               className="absolute bottom-0 right-0 bg-amber-600 text-white p-1.5 rounded-full w-8 h-8 flex items-center justify-center hover:bg-amber-700 transition"
               aria-label="Change profile picture"
             >
-              📷
+              <CameraIcon className="w-4 h-4" />
             </button>
             <input ref={fileInputRef} type="file" accept="image/*" onChange={handleProfilePicUpload} className="hidden" />
           </div>
@@ -291,6 +375,7 @@ export default function ClientProfile() {
                 <h3 className="font-semibold text-gray-700 dark:text-gray-300">Social Links</h3>
                 <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300">WhatsApp URL</label><input type="text" value={whatsappUrl} onChange={(e) => setWhatsappUrl(e.target.value)} placeholder="https://wa.me/2348123456789" className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100" /></div>
                 <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Facebook URL</label><input type="text" value={facebookUrl} onChange={(e) => setFacebookUrl(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300">X (Twitter) URL</label><input type="text" value={twitterUrl} onChange={(e) => setTwitterUrl(e.target.value)} placeholder="https://x.com/yourhandle" className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100" /></div>
                 <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300">TikTok URL</label><input type="text" value={tiktokUrl} onChange={(e) => setTiktokUrl(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100" /></div>
                 <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Instagram URL</label><input type="text" value={instagramUrl} onChange={(e) => setInstagramUrl(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100" /></div>
               </div>
@@ -305,6 +390,15 @@ export default function ClientProfile() {
 
         {activeTab === "security" && (
           <form onSubmit={handlePasswordChange} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Current Password</label>
+              <div className="relative">
+                <input type={showCurrent ? "text" : "password"} value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg pr-12 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100" required />
+                <button type="button" className="absolute inset-y-0 right-3 flex items-center text-gray-500 dark:text-gray-400 hover:text-amber-600 transition" onClick={() => setShowCurrent(!showCurrent)} aria-label={showCurrent ? "Hide" : "Show"}>
+                  {showCurrent ? <EyeOff /> : <EyeOpen />}
+                </button>
+              </div>
+            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">New Password</label>
               <div className="relative">
