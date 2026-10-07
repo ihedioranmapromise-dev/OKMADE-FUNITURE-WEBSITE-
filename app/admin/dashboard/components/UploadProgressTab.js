@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { adminFetch } from "@/lib/admin-client";
+import { createSupabaseBrowser } from "@/lib/supabase-browser";
 import AutoPostModal from "@/app/components/AutoPostModal";
 
 const STATUS_OPTIONS = ["pending", "in-progress", "complete"];
@@ -130,11 +131,7 @@ export default function UploadProgressTab() {
     setUploading(true);
     setMessage("");
     try {
-      const { createClient } = await import("@supabase/supabase-js");
-      const sb = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-      );
+      const sb = createSupabaseBrowser();
 
       const uploaded = [];
       for (let i = 0; i < imageData.length; i++) {
