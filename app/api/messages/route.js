@@ -6,7 +6,17 @@ const admin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// GET: list my threads
+async function isBlockedEitherWay(a, b) {
+  const { data } = await admin
+    .from("blocks")
+    .select("id")
+    .or(
+      `and(blocker_id.eq.${a},blocked_id.eq.${b}),and(blocker_id.eq.${b},blocked_id.eq.${a})`
+    )
+    .maybeSingle();
+  return !!data;
+}
+
 export async function GET() {
   try {
     const supabase = await createSupabaseServer();
@@ -22,24 +32,19 @@ export async function GET() {
       .or(`user_a.eq.${me.id},user_b.eq.${me.id}`)
       .order("last_message_at", { ascending: false });
 
-    // Attach other user info
     const threadsWithUsers = await Promise.all(
       (threads || []).map(async (t) => {
         const otherId = t.user_a === me.id ? t.user_b : t.user_a;
-        const { data: other } = await admin
-          .from("clients")
-          .select("username, display_name, profile_pic")
-          .eq("id", otherId)
-          .single();
-
-        const { count: unread } = await admin
-          .from("messages")
-          .select("*", { count: "exact", head: true })
-          .eq("thread_id", t.id)
-          .eq("receiver_id", me.id)
-          .is("read_at", null);
-
-        return { ...t, other, unread: unread || 0 };
+        const [otherRes, unreadRes] = await Promise.all([
+          admin.from("clients").select("username, display_name, profile_pic").eq("id", otherId).maybeSingle(),
+          admin
+            .from("messages")
+            .select("*", { count: "exact", head: true })
+            .eq("thread_id", t.id)
+            .eq("receiver_id", me.id)
+            .is("read_at", null),
+        ]);
+        return { ...t, other: otherRes.data, unread: unreadRes.count || 0 };
       })
     );
 
@@ -49,7 +54,6 @@ export async function GET() {
   }
 }
 
-// POST: create/find thread with a username
 export async function POST(request) {
   try {
     const supabase = await createSupabaseServer();
@@ -63,23 +67,25 @@ export async function POST(request) {
     if (!me || !other) return new Response(JSON.stringify({ error: "User not found" }), { status: 404 });
     if (me.id === other.id) return new Response(JSON.stringify({ error: "Cannot message yourself" }), { status: 400 });
 
-    // Check friendship
+    if (await isBlockedEitherWay(me.id, other.id)) {
+      return new Response(JSON.stringify({ error: "Cannot message this user" }), { status: 403 });
+    }
+
+    const [a, b] = [me.id, other.id].sort();
     const { data: friends } = await admin
       .from("friends")
       .select("id")
-      .or(`and(user_a.eq.${me.id},user_b.eq.${other.id}),and(user_a.eq.${other.id},user_b.eq.${me.id})`)
-      .single();
+      .eq("user_a", a)
+      .eq("user_b", b)
+      .maybeSingle();
     if (!friends) return new Response(JSON.stringify({ error: "You must be friends to message" }), { status: 403 });
-
-    // Sort IDs
-    const [a, b] = [me.id, other.id].sort();
 
     const { data: existing } = await admin
       .from("message_threads")
       .select("id")
       .eq("user_a", a)
       .eq("user_b", b)
-      .single();
+      .maybeSingle();
 
     if (existing) return new Response(JSON.stringify({ thread_id: existing.id }), { status: 200 });
 
