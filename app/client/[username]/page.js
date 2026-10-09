@@ -299,7 +299,6 @@ export default function ClientPortfolio() {
   const st = status || { isLoggedIn: false, isFollowing: false, isBlocked: false, isMuted: false, friendStatus: "none", followersCount: 0, followingCount: 0 };
   const displayName = client.display_name || client.username;
   const profileUrl = typeof window !== "undefined" ? window.location.href : "";
-  const recentProjects = projects.slice(0, 3);
   const isBlockedByMe = st.isBlocked;
   const isMutedByMe = st.isMuted;
 
@@ -482,14 +481,27 @@ export default function ClientPortfolio() {
           </div>
         )}
 
-        {recentProjects.length > 0 && !isBlockedByMe && (
+        {projects.length > 0 && !isBlockedByMe && (
           <div className="mt-4 mb-4 px-4 md:px-6">
-            <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-3">Recent Projects</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {recentProjects.map((p) => (
-                <a key={p.id} href={`/workspace/${p.token_string || p.id}`} className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-3 hover:shadow-md transition">
-                  <p className="font-semibold text-gray-800 dark:text-gray-200 text-sm truncate">{p.work_description || "Project"}</p>
-                  {p.city && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{p.city}</p>}
+            <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-3">
+              Projects ({projects.length})
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {projects.map((project) => (
+                <a
+                  key={project.id}
+                  href={`/workspace/${project.token_string || project.id}`}
+                  className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-4 hover:shadow-md transition"
+                >
+                  <p className="font-semibold text-gray-800 dark:text-gray-200">
+                    {project.work_description || "Completed Project"}
+                  </p>
+                  {project.city && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{project.city}</p>
+                  )}
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Completed: {new Date(project.created_at).toLocaleDateString()}
+                  </p>
                 </a>
               ))}
             </div>
@@ -523,21 +535,6 @@ export default function ClientPortfolio() {
                 ))}
               </div>
             )}
-          </div>
-        )}
-
-        {projects.length > 3 && !isBlockedByMe && (
-          <div className="px-4 md:px-6">
-            <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-3">All Completed Projects</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {projects.map((project) => (
-                <a key={project.id} href={`/workspace/${project.token_string || project.id}`} className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-4 hover:shadow-md transition">
-                  <p className="font-semibold text-gray-800 dark:text-gray-200">{project.work_description || "Completed Project"}</p>
-                  {project.city && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{project.city}</p>}
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Completed: {new Date(project.created_at).toLocaleDateString()}</p>
-                </a>
-              ))}
-            </div>
           </div>
         )}
       </div>
