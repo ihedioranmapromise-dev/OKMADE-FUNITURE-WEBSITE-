@@ -28,6 +28,12 @@ const VerifiedBadge = ({ isOkmade }) => (
   </svg>
 );
 
+const PinIcon = ({ className = "w-4 h-4" }) => (
+  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
+    <path d="M16 3l5 5-3 1-3.5 3.5-1.5 5.5-1-1-3 3-2-2 3-3-1-1 5.5-1.5L18 9l1-3z" />
+  </svg>
+);
+
 function timeAgo(dateStr) {
   const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
   if (seconds < 60) return "Just now";
@@ -74,6 +80,9 @@ export default function PostCard({
   const [editSaving, setEditSaving] = useState(false);
   const [localCommentCount, setLocalCommentCount] = useState(post.commentCount || 0);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [pinned, setPinned] = useState(!!post.pinned);
+  const [pinBusy, setPinBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const author = post.clients || {};
   const fullName = author.display_name || author.username || "User";
@@ -137,8 +146,6 @@ export default function PostCard({
 
     setCommentText("");
     setReplyingTo(null);
-
-    // Optimistic comment count
     setLocalCommentCount((c) => c + 1);
 
     if (!navigator.onLine) {
@@ -226,6 +233,37 @@ export default function PostCard({
     }
   };
 
+  const handlePin = async () => {
+    setMenuOpen(false);
+    setPinBusy(true);
+    try {
+      const res = await fetchWithRetry(`/api/posts/${post.id}/pin`, { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        setPinned(!!data.pinned);
+        onUpdate?.();
+      } else {
+        alert("Pin failed.");
+      }
+    } catch {
+      alert("Network error.");
+    } finally {
+      setPinBusy(false);
+    }
+  };
+
+  const handleCopyLink = async () => {
+    setMenuOpen(false);
+    try {
+      const url = `${window.location.origin}/client/${author.username}#post-${post.id}`;
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      alert("Copy failed.");
+    }
+  };
+
   const topLevel = comments.filter((c) => !c.parent_id);
   const visibleComments = showAllComments ? topLevel : topLevel.slice(0, 2);
 
@@ -237,8 +275,21 @@ export default function PostCard({
       : "";
 
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
-      {/* Header */}
+    <div
+      id={`post-${post.id}`}
+      className={`bg-white dark:bg-gray-900 rounded-xl shadow-sm border overflow-hidden ${
+        pinned
+          ? "border-amber-400 dark:border-amber-600 ring-1 ring-amber-200 dark:ring-amber-900"
+          : "border-gray-200 dark:border-gray-800"
+      }`}
+    >
+      {pinned && (
+        <div className="flex items-center gap-1.5 px-4 pt-3 text-xs text-amber-700 dark:text-amber-400 font-medium">
+          <PinIcon className="w-3.5 h-3.5" />
+          Pinned post
+        </div>
+      )}
+
       <div className="p-4 flex items-start gap-3">
         {author.profile_pic ? (
           <div className="relative w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
@@ -298,7 +349,7 @@ export default function PostCard({
               {menuOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-                  <div className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-50 overflow-hidden">
+                  <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-50 overflow-hidden">
                     <button
                       onClick={() => {
                         setEditing(true);
@@ -307,6 +358,19 @@ export default function PostCard({
                       className="w-full text-left px-4 py-2.5 hover:bg-amber-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm"
                     >
                       Edit post
+                    </button>
+                    <button
+                      onClick={handlePin}
+                      disabled={pinBusy}
+                      className="w-full text-left px-4 py-2.5 hover:bg-amber-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm disabled:opacity-50 border-t border-gray-100 dark:border-gray-800"
+                    >
+                      {pinBusy ? "..." : pinned ? "Unpin post" : "Pin post"}
+                    </button>
+                    <button
+                      onClick={handleCopyLink}
+                      className="w-full text-left px-4 py-2.5 hover:bg-amber-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm border-t border-gray-100 dark:border-gray-800"
+                    >
+                      {copied ? "Copied!" : "Copy link"}
                     </button>
                     <button
                       onClick={() => {
@@ -325,7 +389,6 @@ export default function PostCard({
         </div>
       </div>
 
-      {/* Content or edit mode */}
       {editing ? (
         <div className="px-4 pb-3">
           <textarea
@@ -366,7 +429,6 @@ export default function PostCard({
         )
       )}
 
-      {/* Images */}
       {imageCount > 0 && (
         <div className={`grid gap-1 ${singleImage ? "grid-cols-1" : "grid-cols-2"}`}>
           {post.image_urls.map((url, i) => (
@@ -393,7 +455,6 @@ export default function PostCard({
         </div>
       )}
 
-      {/* Counts bar */}
       {(totalReactions > 0 || localCommentCount > 0) && (
         <div className="px-4 py-2 flex justify-between text-xs text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-800">
           <span className="flex items-center gap-1">
@@ -415,7 +476,6 @@ export default function PostCard({
         </div>
       )}
 
-      {/* Action bar */}
       <div className="border-t border-gray-100 dark:border-gray-800 px-2 flex">
         <div
           className="relative flex-1"
@@ -472,7 +532,6 @@ export default function PostCard({
         </div>
       )}
 
-      {/* Comments */}
       {showAllComments && (
         <div className="border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 p-4 space-y-3">
           {loadingComments && (
