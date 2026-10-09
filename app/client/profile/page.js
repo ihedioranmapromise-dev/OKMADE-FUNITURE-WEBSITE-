@@ -2,6 +2,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowser } from "@/lib/supabase-browser";
+import PostShareModal from "./PostShareModal";
 
 const EyeOpen = ({ className = "w-5 h-5" }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8">
@@ -30,6 +31,19 @@ const CoverIcon = ({ className = "w-4 h-4" }) => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
   </svg>
 );
+const TrashIcon = ({ className = "w-4 h-4" }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" />
+  </svg>
+);
+
+function extractStoragePath(url) {
+  if (!url) return null;
+  const marker = "/public/";
+  const idx = url.indexOf(marker);
+  if (idx === -1) return null;
+  return url.slice(idx + marker.length);
+}
 
 async function uploadWithRetry(supabase, bucket, path, file, retries = 3) {
   let lastErr;
@@ -86,6 +100,16 @@ export default function ClientProfile() {
   const [passwordMessage, setPasswordMessage] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
 
+  // Post-share modal state
+  const [shareModal, setShareModal] = useState({
+    open: false,
+    kind: null, // "profile_pic" | "cover_photo"
+    newUrl: null,
+    newPath: null, // storage path, for cleanup on cancel
+    bucket: null,
+  });
+  const [shareSaving, setShareSaving] = useState(false);
+
   useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser();
@@ -140,14 +164,14 @@ export default function ClientProfile() {
       if (!result.ok) throw new Error(result.error?.message || "Upload failed after retries");
       const { data: urlData } = supabase.storage.from("profile-pics").getPublicUrl(fileName);
 
-      const { error: updateError } = await supabase
-        .from("clients")
-        .update({ profile_pic: urlData.publicUrl })
-        .eq("id", client.id);
-      if (updateError) throw updateError;
-
-      setProfilePicPreview(urlData.publicUrl);
-      setMessage("Profile picture updated!");
+      // Open share modal — DB is NOT updated yet
+      setShareModal({
+        open: true,
+        kind: "profile_pic",
+        newUrl: urlData.publicUrl,
+        newPath: fileName,
+        bucket: "profile-pics",
+      });
     } catch (err) {
       setMessage("Error uploading picture: " + err.message);
     } finally {
@@ -168,19 +192,136 @@ export default function ClientProfile() {
       if (!result.ok) throw new Error(result.error?.message || "Upload failed after retries");
       const { data: urlData } = supabase.storage.from("cover-photos").getPublicUrl(fileName);
 
-      const { error: updateError } = await supabase
-        .from("clients")
-        .update({ cover_photo: urlData.publicUrl })
-        .eq("id", client.id);
-      if (updateError) throw updateError;
-
-      setCoverPreview(urlData.publicUrl);
-      setMessage("Cover photo updated!");
+      setShareModal({
+        open: true,
+        kind: "cover_photo",
+        newUrl: urlData.publicUrl,
+        newPath: fileName,
+        bucket: "cover-photos",
+      });
     } catch (err) {
       setMessage("Error uploading cover: " + err.message);
     } finally {
       setUploadingCover(false);
       if (coverInputRef.current) coverInputRef.current.value = "";
+    }
+  };
+
+  const handleShareCancel = async () => {
+    if (!shareModal.open) return;
+    try {
+      if (shareModal.newPath && shareModal.bucket) {
+        await supabase.storage.from(shareModal.bucket).remove([shareModal.newPath]);
+      }
+    } catch {}
+    setShareModal({ open: false, kind: null, newUrl: null, newPath: null, bucket: null });
+    setMessage("Cancelled. Nothing was changed.");
+  };
+
+  const handleShareConfirm = async (shareChecked, text) => {
+    if (!client || !shareModal.open) return;
+    setShareSaving(true);
+    setMessage("");
+    try {
+      const column = shareModal.kind === "cover_photo" ? "cover_photo" : "profile_pic";
+
+      // Delete old file from storage first (free space)
+      const oldUrl = shareModal.kind === "cover_photo" ? client.cover_photo : client.profile_pic;
+      const oldPath = extractStoragePath(oldUrl);
+      if (oldPath && shareModal.bucket) {
+        try {
+          await supabase.storage.from(shareModal.bucket).remove([oldPath]);
+        } catch {}
+      }
+
+      // Update DB with the new URL
+      const { error: updateError } = await supabase
+        .from("clients")
+        .update({ [column]: shareModal.newUrl })
+        .eq("id", client.id);
+      if (updateError) throw updateError;
+
+      // If sharing, create the auto-post
+      if (shareChecked) {
+        const res = await fetch("/api/posts/auto", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content: text,
+            image_url: shareModal.newUrl,
+            auto_source: shareModal.kind,
+          }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || "Post failed");
+        }
+      }
+
+      // Update local state
+      if (shareModal.kind === "cover_photo") {
+        setCoverPreview(shareModal.newUrl);
+        setClient({ ...client, cover_photo: shareModal.newUrl });
+        setMessage(shareChecked ? "Cover photo updated and posted!" : "Cover photo updated!");
+      } else {
+        setProfilePicPreview(shareModal.newUrl);
+        setClient({ ...client, profile_pic: shareModal.newUrl });
+        setMessage(shareChecked ? "Profile picture updated and posted!" : "Profile picture updated!");
+      }
+
+      setShareModal({ open: false, kind: null, newUrl: null, newPath: null, bucket: null });
+    } catch (err) {
+      setMessage("Error: " + err.message);
+    } finally {
+      setShareSaving(false);
+    }
+  };
+
+  const handleRemoveProfilePic = async () => {
+    if (!client || !client.profile_pic) return;
+    if (!confirm("Remove your profile picture?")) return;
+    setMessage("");
+    try {
+      const path = extractStoragePath(client.profile_pic);
+      if (path) {
+        try {
+          await supabase.storage.from("profile-pics").remove([path]);
+        } catch {}
+      }
+      const { error } = await supabase
+        .from("clients")
+        .update({ profile_pic: null })
+        .eq("id", client.id);
+      if (error) throw error;
+      setProfilePicPreview("");
+      setClient({ ...client, profile_pic: null });
+      setMessage("Profile picture removed.");
+    } catch (err) {
+      setMessage("Error: " + err.message);
+    }
+  };
+
+  const handleRemoveCover = async () => {
+    if (!client || !client.cover_photo) return;
+    if (!confirm("Remove your cover photo?")) return;
+    setMessage("");
+    try {
+      const path = extractStoragePath(client.cover_photo);
+      if (path) {
+        try {
+          await supabase.storage.from("cover-photos").remove([path]);
+        } catch {}
+      }
+      const { error } = await supabase
+        .from("clients")
+        .update({ cover_photo: null })
+        .eq("id", client.id);
+      if (error) throw error;
+      setCoverPreview("");
+      setClient({ ...client, cover_photo: null });
+      setMessage("Cover photo removed.");
+    } catch (err) {
+      setMessage("Error: " + err.message);
     }
   };
 
@@ -284,18 +425,31 @@ export default function ClientProfile() {
           <a href="/client/dashboard" className="text-sm text-amber-600 dark:text-amber-400 hover:underline">← Dashboard</a>
         </div>
 
+        {/* Cover photo */}
         <div className="relative w-full h-32 md:h-40 rounded-xl overflow-hidden mb-6 bg-gradient-to-r from-amber-700 to-stone-700 dark:from-gray-800 dark:to-gray-900">
           {coverPreview && (
             <img src={coverPreview} alt="Cover" className="w-full h-full object-cover" />
           )}
-          <button
-            type="button"
-            onClick={() => coverInputRef.current?.click()}
-            className="absolute bottom-2 right-2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full flex items-center justify-center transition"
-            aria-label="Change cover photo"
-          >
-            <CoverIcon className="w-4 h-4" />
-          </button>
+          <div className="absolute bottom-2 right-2 flex gap-2">
+            {coverPreview && (
+              <button
+                type="button"
+                onClick={handleRemoveCover}
+                className="bg-red-600/80 hover:bg-red-700 text-white p-2 rounded-full flex items-center justify-center transition"
+                aria-label="Remove cover photo"
+              >
+                <TrashIcon className="w-4 h-4" />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => coverInputRef.current?.click()}
+              className="bg-black/60 hover:bg-black/80 text-white p-2 rounded-full flex items-center justify-center transition"
+              aria-label="Change cover photo"
+            >
+              <CoverIcon className="w-4 h-4" />
+            </button>
+          </div>
           <input ref={coverInputRef} type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" />
           {uploadingCover && (
             <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white text-sm">
@@ -322,6 +476,16 @@ export default function ClientProfile() {
               <CameraIcon className="w-4 h-4" />
             </button>
             <input ref={fileInputRef} type="file" accept="image/*" onChange={handleProfilePicUpload} className="hidden" />
+            {profilePicPreview && (
+              <button
+                type="button"
+                onClick={handleRemoveProfilePic}
+                className="absolute top-0 right-0 bg-red-600 hover:bg-red-700 text-white p-1.5 rounded-full w-7 h-7 flex items-center justify-center transition"
+                aria-label="Remove profile picture"
+              >
+                <TrashIcon className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
           {uploadingPic && <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Uploading...</p>}
         </div>
@@ -389,37 +553,4 @@ export default function ClientProfile() {
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Current Password</label>
               <div className="relative">
-                <input type={showCurrent ? "text" : "password"} value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg pr-12 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100" required />
-                <button type="button" className="absolute inset-y-0 right-3 flex items-center text-gray-500 dark:text-gray-400 hover:text-amber-600 transition" onClick={() => setShowCurrent(!showCurrent)} aria-label={showCurrent ? "Hide" : "Show"}>
-                  {showCurrent ? <EyeOff /> : <EyeOpen />}
-                </button>
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">New Password</label>
-              <div className="relative">
-                <input type={showNew ? "text" : "password"} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg pr-12 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100" required />
-                <button type="button" className="absolute inset-y-0 right-3 flex items-center text-gray-500 dark:text-gray-400 hover:text-amber-600 transition" onClick={() => setShowNew(!showNew)} aria-label={showNew ? "Hide" : "Show"}>
-                  {showNew ? <EyeOff /> : <EyeOpen />}
-                </button>
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Confirm New Password</label>
-              <div className="relative">
-                <input type={showConfirm ? "text" : "password"} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg pr-12 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100" required />
-                <button type="button" className="absolute inset-y-0 right-3 flex items-center text-gray-500 dark:text-gray-400 hover:text-amber-600 transition" onClick={() => setShowConfirm(!showConfirm)} aria-label={showConfirm ? "Hide" : "Show"}>
-                  {showConfirm ? <EyeOff /> : <EyeOpen />}
-                </button>
-              </div>
-            </div>
-            <button type="submit" disabled={changingPassword} className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 rounded-lg transition disabled:opacity-50">
-              {changingPassword ? "Updating..." : "Update Password"}
-            </button>
-            {passwordMessage && <p className={`text-center text-sm ${passwordMessage.includes("Error") ? "text-red-500" : "text-green-600 dark:text-green-400"}`}>{passwordMessage}</p>}
-          </form>
-        )}
-      </div>
-    </div>
-  );
-}
+                <input type={showCurrent ? "text" : "password"} value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg pr-
