@@ -15,7 +15,7 @@ export async function GET(request, { params }) {
         .from("posts")
         .select(`
           id, author_id, content, image_urls, font_family, is_auto,
-          created_at, updated_at,
+          created_at, updated_at, pinned,
           clients:author_id (username, display_name, profile_pic, is_okmade, verified)
         `)
         .eq("id", id)
@@ -134,7 +134,6 @@ export async function DELETE(request, { params }) {
       return new Response(JSON.stringify({ error: "Not allowed" }), { status: 403 });
     }
 
-    // Delete storage images
     for (const url of post.image_urls || []) {
       const path = url.split("/public/")[1];
       if (path) {
@@ -142,7 +141,6 @@ export async function DELETE(request, { params }) {
       }
     }
 
-    // Clean up related rows
     await Promise.all([
       admin.from("post_reactions").delete().eq("post_id", id),
       admin.from("post_comments").delete().eq("post_id", id),
