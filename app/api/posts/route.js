@@ -7,32 +7,6 @@ const admin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-async function getClientUser() {
-  const cookieStore = await cookies();
-  const sb = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll() {},
-      },
-    }
-  );
-  const {
-    data: { user },
-  } = await sb.auth.getUser();
-  if (!user) return null;
-  const { data: client } = await admin
-    .from("clients")
-    .select("id, username, display_name, profile_pic, is_okmade, verified, suspended")
-    .eq("auth_id", user.id)
-    .maybeSingle();
-  return client;
-}
-
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -45,52 +19,33 @@ export async function GET(request) {
         created_at, updated_at, requires_approval, approved,
         clients:author_id (id, username, display_name, profile_pic, is_okmade, verified)
       `)
-      .eq("status", "published")
       .order("created_at", { ascending: false })
       .limit(50);
 
-    // Filter by author if requested. Public profile and dashboard both use this.
     if (author) {
-      const { data: authorClient } = await admin
+      const { data: authorClient, error: authorErr } = await admin
         .from("clients")
         .select("id")
         .eq("username", author)
         .maybeSingle();
 
+      console.log("[posts GET] author param =", author, "authorClient =", authorClient, "error =", authorErr);
+
       if (!authorClient) {
         return new Response(JSON.stringify([]), { status: 200 });
       }
 
-      // On another user's profile we only show approved posts.
-      // On your own dashboard you see your own posts regardless.
-      const me = await getClientUser();
-      const isMine = me && me.id === authorClient.id;
-
       query = query.eq("author_id", authorClient.id);
-      if (!isMine) {
-        query = query.eq("approved", true);
-      }
-    } else {
-      // General feed: only approved, and hide muted/blocked authors
-      query = query.eq("approved", true);
-
-      const me = await getClientUser();
-      if (me) {
-        const [mutesRes, blocksRes] = await Promise.all([
-          admin.from("mutes").select("muted_id").eq("muter_id", me.id),
-          admin.from("blocks").select("blocked_id").eq("blocker_id", me.id),
-        ]);
-        const hideIds = [
-          ...(mutesRes.data || []).map((m) => m.muted_id),
-          ...(blocksRes.data || []).map((b) => b.blocked_id),
-        ];
-        if (hideIds.length > 0) {
-          query = query.not("author_id", "in", `(${hideIds.join(",")})`);
-        }
-      }
     }
 
-    const { data: posts } = await query;
+    const { data: posts, error: postsErr } = await query;
+
+    console.log("[posts GET] posts found =", (posts || []).length, "error =", postsErr);
+
+    if (postsErr) {
+      return new Response(JSON.stringify({ error: postsErr.message }), { status: 500 });
+    }
+
     let list = posts || [];
 
     if (list.length === 0) {
@@ -123,66 +78,7 @@ export async function GET(request) {
 
     return new Response(JSON.stringify(enriched), { status: 200 });
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), { status: 500 });
-  }
-}
-
-export async function POST(request) {
-  try {
-    const client = await getClientUser();
-    if (!client) {
-      return new Response(JSON.stringify({ error: "Not logged in" }), { status: 401 });
-    }
-    if (client.suspended) {
-      return new Response(JSON.stringify({ error: "Account suspended" }), { status: 403 });
-    }
-
-    const { content, image_urls, font_family } = await request.json();
-    if (!content?.trim() && (!image_urls || image_urls.length === 0)) {
-      return new Response(JSON.stringify({ error: "Empty post" }), { status: 400 });
-    }
-
-    const { data: settings } = await admin
-      .from("user_settings")
-      .select("auto_approve_posts")
-      .eq("user_id", client.id)
-      .maybeSingle();
-
-    const autoApprove = settings?.auto_approve_posts ?? true;
-    const isVerified = client.is_okmade || client.verified;
-    const requiresApproval = !autoApprove && !isVerified;
-    const approved = !requiresApproval;
-
-    const { data, error } = await admin
-      .from("posts")
-      .insert({
-        author_id: client.id,
-        content: content?.trim() || "",
-        image_urls: image_urls || [],
-        font_family: font_family || "sans-serif",
-        is_auto: false,
-        status: "published",
-        requires_approval: requiresApproval,
-        approved,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      return new Response(JSON.stringify({ error: error.message }), { status: 500 });
-    }
-
-    if (requiresApproval) {
-      await admin.from("admin_inbox").insert({
-        type: "post_pending",
-        title: `Post pending approval from @${client.username}`,
-        body: content?.slice(0, 120) || "(image only)",
-        link: "/admin/dashboard?tab=pending-posts",
-      });
-    }
-
-    return new Response(JSON.stringify(data), { status: 200 });
-  } catch (err) {
+    console.log("[posts GET] catch error =", err.message);
     return new Response(JSON.stringify({ error: err.message }), { status: 500 });
   }
 }
