@@ -130,26 +130,52 @@ export default function ClientDashboard() {
   const supabase = createSupabaseBrowser();
 
   useEffect(() => {
+    let cancelled = false;
+
+    async function fetchClient(userId, attempt = 0) {
+      const { data, error: loadErr } = await supabase
+        .from("clients")
+        .select("*")
+        .eq("auth_id", userId)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (loadErr) {
+        console.error("[dashboard] clients load error:", loadErr);
+        setError("Database error: " + loadErr.message);
+        setLoading(false);
+        return;
+      }
+
+      if (!data && attempt === 0) {
+        setTimeout(() => fetchClient(userId, 1), 800);
+        return;
+      }
+
+      if (!data) {
+        setError("No profile found for this account.");
+        setLoading(false);
+        return;
+      }
+
+      setClient(data);
+      setLoading(false);
+    }
+
     async function load() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         router.push("/client/login");
         return;
       }
-      const { data, error: loadErr } = await supabase
-        .from("clients")
-        .select("*")
-        .eq("auth_id", user.id)
-        .maybeSingle();
-      if (loadErr || !data) {
-        setError("Could not load profile.");
-        setLoading(false);
-        return;
-      }
-      setClient(data);
-      setLoading(false);
+      fetchClient(user.id);
     }
+
     load();
+    return () => {
+      cancelled = true;
+    };
   }, [router, supabase]);
 
   useEffect(() => {
@@ -231,7 +257,7 @@ export default function ClientDashboard() {
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-amber-50 to-white dark:from-gray-950 dark:to-gray-900">
-        <div className="text-red-600 dark:text-red-400 text-lg">{error}</div>
+        <div className="text-red-600 dark:text-red-400 text-lg text-center px-4">{error}</div>
       </div>
     );
   }
