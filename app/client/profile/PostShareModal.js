@@ -4,9 +4,9 @@ import { useState, useEffect } from "react";
 export default function PostShareModal({
   open,
   imageUrl,
-  kind, // "profile_pic" or "cover_photo"
-  onConfirm, // (shareChecked, text) => void
-  onCancel, // () => void
+  kind,
+  onConfirm,
+  onCancel,
   saving,
 }) {
   const [shareChecked, setShareChecked] = useState(false);
@@ -26,6 +26,11 @@ export default function PostShareModal({
   if (!open) return null;
 
   const isCover = kind === "cover_photo";
+
+  const handleConfirmClick = () => {
+    console.log("[PostShareModal] Confirm clicked. shareChecked =", shareChecked, "text =", text);
+    onConfirm(shareChecked, text.trim());
+  };
 
   return (
     <div
@@ -62,7 +67,10 @@ export default function PostShareModal({
           <input
             type="checkbox"
             checked={shareChecked}
-            onChange={(e) => setShareChecked(e.target.checked)}
+            onChange={(e) => {
+              console.log("[PostShareModal] Checkbox changed to", e.target.checked);
+              setShareChecked(e.target.checked);
+            }}
             className="w-4 h-4"
           />
           <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
@@ -100,7 +108,7 @@ export default function PostShareModal({
           </button>
           <button
             type="button"
-            onClick={() => onConfirm(shareChecked, text.trim())}
+            onClick={handleConfirmClick}
             disabled={saving}
             className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-medium py-2.5 rounded-lg disabled:opacity-50"
           >
