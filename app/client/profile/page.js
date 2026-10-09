@@ -553,4 +553,46 @@ export default function ClientProfile() {
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Current Password</label>
               <div className="relative">
-                <input type={showCurrent ? "text" : "password"} value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg pr-
+                <input type={showCurrent ? "text" : "password"} value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg pr-12 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100" required />
+                <button type="button" className="absolute inset-y-0 right-3 flex items-center text-gray-500 dark:text-gray-400 hover:text-amber-600 transition" onClick={() => setShowCurrent(!showCurrent)} aria-label={showCurrent ? "Hide" : "Show"}>
+                  {showCurrent ? <EyeOff /> : <EyeOpen />}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">New Password</label>
+              <div className="relative">
+                <input type={showNew ? "text" : "password"} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg pr-12 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100" required />
+                <button type="button" className="absolute inset-y-0 right-3 flex items-center text-gray-500 dark:text-gray-400 hover:text-amber-600 transition" onClick={() => setShowNew(!showNew)} aria-label={showNew ? "Hide" : "Show"}>
+                  {showNew ? <EyeOff /> : <EyeOpen />}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Confirm New Password</label>
+              <div className="relative">
+                <input type={showConfirm ? "text" : "password"} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg pr-12 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100" required />
+                <button type="button" className="absolute inset-y-0 right-3 flex items-center text-gray-500 dark:text-gray-400 hover:text-amber-600 transition" onClick={() => setShowConfirm(!showConfirm)} aria-label={showConfirm ? "Hide" : "Show"}>
+                  {showConfirm ? <EyeOff /> : <EyeOpen />}
+                </button>
+              </div>
+            </div>
+            <button type="submit" disabled={changingPassword} className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 rounded-lg transition disabled:opacity-50">
+              {changingPassword ? "Updating..." : "Update Password"}
+            </button>
+            {passwordMessage && <p className={`text-center text-sm ${passwordMessage.includes("Error") ? "text-red-500" : "text-green-600 dark:text-green-400"}`}>{passwordMessage}</p>}
+          </form>
+        )}
+      </div>
+
+      <PostShareModal
+        open={shareModal.open}
+        imageUrl={shareModal.newUrl}
+        kind={shareModal.kind}
+        saving={shareSaving}
+        onConfirm={handleShareConfirm}
+        onCancel={handleShareCancel}
+      />
+    </div>
+  );
+}
