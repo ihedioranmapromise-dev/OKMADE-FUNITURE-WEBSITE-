@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { createSupabaseBrowser } from "@/lib/supabase-browser";
+import PostCard from "@/app/components/PostCard";
 
 const BLUR = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxIDEiPjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9IiNmZWYzYzciLz48L3N2Zz4=";
 
@@ -33,6 +34,9 @@ const IconLogout = ({ className = "w-5 h-5" }) => (
 const IconBell = ({ className = "w-6 h-6" }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
 );
+const IconSearch = ({ className = "w-4 h-4" }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" /></svg>
+);
 
 const VerifiedBadge = ({ isOkmade }) => (
   <svg className={`w-5 h-5 inline-block ml-2 ${isOkmade ? "text-amber-500" : "text-blue-500"}`} viewBox="0 0 24 24" fill="currentColor">
@@ -40,62 +44,6 @@ const VerifiedBadge = ({ isOkmade }) => (
     <path d="M9.5 12.5l1.8 1.8 3.7-3.7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
   </svg>
 );
-
-function timeAgo(dateStr) {
-  if (!dateStr) return "";
-  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-  if (seconds < 60) return "Just now";
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-  if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
-  return new Date(dateStr).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-}
-
-function SimplePostCard({ post }) {
-  const author = post?.clients || {};
-  const name = author.display_name || author.username || "User";
-  const images = Array.isArray(post?.image_urls) ? post.image_urls : [];
-  const singleImage = images.length === 1;
-
-  return (
-    <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
-      <div className="p-4 flex items-start gap-3">
-        {author.profile_pic ? (
-          <div className="relative w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
-            <Image src={author.profile_pic} alt={name} fill sizes="40px" className="object-cover" placeholder="blur" blurDataURL={BLUR} />
-          </div>
-        ) : (
-          <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 flex items-center justify-center font-bold flex-shrink-0">
-            {name.charAt(0).toUpperCase()}
-          </div>
-        )}
-        <div className="flex-1 min-w-0">
-          <p className="font-semibold text-gray-900 dark:text-gray-100 truncate">{name}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            {timeAgo(post?.created_at)}
-            {post?.is_auto && " · Auto-update"}
-          </p>
-        </div>
-      </div>
-
-      {post?.content && (
-        <div className="px-4 pb-3">
-          <p className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{post.content}</p>
-        </div>
-      )}
-
-      {images.length > 0 && (
-        <div className={`grid gap-1 ${singleImage ? "grid-cols-1" : "grid-cols-2"}`}>
-          {images.map((url, i) => (
-            <div key={i} className={`relative w-full ${singleImage ? "aspect-[4/3]" : "aspect-square"}`}>
-              <Image src={url} alt="" fill sizes={singleImage ? "(max-width: 768px) 100vw, 700px" : "(max-width: 768px) 50vw, 350px"} className="object-cover" placeholder="blur" blurDataURL={BLUR} />
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 function ReferralCard() {
   const [data, setData] = useState(null);
@@ -144,6 +92,7 @@ export default function ClientDashboard() {
   const [error, setError] = useState("");
   const [myPosts, setMyPosts] = useState([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
+  const [postSearch, setPostSearch] = useState("");
   const [friendRequests, setFriendRequests] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [showBell, setShowBell] = useState(false);
@@ -268,6 +217,12 @@ export default function ClientDashboard() {
     router.push("/");
     router.refresh();
   };
+
+  const filteredPosts = postSearch.trim()
+    ? myPosts.filter((p) =>
+        (p.content || "").toLowerCase().includes(postSearch.toLowerCase().trim())
+      )
+    : myPosts;
 
   if (loading) {
     return (
@@ -412,8 +367,6 @@ export default function ClientDashboard() {
               { id: "posts", label: "My Posts" },
               { id: "about", label: "About" },
               { id: "projects", label: "Projects" },
-              { id: "reviews", label: "Reviews" },
-              { id: "photos", label: "Photos" },
             ].map((tab) => (
               <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition ${activeTab === tab.id ? "border-amber-600 text-amber-700 dark:text-amber-400" : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800"}`}>
                 {tab.label}
@@ -473,6 +426,19 @@ export default function ClientDashboard() {
 
           {activeTab === "posts" && (
             <>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-gray-400">
+                  <IconSearch className="w-4 h-4" />
+                </div>
+                <input
+                  type="text"
+                  value={postSearch}
+                  onChange={(e) => setPostSearch(e.target.value)}
+                  placeholder="Search your posts..."
+                  className="w-full pl-10 pr-4 py-3 border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
               {loadingPosts ? (
                 <div className="space-y-4">
                   {[...Array(2)].map((_, i) => (
@@ -492,8 +458,14 @@ export default function ClientDashboard() {
                   <a href="/feed" className="text-amber-600 dark:text-amber-400 hover:underline font-medium">Public Feed</a>{" "}
                   to share your first post.
                 </div>
+              ) : filteredPosts.length === 0 ? (
+                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-8 text-center text-gray-500 dark:text-gray-400">
+                  No posts match "{postSearch}".
+                </div>
               ) : (
-                myPosts.map((post) => <SimplePostCard key={post.id} post={post} />)
+                filteredPosts.map((post) => (
+                  <PostCard key={post.id} post={post} currentUserId={client.id} currentUserIsOkmade={client.is_okmade} onUpdate={loadMyPosts} />
+                ))
               )}
             </>
           )}
@@ -519,18 +491,6 @@ export default function ClientDashboard() {
             <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-8 text-center text-gray-500 dark:text-gray-400">
               <p>Your projects list will appear here.</p>
               <p className="text-sm mt-2">(Coming in a later update)</p>
-            </div>
-          )}
-
-          {activeTab === "reviews" && (
-            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-8 text-center text-gray-500 dark:text-gray-400">
-              <p>Reviews you've received will appear here.</p>
-            </div>
-          )}
-
-          {activeTab === "photos" && (
-            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-8 text-center text-gray-500 dark:text-gray-400">
-              <p>Your photo gallery will appear here.</p>
             </div>
           )}
         </main>
