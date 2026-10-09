@@ -37,6 +37,15 @@ const IconBell = ({ className = "w-6 h-6" }) => (
 const IconSearch = ({ className = "w-4 h-4" }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" /></svg>
 );
+const IconCheck = ({ className = "w-4 h-4" }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+);
+const IconClock = ({ className = "w-4 h-4" }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+);
+const IconLocation = ({ className = "w-3 h-3" }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+);
 
 const VerifiedBadge = ({ isOkmade }) => (
   <svg className={`w-5 h-5 inline-block ml-2 ${isOkmade ? "text-amber-500" : "text-blue-500"}`} viewBox="0 0 24 24" fill="currentColor">
@@ -84,6 +93,66 @@ function ReferralCard() {
   );
 }
 
+function ProjectCard({ project }) {
+  const isComplete = project.status === "killed";
+  const timeline = Array.isArray(project.timeline) ? project.timeline : [];
+  const completedMilestones = timeline.filter((m) => m.status === "complete").length;
+  const percent = timeline.length > 0 ? Math.round((completedMilestones / timeline.length) * 100) : 0;
+
+  return (
+    <a
+      href={`/workspace/${project.token_string || project.id}`}
+      className="block bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-4 hover:shadow-md transition"
+    >
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <p className="font-semibold text-gray-800 dark:text-gray-200 flex-1">
+          {project.work_description || "Untitled Project"}
+        </p>
+        {isComplete ? (
+          <span className="flex items-center gap-1 text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 px-2 py-0.5 rounded-full whitespace-nowrap">
+            <IconCheck className="w-3 h-3" /> Completed
+          </span>
+        ) : (
+          <span className="flex items-center gap-1 text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-full whitespace-nowrap">
+            <IconClock className="w-3 h-3" /> Active
+          </span>
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-3 text-xs text-gray-500 dark:text-gray-400">
+        {project.city && (
+          <span className="flex items-center gap-1">
+            <IconLocation className="w-3 h-3" /> {project.city}
+          </span>
+        )}
+        {project.duration_weeks && <span>{project.duration_weeks} weeks</span>}
+        {project.token_string && (
+          <span className="font-mono">#{project.token_string}</span>
+        )}
+      </div>
+
+      {timeline.length > 0 && (
+        <div className="mt-3">
+          <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
+            <span>{completedMilestones} of {timeline.length} milestones</span>
+            <span>{percent}%</span>
+          </div>
+          <div className="w-full h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-amber-500 to-green-500 transition-all duration-500"
+              style={{ width: `${percent}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="mt-3 text-xs text-amber-600 dark:text-amber-400 font-medium">
+        Open Workspace →
+      </div>
+    </a>
+  );
+}
+
 export default function ClientDashboard() {
   const [client, setClient] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -97,6 +166,8 @@ export default function ClientDashboard() {
   const [notifications, setNotifications] = useState([]);
   const [showBell, setShowBell] = useState(false);
   const [logoutConfirm, setLogoutConfirm] = useState(false);
+  const [projects, setProjects] = useState({ active: [], completed: [] });
+  const [loadingProjects, setLoadingProjects] = useState(true);
   const router = useRouter();
   const supabase = createSupabaseBrowser();
 
@@ -153,6 +224,7 @@ export default function ClientDashboard() {
     loadMyPosts();
     loadFriendRequests();
     loadNotifications();
+    loadProjects();
   }, [client]);
 
   async function loadMyPosts() {
@@ -169,6 +241,21 @@ export default function ClientDashboard() {
       setMyPosts([]);
     }
     setLoadingPosts(false);
+  }
+
+  async function loadProjects() {
+    setLoadingProjects(true);
+    try {
+      const res = await fetch("/api/client/projects");
+      if (res.ok) {
+        const data = await res.json();
+        setProjects({
+          active: Array.isArray(data.active) ? data.active : [],
+          completed: Array.isArray(data.completed) ? data.completed : [],
+        });
+      }
+    } catch {}
+    setLoadingProjects(false);
   }
 
   async function loadFriendRequests() {
@@ -252,6 +339,7 @@ export default function ClientDashboard() {
 
   const fullName = client.display_name || `${client.first_name || ""} ${client.last_name || ""}`.trim() || client.username;
   const unreadCount = notifications.filter((n) => !n.is_read).length;
+  const totalProjects = projects.active.length + projects.completed.length;
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-950 pb-20">
@@ -365,8 +453,8 @@ export default function ClientDashboard() {
           <div className="flex gap-1 md:gap-2 overflow-x-auto">
             {[
               { id: "posts", label: "My Posts" },
+              { id: "projects", label: `Projects${totalProjects > 0 ? ` (${totalProjects})` : ""}` },
               { id: "about", label: "About" },
-              { id: "projects", label: "Projects" },
             ].map((tab) => (
               <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition ${activeTab === tab.id ? "border-amber-600 text-amber-700 dark:text-amber-400" : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800"}`}>
                 {tab.label}
@@ -470,6 +558,55 @@ export default function ClientDashboard() {
             </>
           )}
 
+          {activeTab === "projects" && (
+            <>
+              {loadingProjects ? (
+                <div className="space-y-3">
+                  {[...Array(2)].map((_, i) => (
+                    <div key={i} className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-4 space-y-2">
+                      <div className="h-5 bg-gray-200 dark:bg-gray-800 rounded w-2/3 animate-pulse"></div>
+                      <div className="h-3 bg-gray-200 dark:bg-gray-800 rounded w-1/3 animate-pulse"></div>
+                    </div>
+                  ))}
+                </div>
+              ) : totalProjects === 0 ? (
+                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-8 text-center text-gray-500 dark:text-gray-400">
+                  You have no projects yet. When OKMADE assigns one to you, it will appear here.
+                </div>
+              ) : (
+                <>
+                  {projects.active.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                        <IconClock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                        Active ({projects.active.length})
+                      </h3>
+                      <div className="space-y-3">
+                        {projects.active.map((p) => (
+                          <ProjectCard key={p.id} project={p} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {projects.completed.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                        <IconCheck className="w-4 h-4 text-green-600 dark:text-green-400" />
+                        Completed ({projects.completed.length})
+                      </h3>
+                      <div className="space-y-3">
+                        {projects.completed.map((p) => (
+                          <ProjectCard key={p.id} project={p} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          )}
+
           {activeTab === "about" && (
             <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-6">
               <h2 className="text-lg font-semibold mb-4 text-gray-800 dark:text-gray-100">About</h2>
@@ -484,13 +621,6 @@ export default function ClientDashboard() {
                 {client.bio && (<div><strong>Bio:</strong><p className="mt-1 text-gray-600 dark:text-gray-400">{client.bio}</p></div>)}
               </div>
               <a href="/client/profile" className="inline-block mt-4 text-amber-600 dark:text-amber-400 hover:underline text-sm">Edit Profile →</a>
-            </div>
-          )}
-
-          {activeTab === "projects" && (
-            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-8 text-center text-gray-500 dark:text-gray-400">
-              <p>Your projects list will appear here.</p>
-              <p className="text-sm mt-2">(Coming in a later update)</p>
             </div>
           )}
         </main>
