@@ -14,12 +14,16 @@ async function getClientUser() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     {
       cookies: {
-        getAll() { return cookieStore.getAll(); },
+        getAll() {
+          return cookieStore.getAll();
+        },
         setAll() {},
       },
     }
   );
-  const { data: { user } } = await sb.auth.getUser();
+  const {
+    data: { user },
+  } = await sb.auth.getUser();
   if (!user) return null;
   const { data: client } = await admin
     .from("clients")
@@ -42,43 +46,52 @@ export async function GET(request) {
         clients:author_id (id, username, display_name, profile_pic, is_okmade, verified)
       `)
       .eq("status", "published")
-      .eq("approved", true)
       .order("created_at", { ascending: false })
       .limit(50);
 
+    // Filter by author if requested. Public profile and dashboard both use this.
     if (author) {
-      query = admin
-        .from("posts")
-        .select(`
-          id, author_id, content, image_urls, font_family, is_auto,
-          created_at, updated_at, requires_approval, approved,
-          clients:author_id (id, username, display_name, profile_pic, is_okmade, verified)
-        `)
-        .eq("status", "published")
-        .order("created_at", { ascending: false })
-        .limit(50);
-    }
+      const { data: authorClient } = await admin
+        .from("clients")
+        .select("id")
+        .eq("username", author)
+        .maybeSingle();
 
-    const { data: posts } = await query;
-    let list = posts || [];
+      if (!authorClient) {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
 
-    // Filter out muted/blocked users if I'm logged in and viewing the general feed
-    if (!author) {
+      // On another user's profile we only show approved posts.
+      // On your own dashboard you see your own posts regardless.
+      const me = await getClientUser();
+      const isMine = me && me.id === authorClient.id;
+
+      query = query.eq("author_id", authorClient.id);
+      if (!isMine) {
+        query = query.eq("approved", true);
+      }
+    } else {
+      // General feed: only approved, and hide muted/blocked authors
+      query = query.eq("approved", true);
+
       const me = await getClientUser();
       if (me) {
         const [mutesRes, blocksRes] = await Promise.all([
           admin.from("mutes").select("muted_id").eq("muter_id", me.id),
           admin.from("blocks").select("blocked_id").eq("blocker_id", me.id),
         ]);
-        const hideSet = new Set([
+        const hideIds = [
           ...(mutesRes.data || []).map((m) => m.muted_id),
           ...(blocksRes.data || []).map((b) => b.blocked_id),
-        ]);
-        if (hideSet.size > 0) {
-          list = list.filter((p) => !hideSet.has(p.author_id));
+        ];
+        if (hideIds.length > 0) {
+          query = query.not("author_id", "in", `(${hideIds.join(",")})`);
         }
       }
     }
+
+    const { data: posts } = await query;
+    let list = posts || [];
 
     if (list.length === 0) {
       return new Response(JSON.stringify([]), { status: 200 });
