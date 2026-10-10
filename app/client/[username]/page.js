@@ -99,7 +99,7 @@ function ProfileNavbar() {
             </button>
 
             {open && (
-              <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-100 dark:border-gray-800 overflow-hidden z-50">
+              <div className="absolute right-0 mt-2 w-52 max-w-[calc(100vw-2rem)] bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-100 dark:border-gray-800 overflow-hidden z-50">
                 <a href="/" onClick={() => setOpen(false)} className="block px-4 py-3 hover:bg-amber-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm">Home</a>
                 {profile ? (
                   <>
@@ -321,8 +321,8 @@ export default function ClientPortfolio() {
         </div>
 
         <div className="bg-white dark:bg-gray-900 px-4 md:px-6">
-          <div className="flex items-end justify-between -mt-16 md:-mt-20">
-            <div className="relative w-32 h-32 md:w-40 md:h-40">
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between -mt-16 md:-mt-20 gap-3">
+            <div className="relative w-32 h-32 md:w-40 md:h-40 flex-shrink-0">
               {client.profile_pic ? (
                 <Image src={client.profile_pic} alt={displayName} fill priority sizes="(max-width: 768px) 128px, 160px" className="rounded-full object-cover border-4 border-white dark:border-gray-900 shadow-lg" placeholder="blur" blurDataURL={BLUR} />
               ) : (
@@ -332,7 +332,7 @@ export default function ClientPortfolio() {
               )}
             </div>
 
-            <div className="pb-2 flex gap-2 flex-wrap items-center">
+            <div className="flex gap-2 flex-wrap items-center">
               {!buttonsReady ? (
                 <>
                   <div className="h-9 w-24 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse"></div>
@@ -340,25 +340,25 @@ export default function ClientPortfolio() {
                 </>
               ) : isSelf ? (
                 <>
-                  <a href="/client/dashboard" className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition">Dashboard</a>
-                  <a href="/client/profile" className="bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg text-sm font-semibold transition">Edit Profile</a>
+                  <a href="/client/dashboard" className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition whitespace-nowrap">Dashboard</a>
+                  <a href="/client/profile" className="bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg text-sm font-semibold transition whitespace-nowrap">Edit Profile</a>
                 </>
               ) : (
                 <>
                   {st.friendStatus === "friends" ? (
-                    <button disabled className="bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-lg text-sm font-medium cursor-default">✓ Friends</button>
+                    <button disabled className="bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-lg text-sm font-medium cursor-default whitespace-nowrap">✓ Friends</button>
                   ) : st.friendStatus === "pending" ? (
-                    <button disabled className="bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 px-4 py-2 rounded-lg text-sm font-medium cursor-default">
+                    <button disabled className="bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 px-4 py-2 rounded-lg text-sm font-medium cursor-default whitespace-nowrap">
                       {st.requestDirection === "sent" ? "Request Sent" : "Respond in Requests"}
                     </button>
                   ) : (
-                    <button onClick={handleFriend} disabled={busy || isBlockedByMe} className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition disabled:opacity-50">+ Add Friend</button>
+                    <button onClick={handleFriend} disabled={busy || isBlockedByMe} className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition disabled:opacity-50 whitespace-nowrap">+ Add Friend</button>
                   )}
-                  <button onClick={handleFollow} disabled={busy || isBlockedByMe} className={`px-4 py-2 rounded-lg text-sm font-semibold transition border ${st.isFollowing ? "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700" : "bg-white dark:bg-gray-900 border-amber-500 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20"} disabled:opacity-50`}>
+                  <button onClick={handleFollow} disabled={busy || isBlockedByMe} className={`px-4 py-2 rounded-lg text-sm font-semibold transition border whitespace-nowrap ${st.isFollowing ? "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700" : "bg-white dark:bg-gray-900 border-amber-500 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20"} disabled:opacity-50`}>
                     {st.isFollowing ? "Following" : "+ Follow"}
                   </button>
                   {st.friendStatus === "friends" && !isBlockedByMe && (
-                    <button onClick={handleMessage} disabled={busy} className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 px-4 py-2 rounded-lg text-sm font-semibold transition disabled:opacity-50">Message</button>
+                    <button onClick={handleMessage} disabled={busy} className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 px-4 py-2 rounded-lg text-sm font-semibold transition disabled:opacity-50 whitespace-nowrap">Message</button>
                   )}
 
                   <div className="relative">
@@ -374,7 +374,7 @@ export default function ClientPortfolio() {
                     {moreOpen && (
                       <>
                         <div className="fixed inset-0 z-40" onClick={() => setMoreOpen(false)} />
-                        <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-50 overflow-hidden">
+                        <div className="absolute right-0 mt-2 w-56 max-w-[calc(100vw-2rem)] bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-50 overflow-hidden">
                           <button
                             onClick={toggleMute}
                             className="w-full text-left px-4 py-3 hover:bg-amber-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm"
@@ -404,16 +404,16 @@ export default function ClientPortfolio() {
           </div>
 
           <div className="mt-3">
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 flex items-center">
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 flex items-center flex-wrap gap-1">
               {displayName}
               {(client.is_okmade || client.verified) && <VerifiedBadge isOkmade={client.is_okmade} />}
               {isBlockedByMe && (
-                <span className="ml-3 text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 px-2 py-1 rounded-full font-normal">
+                <span className="ml-2 text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 px-2 py-1 rounded-full font-normal">
                   Blocked
                 </span>
               )}
               {isMutedByMe && !isBlockedByMe && (
-                <span className="ml-3 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-2 py-1 rounded-full font-normal">
+                <span className="ml-2 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-2 py-1 rounded-full font-normal">
                   Muted
                 </span>
               )}
