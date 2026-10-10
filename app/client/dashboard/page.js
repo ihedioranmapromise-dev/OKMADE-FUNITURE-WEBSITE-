@@ -363,7 +363,7 @@ export default function ClientDashboard() {
               {showBell && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowBell(false)} />
-                  <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-100 dark:border-gray-800 z-50 max-h-96 overflow-y-auto">
+                  <div className="absolute right-0 mt-2 w-[90vw] max-w-xs sm:w-80 bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-100 dark:border-gray-800 z-50 max-h-96 overflow-y-auto">
                     <div className="p-3 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
                       <span className="font-semibold text-sm text-gray-800 dark:text-gray-200">Notifications</span>
                       <a href="/client/notifications" className="text-xs text-amber-600 dark:text-amber-400 hover:underline">View all</a>
@@ -390,13 +390,11 @@ export default function ClientDashboard() {
               {menuOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-                  <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-100 dark:border-gray-800 z-50 overflow-hidden">
+                  <div className="absolute right-0 mt-2 w-56 max-w-[calc(100vw-2rem)] bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-100 dark:border-gray-800 z-50 overflow-hidden">
                     <a href="/" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm"><IconHome /> Home</a>
                     <a href="/feed" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm"><IconFeed /> Public Feed</a>
                     <button onClick={() => { setActiveTab("projects"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-amber-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm text-left"><IconFolder /> Projects</button>
                     <div className="border-t border-gray-100 dark:border-gray-800" />
-                    <a href="/client/notifications" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm"><IconBell /> Notifications</a>
-                    <a href={`/client/${client.username}`} onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm"><IconUser /> View Public Profile</a>
                     <a href="/client/profile" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm"><IconEdit /> Edit Profile</a>
                     <a href="/client/settings" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm">Settings</a>
                     <div className="border-t border-gray-100 dark:border-gray-800" />
@@ -416,8 +414,8 @@ export default function ClientDashboard() {
       </div>
 
       <div className="max-w-5xl mx-auto px-4">
-        <div className="flex items-end justify-between -mt-16 md:-mt-20">
-          <div className="relative w-32 h-32 md:w-40 md:h-40">
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between -mt-16 md:-mt-20 gap-3">
+          <div className="relative w-32 h-32 md:w-40 md:h-40 flex-shrink-0">
             {client.profile_pic ? (
               <Image src={client.profile_pic} alt={fullName} fill priority sizes="(max-width: 768px) 128px, 160px" className="rounded-full object-cover border-4 border-white dark:border-gray-900 shadow-lg" placeholder="blur" blurDataURL={BLUR} />
             ) : (
@@ -430,9 +428,9 @@ export default function ClientDashboard() {
             </a>
           </div>
 
-          <div className="pb-2 flex gap-2">
-            <a href={`/client/${client.username}`} className="bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition">View Public</a>
-            <a href="/client/profile" className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition">Edit Profile</a>
+          <div className="flex gap-2 flex-shrink-0">
+            <a href={`/client/${client.username}`} className="bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap">View Public</a>
+            <a href="/client/profile" className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition whitespace-nowrap">Edit Profile</a>
           </div>
         </div>
 
@@ -489,23 +487,25 @@ export default function ClientDashboard() {
               <h3 className="font-semibold text-gray-800 dark:text-gray-100 mb-3">Friend Requests ({friendRequests.length})</h3>
               <div className="space-y-3">
                 {friendRequests.map((req) => (
-                  <div key={req.id} className="flex items-center gap-3">
+                  <div key={req.id} className="flex items-center gap-3 flex-wrap">
                     {req.clients?.profile_pic ? (
-                      <div className="relative w-10 h-10 rounded-full overflow-hidden">
+                      <div className="relative w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
                         <Image src={req.clients.profile_pic} alt="" fill sizes="40px" className="object-cover" />
                       </div>
                     ) : (
-                      <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-amber-700 dark:text-amber-300 font-bold">
+                      <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-amber-700 dark:text-amber-300 font-bold flex-shrink-0">
                         {(req.clients?.display_name || "?").charAt(0)}
                       </div>
                     )}
-                    <div className="flex-1">
-                      <a href={`/client/${req.clients?.username}`} className="text-sm font-semibold text-gray-800 dark:text-gray-200 hover:underline">
+                    <div className="flex-1 min-w-0">
+                      <a href={`/client/${req.clients?.username}`} className="text-sm font-semibold text-gray-800 dark:text-gray-200 hover:underline truncate block">
                         {req.clients?.display_name || req.clients?.username}
                       </a>
                     </div>
-                    <button onClick={() => respondToRequest(req.id, "accept")} className="bg-amber-600 text-white px-3 py-1.5 rounded-lg text-sm">Accept</button>
-                    <button onClick={() => respondToRequest(req.id, "decline")} className="bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-3 py-1.5 rounded-lg text-sm">Decline</button>
+                    <div className="flex gap-2">
+                      <button onClick={() => respondToRequest(req.id, "accept")} className="bg-amber-600 text-white px-3 py-1.5 rounded-lg text-sm">Accept</button>
+                      <button onClick={() => respondToRequest(req.id, "decline")} className="bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-3 py-1.5 rounded-lg text-sm">Decline</button>
+                    </div>
                   </div>
                 ))}
               </div>
