@@ -91,7 +91,7 @@ export default function TopBar({ onOpenMobileSidebar, onOpenCommand }) {
         <div className="h-14 px-3 md:px-5 flex items-center gap-3">
           <button
             onClick={onOpenMobileSidebar}
-            className="md:hidden p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+            className="md:hidden p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg flex-shrink-0"
             aria-label="Open menu"
           >
             <svg className="w-5 h-5 text-gray-700 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
@@ -101,19 +101,18 @@ export default function TopBar({ onOpenMobileSidebar, onOpenCommand }) {
 
           <button
             onClick={onOpenCommand}
-            className="flex-1 max-w-md flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-left text-sm text-gray-500 dark:text-gray-400 transition"
+            className="flex-1 min-w-0 max-w-md flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-left text-sm text-gray-500 dark:text-gray-400 transition"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
-            <span className="flex-1 hidden sm:inline">Search...</span>
+            <span className="flex-1 hidden sm:inline truncate">Search...</span>
             <kbd className="hidden md:inline-block text-[10px] border border-gray-300 dark:border-gray-600 rounded px-1.5 py-0.5">
               Ctrl+K
             </kbd>
           </button>
 
-          <div className="flex items-center gap-1 ml-auto">
-            {/* Inbox bell */}
+          <div className="flex items-center gap-0.5 sm:gap-1 ml-auto flex-shrink-0">
             <div className="relative" ref={bellRef}>
               <button
                 onClick={() => setBellOpen(!bellOpen)}
@@ -131,8 +130,8 @@ export default function TopBar({ onOpenMobileSidebar, onOpenCommand }) {
               </button>
 
               {bellOpen && (
-                <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-40 max-h-96 overflow-y-auto">
-                  <div className="p-3 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
+                <div className="fixed right-3 left-3 top-16 sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 w-auto sm:w-80 sm:max-w-[calc(100vw-1rem)] bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 z-50 max-h-[70vh] overflow-y-auto">
+                  <div className="p-3 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center sticky top-0 bg-white dark:bg-gray-900 z-10">
                     <span className="font-semibold text-sm text-gray-800 dark:text-gray-100">
                       Inbox
                     </span>
@@ -223,7 +222,7 @@ export default function TopBar({ onOpenMobileSidebar, onOpenCommand }) {
               </button>
 
               {menuOpen && (
-                <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden z-40">
+                <div className="absolute right-0 mt-2 w-52 max-w-[calc(100vw-1rem)] bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden z-50">
                   <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
                     <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">
                       Admin
